@@ -1,3 +1,4 @@
+import { useEffect, useId, useRef } from 'react'
 import type { ChangeEvent } from 'react'
 import {
   Aperture,
@@ -192,6 +193,36 @@ function joinClassNames(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(' ')
 }
 
+const FOCUSABLE_SELECTOR = [
+  'a[href]',
+  'button:not([disabled])',
+  'input:not([disabled])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  '[contenteditable="true"]',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',')
+
+function getFocusableElements(container: HTMLElement) {
+  return Array.from(
+    container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
+  ).filter(
+    (element) =>
+      !element.hidden &&
+      element.getAttribute('aria-hidden') !== 'true' &&
+      !element.closest('[hidden], [aria-hidden="true"]'),
+  )
+}
+
+function canRestoreFocus(element: HTMLElement | null) {
+  if (!element || element === document.body || !element.isConnected) return false
+  if (element.matches(':disabled')) return false
+  if (element.getAttribute('aria-disabled') === 'true') return false
+
+  const style = window.getComputedStyle(element)
+  return style.display !== 'none' && style.visibility !== 'hidden'
+}
+
 function formatSpeed(speed: number) {
   if (!Number.isFinite(speed)) return '—'
 
@@ -217,8 +248,15 @@ function formatSpeed(speed: number) {
 
 function formatTimeScale(timeScale: number) {
   if (!Number.isFinite(timeScale)) return '1×'
-  if (timeScale < 1) return `${timeScale.toFixed(2).replace(/0+$/, '')}×`
+  if (timeScale === 0) return '0×'
+  if (timeScale < 1) {
+    return `${timeScale.toFixed(2).replace(/\.?0+$/, '')}×`
+  }
   return `${timeScale.toLocaleString()}×`
+}
+
+function formatFps(fps: number) {
+  return Number.isFinite(fps) ? Math.max(0, Math.round(fps)) : '—'
 }
 
 function formatSimulationTime(simulationTime: Date | string) {
@@ -258,8 +296,13 @@ export function TopStatusBar({
   }
 
   return (
-    <header className="se-topbar" aria-label="Simulation status">
-      <div className="se-brand" aria-label="Astral Surveyor">
+    <div
+      className="se-topbar"
+      role="region"
+      aria-label="Simulation status"
+      tabIndex={-1}
+    >
+      <div className="se-brand">
         <span className="se-brand__mark" aria-hidden="true">
           <Orbit size={21} strokeWidth={1.6} />
         </span>
@@ -276,14 +319,16 @@ export function TopStatusBar({
             `se-gpu-status--${webGpuStatus}`,
           )}
           title={gpuStatus.detail}
+          role="status"
+          aria-label={`${gpuStatus.label}. ${gpuStatus.detail}`}
         >
           <span className="se-gpu-status__dot" aria-hidden="true" />
-          <span>{gpuStatus.label}</span>
+          <span aria-hidden="true">{gpuStatus.label}</span>
         </div>
 
         <div className="se-readout" title="Rendered frames per second">
           <span>FPS</span>
-          <strong>{Math.max(0, Math.round(fps))}</strong>
+          <strong>{formatFps(fps)}</strong>
         </div>
 
         <div className="se-readout se-readout--speed" title="Camera velocity">
@@ -294,7 +339,12 @@ export function TopStatusBar({
         <label className="se-quality" title="Rendering quality">
           <CircleGauge size={15} aria-hidden="true" />
           <span className="se-sr-only">Rendering quality</span>
-          <select value={quality} onChange={handleQualityChange}>
+          <select
+            value={quality}
+            onChange={handleQualityChange}
+            disabled={!onQualityChange}
+            aria-label="Rendering quality"
+          >
             {(Object.keys(QUALITY_LABELS) as QualityPreset[]).map((preset) => (
               <option key={preset} value={preset}>
                 {QUALITY_LABELS[preset]}
@@ -318,7 +368,7 @@ export function TopStatusBar({
           <Aperture size={18} />
         </button>
       </div>
-    </header>
+    </div>
   )
 }
 
@@ -376,6 +426,8 @@ export function ObjectInspector({
   onFocus,
   onClear,
 }: ObjectInspectorProps) {
+  const contentId = useId()
+
   return (
     <aside
       className={joinClassNames('se-inspector', !open && 'is-collapsed')}
@@ -386,6 +438,7 @@ export function ObjectInspector({
         type="button"
         aria-label={open ? 'Collapse object inspector' : 'Open object inspector'}
         aria-expanded={open}
+        aria-controls={contentId}
         onClick={onToggle}
         disabled={!onToggle}
       >
@@ -393,7 +446,7 @@ export function ObjectInspector({
       </button>
 
       {open && (
-        <div className="se-inspector__content">
+        <div className="se-inspector__content" id={contentId}>
           <div className="se-panel-heading">
             <div>
               <span className="se-panel-heading__eyebrow">Object analysis</span>
@@ -549,7 +602,9 @@ export function TimeControls({
 
       <div className="se-time-controls__scale">
         <span>Time scale</span>
-        <strong>{paused ? 'Paused' : formatTimeScale(timeScale)}</strong>
+        <strong aria-live="polite">
+          {paused ? 'Paused' : formatTimeScale(timeScale)}
+        </strong>
       </div>
 
       <button
@@ -567,13 +622,15 @@ export function TimeControls({
 }
 
 function WelcomePanel({
+  titleId,
+  descriptionId,
   onClose,
   onBeginExploring,
   onOpenQuickTour,
 }: Pick<
   WelcomeOverlayProps,
   'onClose' | 'onBeginExploring' | 'onOpenQuickTour'
->) {
+> & { titleId: string; descriptionId: string }) {
   return (
     <div className="se-welcome-card">
       <button
@@ -593,13 +650,13 @@ function WelcomePanel({
       <div className="se-welcome-card__eyebrow">
         WebGPU universe simulator
       </div>
-      <h1>Every horizon is reachable.</h1>
-      <p className="se-welcome-card__lede">
+      <h1 id={titleId}>Every horizon is reachable.</h1>
+      <p className="se-welcome-card__lede" id={descriptionId}>
         Cross astronomical scales, study procedural worlds and descend from
         deep space to the surface without breaking the journey.
       </p>
 
-      <div className="se-capabilities" aria-label="Core capabilities">
+      <div className="se-capabilities" role="group" aria-label="Core capabilities">
         <div>
           <Maximize2 size={17} aria-hidden="true" />
           <span>
@@ -652,6 +709,8 @@ function WelcomePanel({
 }
 
 function QuickTourPanel({
+  titleId,
+  descriptionId,
   tourStep = 0,
   onClose,
   onBeginExploring,
@@ -659,8 +718,9 @@ function QuickTourPanel({
 }: Pick<
   WelcomeOverlayProps,
   'tourStep' | 'onClose' | 'onBeginExploring' | 'onTourStepChange'
->) {
-  const safeStep = Math.min(Math.max(0, tourStep), TOUR_STEPS.length - 1)
+> & { titleId: string; descriptionId: string }) {
+  const normalizedStep = Number.isFinite(tourStep) ? Math.trunc(tourStep) : 0
+  const safeStep = Math.min(Math.max(0, normalizedStep), TOUR_STEPS.length - 1)
   const current = TOUR_STEPS[safeStep]
   const CurrentIcon = current.icon
   const isLastStep = safeStep === TOUR_STEPS.length - 1
@@ -688,8 +748,8 @@ function QuickTourPanel({
         </div>
 
         <div className="se-tour-card__step">{current.eyebrow}</div>
-        <h2>{current.title}</h2>
-        <p>{current.description}</p>
+        <h2 id={titleId}>{current.title}</h2>
+        <p id={descriptionId}>{current.description}</p>
 
         <div className="se-tour-progress" aria-label="Tour progress">
           {TOUR_STEPS.map((step, index) => (
@@ -750,17 +810,109 @@ export function WelcomeOverlay({
   onOpenQuickTour,
   onTourStepChange,
 }: WelcomeOverlayProps) {
+  const titleId = useId()
+  const descriptionId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const previouslyFocusedElement =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null
+    const hudRoot = dialogRef.current?.closest('.se-hud')
+    const getFocusFallback = () =>
+      hudRoot?.querySelector<HTMLElement>(
+        '.se-topbar .se-icon-button:not([disabled])',
+      ) ??
+      hudRoot?.querySelector<HTMLElement>('.se-topbar select:not([disabled])') ??
+      hudRoot?.querySelector<HTMLElement>('.se-topbar') ??
+      null
+
+    return () => {
+      const returnTarget = canRestoreFocus(previouslyFocusedElement)
+        ? previouslyFocusedElement
+        : getFocusFallback()
+      if (canRestoreFocus(returnTarget)) {
+        returnTarget?.focus({ preventScroll: true })
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    dialogRef.current?.focus({ preventScroll: true })
+  }, [mode])
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const dialog = dialogRef.current
+      if (!dialog) return
+
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        event.stopPropagation()
+        event.stopImmediatePropagation()
+        onClose?.()
+        return
+      }
+
+      if (event.key !== 'Tab') return
+
+      const focusableElements = getFocusableElements(dialog)
+      if (focusableElements.length === 0) {
+        event.preventDefault()
+        event.stopPropagation()
+        event.stopImmediatePropagation()
+        dialog.focus({ preventScroll: true })
+        return
+      }
+
+      const firstElement = focusableElements[0]
+      const lastElement = focusableElements.at(-1)!
+      const activeElement = document.activeElement
+      const activeIndex = focusableElements.findIndex(
+        (element) => element === activeElement,
+      )
+      const nextElement = event.shiftKey
+        ? activeIndex <= 0
+          ? lastElement
+          : focusableElements[activeIndex - 1]
+        : activeIndex < 0 || activeIndex === focusableElements.length - 1
+          ? firstElement
+          : focusableElements[activeIndex + 1]
+
+      event.preventDefault()
+      event.stopPropagation()
+      event.stopImmediatePropagation()
+      nextElement.focus({ preventScroll: true })
+    }
+
+    window.addEventListener('keydown', handleKeyDown, true)
+    return () => window.removeEventListener('keydown', handleKeyDown, true)
+  }, [onClose])
+
   return (
-    <div className="se-overlay" role="dialog" aria-modal="true">
+    <div
+      ref={dialogRef}
+      className="se-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      aria-describedby={descriptionId}
+      tabIndex={-1}
+    >
       <div className="se-overlay__scrim" aria-hidden="true" />
       {mode === 'welcome' ? (
         <WelcomePanel
+          titleId={titleId}
+          descriptionId={descriptionId}
           onClose={onClose}
           onBeginExploring={onBeginExploring}
           onOpenQuickTour={onOpenQuickTour}
         />
       ) : (
         <QuickTourPanel
+          titleId={titleId}
+          descriptionId={descriptionId}
           tourStep={tourStep}
           onClose={onClose}
           onBeginExploring={onBeginExploring}
@@ -818,24 +970,28 @@ export function ExplorerHud({
         onToggleCinematic={onToggleCinematic}
       />
 
-      <NavigationRail activeTool={activeTool} onToolChange={onToolChange} />
+      {!cinematic && (
+        <>
+          <NavigationRail activeTool={activeTool} onToolChange={onToolChange} />
 
-      <ObjectInspector
-        selectedObject={selectedObject}
-        open={inspectorOpen}
-        onToggle={onInspectorToggle}
-        onFocus={onFocusSelectedObject}
-        onClear={onClearSelectedObject}
-      />
+          <ObjectInspector
+            selectedObject={selectedObject}
+            open={inspectorOpen}
+            onToggle={onInspectorToggle}
+            onFocus={onFocusSelectedObject}
+            onClear={onClearSelectedObject}
+          />
 
-      <TimeControls
-        simulationTime={simulationTime}
-        timeScale={timeScale}
-        paused={paused}
-        onTogglePause={onTogglePause}
-        onTimeScaleChange={onTimeScaleChange}
-        onResetTime={onResetTime}
-      />
+          <TimeControls
+            simulationTime={simulationTime}
+            timeScale={timeScale}
+            paused={paused}
+            onTogglePause={onTogglePause}
+            onTimeScaleChange={onTimeScaleChange}
+            onResetTime={onResetTime}
+          />
+        </>
+      )}
 
       {overlay && (
         <WelcomeOverlay

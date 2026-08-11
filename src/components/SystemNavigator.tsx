@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react'
+import { memo, type CSSProperties } from 'react'
 import { ArrowDownToLine, LocateFixed, MousePointer2, Move3d, Orbit } from 'lucide-react'
 import type { NavigationTarget } from '../engine/types'
 
@@ -19,15 +19,17 @@ const KIND_LABELS: Record<NavigationTarget['kind'], string> = {
   'ice-giant': 'ice giant',
 }
 
-export function SystemNavigator({
+function SystemNavigatorComponent({
   targets,
   selectedId,
   hidden = false,
   onSelect,
   onFocus,
 }: SystemNavigatorProps) {
+  if (hidden) return null
+
   return (
-    <aside className={`system-navigator${hidden ? ' is-hidden' : ''}`} aria-label="Asteria system browser">
+    <aside className="system-navigator" aria-label="Asteria system browser">
       <div className="system-navigator__heading">
         <div>
           <span>Current system</span>
@@ -36,30 +38,30 @@ export function SystemNavigator({
         <Orbit size={18} aria-hidden="true" />
       </div>
 
-      <div className="system-navigator__targets" role="listbox" aria-label="Celestial objects">
+      <ul className="system-navigator__targets" aria-label="Celestial objects">
         {targets.map((target, index) => {
           const selected = target.id === selectedId
           return (
-            <button
-              key={target.id}
-              className={selected ? 'is-selected' : undefined}
-              type="button"
-              role="option"
-              aria-selected={selected}
-              onClick={() => onSelect(target.id)}
-              onDoubleClick={() => onFocus(target.id)}
-            >
-              <span className="system-navigator__index">{String(index + 1).padStart(2, '0')}</span>
-              <span className="system-navigator__body" style={{ '--body-color': target.color } as CSSProperties} />
-              <span className="system-navigator__label">
-                <strong>{target.name}</strong>
-                <small>{KIND_LABELS[target.kind]}</small>
-              </span>
-              {selected ? <LocateFixed size={15} aria-hidden="true" /> : null}
-            </button>
+            <li key={target.id}>
+              <button
+                className={selected ? 'is-selected' : undefined}
+                type="button"
+                aria-pressed={selected}
+                onClick={() => onSelect(target.id)}
+                onDoubleClick={() => onFocus(target.id)}
+              >
+                <span className="system-navigator__index">{String(index + 1).padStart(2, '0')}</span>
+                <span className="system-navigator__body" style={{ '--body-color': target.color } as CSSProperties} />
+                <span className="system-navigator__label">
+                  <strong>{target.name}</strong>
+                  <small>{KIND_LABELS[target.kind]}</small>
+                </span>
+                {selected ? <LocateFixed size={15} aria-hidden="true" /> : null}
+              </button>
+            </li>
           )
         })}
-      </div>
+      </ul>
 
       {selectedId ? (
         <div className="system-navigator__actions">
@@ -84,3 +86,5 @@ export function SystemNavigator({
     </aside>
   )
 }
+
+export const SystemNavigator = memo(SystemNavigatorComponent)

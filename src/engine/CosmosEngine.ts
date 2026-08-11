@@ -766,7 +766,15 @@ export class CosmosEngine {
   }
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
-    if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return
+    const target = event.target
+    if (
+      target instanceof HTMLElement &&
+      target.closest(
+        'input, textarea, select, button, a[href], [role="button"], [role="dialog"], [contenteditable="true"]',
+      )
+    ) {
+      return
+    }
     this.pressedKeys.add(event.code)
     if (event.code === 'KeyG') this.focusOn(this.selectedId)
     if (event.code === 'Space') {

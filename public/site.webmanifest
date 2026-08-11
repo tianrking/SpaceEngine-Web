@@ -1,0 +1,19 @@
+{
+  "name": "Astral Surveyor",
+  "short_name": "Astral",
+  "id": "/",
+  "description": "A cinematic WebGPU procedural universe explorer.",
+  "start_url": "/",
+  "display": "standalone",
+  "categories": ["education", "entertainment", "utilities"],
+  "background_color": "#010207",
+  "theme_color": "#010207",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
