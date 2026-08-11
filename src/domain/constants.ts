@@ -1,0 +1,17 @@
+/** SI and astronomical constants used by the simulation domain. */
+export const TAU = Math.PI * 2
+export const GRAVITATIONAL_CONSTANT = 6.674_30e-11
+export const SPEED_OF_LIGHT_METERS_PER_SECOND = 299_792_458
+export const JULIAN_DAY_SECONDS = 86_400
+export const JULIAN_YEAR_SECONDS = 365.25 * JULIAN_DAY_SECONDS
+export const ASTRONOMICAL_UNIT_METERS = 149_597_870_700
+export const LIGHT_YEAR_METERS =
+  SPEED_OF_LIGHT_METERS_PER_SECOND * JULIAN_YEAR_SECONDS
+export const PARSEC_METERS = 3.085_677_581_491_367e16
+
+export const SOLAR_MASS_KILOGRAMS = 1.988_47e30
+export const SOLAR_RADIUS_METERS = 695_700_000
+export const EARTH_MASS_KILOGRAMS = 5.972_2e24
+export const EARTH_RADIUS_METERS = 6_371_000
+export const JUPITER_MASS_KILOGRAMS = 1.898_13e27
+export const JUPITER_RADIUS_METERS = 69_911_000
