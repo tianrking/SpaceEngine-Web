@@ -6,7 +6,9 @@ import {
   hash,
   instanceIndex,
   instancedArray,
+  materialOpacity,
   shapeCircle,
+  uniform,
   vec3,
 } from 'three/tsl'
 import { ASTERIA_SYSTEM, JULIAN_DAY_SECONDS, orbitalStateAtTime } from '../domain'
@@ -18,6 +20,11 @@ import {
   type RenderBody,
 } from './catalog'
 import {
+  DEFAULT_DISPLAY_SETTINGS,
+  deriveVisualCalibration,
+  normalizeDisplaySettings,
+} from './displaySettings'
+import {
   createCloudTexture,
   createPlanetTexture,
   createRadialGlowTexture,
@@ -26,6 +33,7 @@ import {
 import type {
   CelestialBodyView,
   CosmosEngineEvents,
+  DisplaySettings,
   EngineCapabilities,
   EngineTelemetry,
   QualityLevel,
@@ -37,6 +45,10 @@ const SYSTEM_UNIT_KM = 1_000_000
 const FLOATING_ORIGIN_THRESHOLD = 4_000
 const TELEMETRY_INTERVAL_MS = 400
 const SIMULATION_EPOCH = Date.UTC(2187, 2, 20, 14, 32, 0)
+const ORBIT_BASE_OPACITY = 0.15
+const FAR_STAR_BASE_OPACITY = 0.88
+const CPU_GALAXY_BASE_OPACITY = 0.72
+const GPU_GALAXY_BASE_OPACITY = 1
 
 interface BodyRuntime {
   definition: RenderBody
@@ -59,6 +71,15 @@ interface NavigatorWithOptionalGpu {
   gpu?: GPU
 }
 
+interface BrightnessBinding {
+  readonly apply: (brightness: number) => void
+}
+
+interface MutableColorOpacityMaterial {
+  readonly color: THREE.Color
+  opacity: number
+}
+
 export class CosmosEngine {
   private readonly host: HTMLElement
   private readonly events: CosmosEngineEvents
@@ -78,9 +99,12 @@ export class CosmosEngine {
   private readonly pointer = new THREE.Vector2()
   private readonly resizeObserver: ResizeObserver
   private readonly previousCameraPosition = new THREE.Vector3()
+  private readonly orbitBrightnessBindings: BrightnessBinding[] = []
+  private readonly starfieldBrightnessBindings: BrightnessBinding[] = []
 
   private backend: RendererBackend = 'webgl2'
   private quality: QualityLevel = 'balanced'
+  private displaySettings: DisplaySettings = DEFAULT_DISPLAY_SETTINGS
   private simulationDays = 0
   private timeScale = 1
   private navigationSpeed = 1
@@ -110,7 +134,7 @@ export class CosmosEngine {
     })
     this.renderer.outputColorSpace = THREE.SRGBColorSpace
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping
-    this.renderer.toneMappingExposure = 1.08
+    this.renderer.toneMappingExposure = this.displaySettings.exposure
     this.renderer.setClearColor(0x010207, 1)
     this.renderer.domElement.className = 'cosmos-canvas'
     this.renderer.domElement.setAttribute('aria-label', 'Interactive procedural universe viewport')
@@ -178,6 +202,36 @@ export class CosmosEngine {
 
   getBodies(): readonly CelestialBodyView[] {
     return CATALOG_BODIES
+  }
+
+  getDisplaySettings(): DisplaySettings {
+    return { ...this.displaySettings }
+  }
+
+  setDisplaySettings(update: Partial<DisplaySettings>): DisplaySettings {
+    const previous = this.displaySettings
+    const next = normalizeDisplaySettings(update, previous)
+    this.displaySettings = next
+
+    if (next.exposure !== previous.exposure) {
+      this.renderer.toneMappingExposure = next.exposure
+    }
+    if (next.orbitBrightness !== previous.orbitBrightness) {
+      for (const binding of this.orbitBrightnessBindings) {
+        binding.apply(next.orbitBrightness)
+      }
+    }
+    if (next.starfieldBrightness !== previous.starfieldBrightness) {
+      for (const binding of this.starfieldBrightnessBindings) {
+        binding.apply(next.starfieldBrightness)
+      }
+    }
+
+    return this.getDisplaySettings()
+  }
+
+  resetDisplaySettings(): DisplaySettings {
+    return this.setDisplaySettings(DEFAULT_DISPLAY_SETTINGS)
   }
 
   setTimeScale(nextScale: number): void {
@@ -254,6 +308,8 @@ export class CosmosEngine {
       else material?.dispose?.()
     })
     this.disposableTextures.forEach((texture) => texture.dispose())
+    this.orbitBrightnessBindings.length = 0
+    this.starfieldBrightnessBindings.length = 0
     this.renderer.dispose()
     this.renderer.domElement.remove()
   }
@@ -469,8 +525,14 @@ export class CosmosEngine {
     const material = new THREE.LineBasicNodeMaterial({
       color: body.color,
       transparent: true,
-      opacity: 0.15,
+      opacity: ORBIT_BASE_OPACITY,
     })
+    this.bindMaterialBrightness(
+      this.orbitBrightnessBindings,
+      material,
+      ORBIT_BASE_OPACITY,
+      this.displaySettings.orbitBrightness,
+    )
     const orbit = new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), material)
     orbit.name = `${body.name} orbit`
     const parentNode =
@@ -522,9 +584,15 @@ export class CosmosEngine {
       sizeAttenuation: false,
       vertexColors: true,
       transparent: true,
-      opacity: 0.88,
+      opacity: FAR_STAR_BASE_OPACITY,
       depthWrite: false,
     })
+    this.bindMaterialBrightness(
+      this.starfieldBrightnessBindings,
+      material,
+      FAR_STAR_BASE_OPACITY,
+      this.displaySettings.starfieldBrightness,
+    )
     this.worldRoot.add(new THREE.Points(geometry, material))
     this.starCount += count
   }
@@ -557,11 +625,19 @@ export class CosmosEngine {
       )
     })().compute(count)
 
+    const initialCalibration = deriveVisualCalibration(
+      this.displaySettings.starfieldBrightness,
+      GPU_GALAXY_BASE_OPACITY,
+    )
+    const brightnessUniform = uniform(initialCalibration.colorIntensity)
+    // `shapeCircle()` is scalar at runtime; current @types/three exposes it as bare Node.
+    const circleOpacity = shapeCircle() as unknown as THREE.Node<'float'>
     const material = new THREE.SpriteNodeMaterial()
-    material.colorNode = colors.element(instanceIndex)
+    material.colorNode = colors.element(instanceIndex).mul(brightnessUniform)
     material.positionNode = positions.toAttribute()
     material.scaleNode = hash(instanceIndex.add(23)).mul(0.34).add(0.12)
-    material.opacityNode = shapeCircle()
+    material.opacityNode = materialOpacity.mul(circleOpacity)
+    material.opacity = initialCalibration.opacity
     material.transparent = true
     material.depthWrite = false
     material.blending = THREE.AdditiveBlending
@@ -573,6 +649,16 @@ export class CosmosEngine {
     galaxy.name = 'WebGPU compute galaxy'
     galaxy.rotation.x = -0.16
     this.worldRoot.add(galaxy)
+    this.starfieldBrightnessBindings.push({
+      apply: (brightness) => {
+        const calibration = deriveVisualCalibration(
+          brightness,
+          GPU_GALAXY_BASE_OPACITY,
+        )
+        brightnessUniform.value = calibration.colorIntensity
+        material.opacity = calibration.opacity
+      },
+    })
     this.renderer.compute(computeInit)
     this.starCount += count
   }
@@ -601,10 +687,16 @@ export class CosmosEngine {
       size: 0.32,
       vertexColors: true,
       transparent: true,
-      opacity: 0.72,
+      opacity: CPU_GALAXY_BASE_OPACITY,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
     })
+    this.bindMaterialBrightness(
+      this.starfieldBrightnessBindings,
+      material,
+      CPU_GALAXY_BASE_OPACITY,
+      this.displaySettings.starfieldBrightness,
+    )
     this.worldRoot.add(new THREE.Points(geometry, material))
     this.starCount += count
   }
@@ -763,6 +855,26 @@ export class CosmosEngine {
       value ^= value + Math.imul(value ^ (value >>> 7), value | 61)
       return ((value ^ (value >>> 14)) >>> 0) / 4_294_967_296
     }
+  }
+
+  private bindMaterialBrightness(
+    bindings: BrightnessBinding[],
+    material: MutableColorOpacityMaterial,
+    baseOpacity: number,
+    initialBrightness: number,
+  ): void {
+    const baseColor = material.color.clone()
+    const binding: BrightnessBinding = {
+      apply: (brightness) => {
+        const calibration = deriveVisualCalibration(brightness, baseOpacity)
+        material.color
+          .copy(baseColor)
+          .multiplyScalar(calibration.colorIntensity)
+        material.opacity = calibration.opacity
+      },
+    }
+    bindings.push(binding)
+    binding.apply(initialBrightness)
   }
 
   private readonly resize = (): void => {

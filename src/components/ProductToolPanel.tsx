@@ -1,5 +1,6 @@
 import {
   memo,
+  useCallback,
   useDeferredValue,
   useId,
   useMemo,
@@ -25,8 +26,18 @@ import {
   Sparkles,
   Trash2,
   X,
+  type LucideIcon,
 } from 'lucide-react'
-import type { CelestialBodyView, EngineCapabilities } from '../engine/types'
+import {
+  DEFAULT_DISPLAY_SETTINGS,
+  DISPLAY_SETTING_RANGES,
+  normalizeDisplaySettings,
+} from '../engine/displaySettings'
+import type {
+  CelestialBodyView,
+  DisplaySettings,
+  EngineCapabilities,
+} from '../engine/types'
 import type { SavedPlace, SavedPlacesPersistence } from './useSavedPlaces'
 
 export type ProductTool = 'search' | 'locations' | 'bookmarks' | 'settings'
@@ -42,7 +53,13 @@ export interface ProductTelemetrySummary {
   readonly floatingOriginKm: string
 }
 
-interface ProductToolPanelProps {
+/** Public UI alias for the renderer-owned visual calibration contract. */
+export type DisplayCalibration = DisplaySettings
+
+/** Backwards-compatible UI export, sourced from the renderer's canonical defaults. */
+export const DEFAULT_DISPLAY_CALIBRATION = DEFAULT_DISPLAY_SETTINGS
+
+export interface ProductToolPanelProps {
   tool: ProductTool
   targets: readonly CelestialBodyView[]
   selectedId: string | null
@@ -60,6 +77,9 @@ interface ProductToolPanelProps {
   onResetView: () => void
   onOpenQuickTour: () => void
   onOpenShortcuts: () => void
+  displayCalibration?: Readonly<DisplayCalibration>
+  onDisplayCalibrationChange?: (calibration: DisplayCalibration) => void
+  onResetDisplayCalibration?: () => void
 }
 
 const PANEL_COPY = {
@@ -92,6 +112,70 @@ const CATALOG_FILTERS: ReadonlyArray<{
   { id: 'moons', label: 'Moons' },
   { id: 'temperate', label: 'Temperate' },
 ]
+
+type DisplayCalibrationKey = keyof DisplayCalibration
+
+interface DisplayCalibrationControlDefinition {
+  readonly key: DisplayCalibrationKey
+  readonly label: string
+  readonly description: string
+  readonly min: number
+  readonly max: number
+  readonly step: number
+  readonly format: 'multiplier' | 'percent'
+  readonly icon: LucideIcon
+}
+
+const DISPLAY_CALIBRATION_CONTROLS: readonly DisplayCalibrationControlDefinition[] = [
+  {
+    key: 'exposure',
+    label: 'Exposure',
+    description: 'Adjust scene luminance before tone mapping.',
+    ...DISPLAY_SETTING_RANGES.exposure,
+    format: 'multiplier',
+    icon: CircleGauge,
+  },
+  {
+    key: 'orbitBrightness',
+    label: 'Orbit brightness',
+    description: 'Balance orbital guides against the rendered scene.',
+    ...DISPLAY_SETTING_RANGES.orbitBrightness,
+    format: 'percent',
+    icon: Orbit,
+  },
+  {
+    key: 'starfieldBrightness',
+    label: 'Starfield brightness',
+    description: 'Tune background-star luminance for the display.',
+    ...DISPLAY_SETTING_RANGES.starfieldBrightness,
+    format: 'percent',
+    icon: Sparkles,
+  },
+]
+
+function normalizeDisplayCalibration(
+  calibration: Readonly<DisplayCalibration>,
+): DisplayCalibration {
+  return normalizeDisplaySettings(calibration)
+}
+
+function formatCalibrationValue(
+  control: DisplayCalibrationControlDefinition,
+  value: number,
+) {
+  return control.format === 'multiplier'
+    ? `${value.toFixed(2)}×`
+    : `${Math.round(value * 100)}%`
+}
+
+function isDefaultCalibration(calibration: Readonly<DisplayCalibration>) {
+  return DISPLAY_CALIBRATION_CONTROLS.every(
+    (control) =>
+      Math.abs(
+        calibration[control.key] - DEFAULT_DISPLAY_CALIBRATION[control.key],
+      ) < control.step / 2,
+  )
+}
 
 function distanceLabel(target: CelestialBodyView): string {
   if (target.bodyKind === 'star') return 'System origin'
@@ -555,6 +639,60 @@ const BookmarksTool = memo(function BookmarksTool({
   )
 })
 
+interface DisplayCalibrationControlProps {
+  control: DisplayCalibrationControlDefinition
+  value: number
+  disabled: boolean
+  onChange: (key: DisplayCalibrationKey, value: number) => void
+}
+
+const DisplayCalibrationControl = memo(function DisplayCalibrationControl({
+  control,
+  value,
+  disabled,
+  onChange,
+}: DisplayCalibrationControlProps) {
+  const inputId = useId()
+  const descriptionId = `${inputId}-description`
+  const formattedValue = formatCalibrationValue(control, value)
+  const progress = ((value - control.min) / (control.max - control.min)) * 100
+  const Icon = control.icon
+
+  return (
+    <div className="product-calibration-control">
+      <div className="product-calibration-control__header">
+        <span className="product-calibration-control__icon" aria-hidden="true">
+          <Icon size={15} strokeWidth={1.6} />
+        </span>
+        <label htmlFor={inputId}>
+          <strong>{control.label}</strong>
+          <small id={descriptionId}>{control.description}</small>
+        </label>
+        <output htmlFor={inputId}>{formattedValue}</output>
+      </div>
+      <input
+        id={inputId}
+        type="range"
+        min={control.min}
+        max={control.max}
+        step={control.step}
+        value={value}
+        disabled={disabled}
+        aria-describedby={descriptionId}
+        aria-valuetext={formattedValue}
+        style={{ '--calibration-progress': `${progress}%` } as CSSProperties}
+        onChange={(event) =>
+          onChange(control.key, Number(event.currentTarget.value))
+        }
+      />
+      <div className="product-calibration-control__scale" aria-hidden="true">
+        <span>{formatCalibrationValue(control, control.min)}</span>
+        <span>{formatCalibrationValue(control, control.max)}</span>
+      </div>
+    </div>
+  )
+})
+
 interface SettingsToolProps {
   targets: readonly CelestialBodyView[]
   capabilities: EngineCapabilities | null
@@ -562,6 +700,9 @@ interface SettingsToolProps {
   onResetView: () => void
   onOpenQuickTour: () => void
   onOpenShortcuts: () => void
+  displayCalibration?: Readonly<DisplayCalibration>
+  onDisplayCalibrationChange?: (calibration: DisplayCalibration) => void
+  onResetDisplayCalibration?: () => void
 }
 
 const SettingsTool = memo(function SettingsTool({
@@ -571,7 +712,45 @@ const SettingsTool = memo(function SettingsTool({
   onResetView,
   onOpenQuickTour,
   onOpenShortcuts,
+  displayCalibration,
+  onDisplayCalibrationChange,
+  onResetDisplayCalibration,
 }: SettingsToolProps) {
+  const [fallbackCalibration, setFallbackCalibration] =
+    useState<DisplayCalibration>(() => ({ ...DEFAULT_DISPLAY_CALIBRATION }))
+  const isCalibrationControlled = displayCalibration !== undefined
+  const calibration = useMemo(
+    () =>
+      normalizeDisplayCalibration(displayCalibration ?? fallbackCalibration),
+    [displayCalibration, fallbackCalibration],
+  )
+  const calibrationDisabled =
+    isCalibrationControlled && !onDisplayCalibrationChange
+  const calibrationIsDefault = isDefaultCalibration(calibration)
+
+  const handleCalibrationChange = useCallback(
+    (key: DisplayCalibrationKey, value: number) => {
+      const nextCalibration = normalizeDisplayCalibration({
+        ...calibration,
+        [key]: value,
+      })
+      if (!isCalibrationControlled) setFallbackCalibration(nextCalibration)
+      onDisplayCalibrationChange?.(nextCalibration)
+    },
+    [calibration, isCalibrationControlled, onDisplayCalibrationChange],
+  )
+
+  const handleCalibrationReset = useCallback(() => {
+    const defaults = { ...DEFAULT_DISPLAY_CALIBRATION }
+    if (!isCalibrationControlled) setFallbackCalibration(defaults)
+    if (onResetDisplayCalibration) onResetDisplayCalibration()
+    else onDisplayCalibrationChange?.(defaults)
+  }, [
+    isCalibrationControlled,
+    onDisplayCalibrationChange,
+    onResetDisplayCalibration,
+  ])
+
   const planetCount = targets.filter((target) => target.bodyKind === 'planet').length
   const moonCount = targets.filter((target) => target.bodyKind === 'moon').length
 
@@ -594,6 +773,44 @@ const SettingsTool = memo(function SettingsTool({
           Catalogue assumptions and equation-derived measurements are labelled separately.
           Climate labels are exploration heuristics, not biosignature claims.
         </p>
+      </section>
+
+      <section
+        className="product-display-calibration"
+        aria-labelledby="display-calibration-heading"
+      >
+        <div className="product-section-heading">
+          <span id="display-calibration-heading">Display calibration</span>
+          <button
+            className="product-calibration-reset"
+            type="button"
+            disabled={
+              calibrationIsDefault ||
+              (isCalibrationControlled &&
+                !onResetDisplayCalibration &&
+                !onDisplayCalibrationChange)
+            }
+            onClick={handleCalibrationReset}
+          >
+            <RefreshCcw size={12} aria-hidden="true" />
+            Reset
+          </button>
+        </div>
+        <p className="product-calibration-intro">
+          Match scene contrast and guide visibility to this display. Values are
+          normalized and can be restored without changing simulation data.
+        </p>
+        <div className="product-calibration-controls">
+          {DISPLAY_CALIBRATION_CONTROLS.map((control) => (
+            <DisplayCalibrationControl
+              key={control.key}
+              control={control}
+              value={calibration[control.key]}
+              disabled={calibrationDisabled}
+              onChange={handleCalibrationChange}
+            />
+          ))}
+        </div>
       </section>
 
       <section aria-labelledby="runtime-heading">
@@ -674,6 +891,9 @@ function ProductToolPanelComponent({
   onResetView,
   onOpenQuickTour,
   onOpenShortcuts,
+  displayCalibration,
+  onDisplayCalibrationChange,
+  onResetDisplayCalibration,
 }: ProductToolPanelProps) {
   const headingId = useId()
   const copy = PANEL_COPY[tool]
@@ -727,6 +947,9 @@ function ProductToolPanelComponent({
             onResetView={onResetView}
             onOpenQuickTour={onOpenQuickTour}
             onOpenShortcuts={onOpenShortcuts}
+            displayCalibration={displayCalibration}
+            onDisplayCalibrationChange={onDisplayCalibrationChange}
+            onResetDisplayCalibration={onResetDisplayCalibration}
           />
         )}
       </div>

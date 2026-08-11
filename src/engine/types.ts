@@ -2,6 +2,25 @@ export type RendererBackend = 'webgpu' | 'webgl2'
 
 export type QualityLevel = 'balanced' | 'ultra' | 'battery'
 
+/** Runtime-only visual controls. Values are normalized by the engine before use. */
+export interface DisplaySettings {
+  readonly exposure: number
+  readonly orbitBrightness: number
+  readonly starfieldBrightness: number
+}
+
+export interface DisplaySettingRange {
+  readonly min: number
+  readonly max: number
+  readonly step: number
+}
+
+/** Material values derived from a normalized brightness control. */
+export interface VisualCalibration {
+  readonly colorIntensity: number
+  readonly opacity: number
+}
+
 export type CatalogBodyKind = 'star' | 'planet' | 'moon'
 
 export type CelestialKind =

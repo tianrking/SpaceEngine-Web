@@ -7,6 +7,7 @@ import {
 } from './components/ProductToolPanel'
 import { ShortcutHelpDialog } from './components/ShortcutHelpDialog'
 import { SystemNavigator } from './components/SystemNavigator'
+import { useDisplaySettings } from './components/useDisplaySettings'
 import { useSavedPlaces } from './components/useSavedPlaces'
 import { formatDistance } from './domain'
 import {
@@ -385,6 +386,12 @@ function App() {
   const [engineError, setEngineError] = useState<string | null>(null)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const {
+    displaySettings,
+    setDisplaySettings,
+    resetDisplaySettings,
+  } = useDisplaySettings()
+  const displaySettingsRef = useRef(displaySettings)
+  const {
     places: savedPlaces,
     persistence: savedPlacesPersistence,
     addPlace,
@@ -424,6 +431,7 @@ function App() {
       })
       engineRef.current = engine
       await engine.init()
+      engine.setDisplaySettings(displaySettingsRef.current)
     }
 
     void bootEngine().catch((reason: unknown) => {
@@ -436,6 +444,11 @@ function App() {
       engine?.dispose()
     }
   }, [])
+
+  useEffect(() => {
+    displaySettingsRef.current = displaySettings
+    engineRef.current?.setDisplaySettings(displaySettings)
+  }, [displaySettings])
 
   const hudObject = useMemo(
     () => (selectedBody ? toHudObject(selectedBody) : null),
@@ -685,6 +698,9 @@ function App() {
           onResetView={handleResetView}
           onOpenQuickTour={handleOpenQuickTour}
           onOpenShortcuts={handleOpenShortcuts}
+          displayCalibration={displaySettings}
+          onDisplayCalibrationChange={setDisplaySettings}
+          onResetDisplayCalibration={resetDisplaySettings}
         />
       ) : null}
 

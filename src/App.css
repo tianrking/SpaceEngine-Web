@@ -1323,6 +1323,182 @@
   border-top: 1px solid var(--tool-line);
 }
 
+.product-calibration-intro {
+  margin: 5px 0 10px;
+  color: var(--tool-faint);
+  font-size: 9px;
+  line-height: 1.55;
+}
+
+.product-calibration-controls {
+  display: grid;
+  gap: 7px;
+}
+
+.product-calibration-control {
+  --calibration-progress: 50%;
+  min-width: 0;
+  padding: 10px 11px 8px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(157, 201, 218, 0.14);
+  border-radius: 6px;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease;
+}
+
+.product-calibration-control:focus-within {
+  background: rgba(123, 232, 237, 0.035);
+  border-color: rgba(123, 232, 237, 0.27);
+}
+
+.product-calibration-control__header {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.product-calibration-control__icon {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  color: var(--tool-cyan);
+  background: var(--tool-cyan-soft);
+  border: 1px solid rgba(123, 232, 237, 0.16);
+  border-radius: 5px;
+}
+
+.product-calibration-control label {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  cursor: pointer;
+}
+
+.product-calibration-control label strong {
+  color: var(--tool-text);
+  font-size: 10px;
+  font-weight: 620;
+  letter-spacing: 0.015em;
+}
+
+.product-calibration-control label small {
+  overflow: hidden;
+  color: var(--tool-faint);
+  font-size: 8px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.product-calibration-control output {
+  min-width: 48px;
+  padding: 4px 6px;
+  color: var(--tool-cyan);
+  text-align: right;
+  background: rgba(123, 232, 237, 0.06);
+  border: 1px solid rgba(123, 232, 237, 0.14);
+  border-radius: 4px;
+  font: 9px/1 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.product-calibration-control input[type="range"] {
+  width: 100%;
+  height: 28px;
+  display: block;
+  margin: 5px 0 0;
+  padding: 0;
+  appearance: none;
+  color: var(--tool-cyan);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.product-calibration-control input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  background: linear-gradient(
+    90deg,
+    var(--tool-cyan) 0 var(--calibration-progress),
+    rgba(157, 201, 218, 0.18) var(--calibration-progress) 100%
+  );
+  border-radius: 2px;
+}
+
+.product-calibration-control input[type="range"]::-webkit-slider-thumb {
+  width: 16px;
+  height: 16px;
+  margin-top: -6px;
+  appearance: none;
+  background: #dffbfc;
+  border: 3px solid #17333b;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 1px var(--tool-cyan),
+    0 0 10px rgba(123, 232, 237, 0.28);
+}
+
+.product-calibration-control input[type="range"]::-moz-range-track {
+  height: 4px;
+  background: rgba(157, 201, 218, 0.18);
+  border: 0;
+  border-radius: 2px;
+}
+
+.product-calibration-control input[type="range"]::-moz-range-progress {
+  height: 4px;
+  background: var(--tool-cyan);
+  border-radius: 2px;
+}
+
+.product-calibration-control input[type="range"]::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  background: #dffbfc;
+  border: 3px solid #17333b;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 1px var(--tool-cyan),
+    0 0 10px rgba(123, 232, 237, 0.28);
+}
+
+.product-calibration-control input[type="range"]:disabled {
+  cursor: not-allowed;
+  filter: grayscale(0.7);
+  opacity: 0.42;
+}
+
+.product-calibration-control__scale {
+  display: flex;
+  justify-content: space-between;
+  margin-top: -2px;
+  color: var(--tool-faint);
+  font: 7px/1 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.product-section-heading > button.product-calibration-reset {
+  min-height: 28px;
+  transition:
+    color 140ms ease,
+    background-color 140ms ease,
+    border-color 140ms ease;
+}
+
+.product-section-heading > button.product-calibration-reset:hover:not(:disabled) {
+  color: var(--tool-cyan);
+  background: var(--tool-cyan-soft);
+  border-color: rgba(123, 232, 237, 0.22);
+}
+
+.product-section-heading > button.product-calibration-reset:disabled {
+  cursor: default;
+  opacity: 0.38;
+}
+
 .product-diagnostic-grid,
 .product-telemetry-grid {
   display: grid;
@@ -1578,8 +1754,47 @@
     grid-template-columns: 1fr 1fr;
   }
 
+  .product-calibration-control {
+    padding-inline: 9px;
+  }
+
+  .product-calibration-control__header {
+    grid-template-columns: 28px minmax(0, 1fr) 52px;
+    gap: 7px;
+  }
+
+  .product-calibration-control label small {
+    display: -webkit-box;
+    overflow: hidden;
+    white-space: normal;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
   .shortcut-dialog__list > div {
     grid-template-columns: 112px minmax(0, 1fr);
+  }
+}
+
+@media (pointer: coarse) {
+  .product-calibration-control input[type="range"] {
+    height: 44px;
+    margin-top: 1px;
+  }
+
+  .product-calibration-control input[type="range"]::-webkit-slider-thumb {
+    width: 20px;
+    height: 20px;
+    margin-top: -8px;
+  }
+
+  .product-calibration-control input[type="range"]::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+  }
+
+  .product-section-heading > button.product-calibration-reset {
+    min-height: 44px;
   }
 }
 
