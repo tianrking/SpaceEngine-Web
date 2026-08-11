@@ -9,6 +9,7 @@
     "lint": "oxlint",
     "test": "vitest run",
     "check": "npm run lint && npm run test && npm run build",
+    "catalog:refresh": "node scripts/refresh-exoplanet-catalog.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

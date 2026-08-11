@@ -6,7 +6,7 @@
   <h1>Astral Surveyor</h1>
 
   <p><strong>A clean-room WebGPU universe explorer built with React, TypeScript, and Three.js.</strong></p>
-  <p>Explore a deterministic prototype star system, inspect procedural worlds, accelerate simulation time, and fall back gracefully to WebGL 2 when WebGPU is unavailable.</p>
+  <p>Explore a deterministic procedural system, inspect a source-backed nearby-exoplanet archive, tune the visual observatory, and fall back gracefully to WebGL 2 when WebGPU is unavailable.</p>
 
   <p>
     <a href="https://space-engine-web.vercel.app/"><img alt="Live demo" src="https://img.shields.io/badge/Live%20Demo-Launch-55d6be?style=for-the-badge&logo=vercel&logoColor=white" /></a>
@@ -23,7 +23,7 @@
 
 ## Overview
 
-Astral Surveyor is a browser-based vertical slice for testing the engineering foundations of a large-scale universe explorer. The current application renders a deliberately compressed, visual-scale version of the fictional Asteria system. It combines a GPU-initialized spiral starfield, eight planets, eighteen parent-relative moons, procedural surfaces, rings, cloud shells, atmospheric presentation, a cinematic scientific HUD, and live renderer telemetry.
+Astral Surveyor is a browser-based vertical slice for testing the engineering foundations of a large-scale universe explorer. The application renders a deliberately compressed, visual-scale version of the fictional Asteria system and pairs it with a source-backed research catalogue of 128 nearby confirmed exoplanets across 69 host systems. It combines a GPU-initialized spiral starfield, eight planets, eighteen parent-relative moons, procedural surfaces, rings, cloud shells, atmospheric presentation, a cinematic scientific HUD, visual calibration, and live renderer telemetry.
 
 The renderer and product UI now consume the same deterministic domain catalogue. That single source owns f64 Kepler mechanics, nested orbital hierarchy, SI inputs, equation-derived physical measurements, astronomical units, seeded procedural properties, provenance, and high/low precision helpers.
 
@@ -48,6 +48,7 @@ This project is an original clean-room implementation. It is not a port, fork, o
 | Rendering | Three.js r185 `WebGPURenderer` | Scene graph, node materials, logarithmic depth, WebGPU selection, and WebGL 2 fallback |
 | GPU programs | Three.js Shading Language (TSL) | WebGPU compute initialization for the spiral starfield and backend-compatible node materials |
 | Procedural visuals | `simplex-noise`, Canvas textures | Seeded planet albedo, clouds, glows, rings, and small rocky-surface displacement |
+| Astronomical data | NASA Exoplanet Archive TAP snapshot | Versioned, validated composite parameters for 128 nearby confirmed exoplanets; loaded only when the archive view is opened |
 | State boundary | React state plus engine snapshots | Commands flow into `CosmosEngine`; telemetry returns to React every 400 ms rather than every frame |
 | Tooling | Vite 8, Oxlint | Development server, optimized production build, and static analysis |
 | Tests | Vitest 4 | Deterministic catalogue, RNG, units, orbital mechanics, and precision-helper tests |
@@ -65,20 +66,27 @@ WebAssembly is not currently used. The project first establishes correctness in 
 - **Hierarchical orbital simulation.** Planets follow deterministic Keplerian ellipses around Asteria; moons follow parent-relative orbits that are transformed into the star-system frame. Simulation time can pause or advance from `0.25x` to `10,000x` through the HUD.
 - **Precision foundations.** The renderer recenters its floating origin beyond a fixed threshold. Separate, unit-tested high/low helpers are ready for future shader integration.
 - **Procedural presentation.** Planets and moons include generated textures, class-aware terrain displacement, pressure-scaled atmosphere shells, cloud layers, ring geometry, stellar glow, and ACES filmic tone mapping.
+- **Live visual observatory.** Tune tone-mapped exposure, orbital-guide brightness, and starfield brightness without rebuilding the scene or reallocating GPU geometry/material resources; versioned preferences persist locally.
+- **Nearby exoplanet archive.** Search 128 confirmed planets in 69 systems by planet, host, spectral type, discovery method, or facility, then filter nearby, Earth-size, or temperate candidates and inspect archive-reported physical, orbital, stellar, positional, and discovery parameters.
+- **Explicit data integrity.** Observed archive records retain missing values as `null`, expose the reproducible TAP query and retrieval timestamp, and are labelled as archive composites rather than simulated fly-to targets.
 - **Working product tools.** Search and filter all 27 bodies, inspect satellite families in the system map, save any destination locally, inspect the scientific/runtime model, and open an accessible keyboard guide.
 - **Product-grade scientific HUD.** Switch between Overview, Physics, and Orbit tabs; inspect bulk properties, climate assumptions, atmospheric composition, conservative environment labels, provenance, and the live render pipeline.
 
 ## Scientific model and provenance
 
-Astral Surveyor's Asteria system is **fictional and deterministic**, not an observed exoplanet catalogue. Every body exposes provenance so curated scenario assumptions are distinguishable from equation-derived measurements.
+Astral Surveyor keeps two intentionally separate scientific layers:
+
+- The rendered Asteria system is **fictional and deterministic**. Every body exposes provenance so curated scenario assumptions are distinguishable from equation-derived measurements.
+- The Nearby Worlds archive contains **observational catalogue records** retrieved from the NASA Exoplanet Archive `pscomppars` table. These rows can combine preferred values from different literature sources, so the interface labels them **archive composite** and never presents missing values as measured facts.
 
 - Reference conversions use the [IAU 2015 Resolution B3 nominal constants](https://www.iau.org/common/Uploaded%20files/IAUGA2015-Resolution-B3-recommended-nominal-conversion.pdf).
 - World classes follow the broad terminology used by [NASA Exoplanet Exploration](https://science.nasa.gov/exoplanets/planet-types/).
 - Internal values use SI units and JavaScript `number`/f64 precision.
 - Climate and habitability labels are conservative exploration heuristics, not biosignature detections.
 - Visual radii and orbital distances are compressed independently from the physical catalogue.
+- The checked-in NASA snapshot contains 128 unique planets in 69 host systems, sorted deterministically by distance, host, and name. Its metadata preserves the exact TAP query, source URL, units, retrieval time, selection rule, and null policy.
 
-The equations, assumptions, input/derived boundary, and limitations are documented in [the scientific model](docs/SCIENCE_MODEL.md).
+The equations, assumptions, input/derived boundary, and limitations are documented in [the scientific model](docs/SCIENCE_MODEL.md). The staged path from this 128-record research index to streamed Gaia/SIMBAD/IVOA-backed catalogues is documented in the [real-catalog expansion roadmap](docs/CATALOG_EXPANSION.md).
 
 ## Current capability boundaries
 
@@ -91,12 +99,12 @@ The prototype is intentionally narrower than a production astronomical simulator
 | Terrain | Fixed sphere meshes, seeded textures, and small CPU vertex displacement | Cube-sphere quadtree LOD, tile scheduling, geomorphing, collision, walking, or terrain-level landing |
 | Atmosphere | Transparent additive shells and animated cloud presentation | Rayleigh/Mie scattering, precomputed atmosphere LUTs, volumetric clouds, weather, or physically based eclipses |
 | Physics | Equation-derived bulk properties, stellar environment, and elliptic two-body Kepler motion | N-body gravity, perturbations, resonances, tidal evolution, relativistic trajectories, spacecraft dynamics, or aerodynamics |
-| Data | Fictional deterministic Asteria inputs, explicit synthetic provenance, and derived measurements | Gaia/HYG ingestion, authoritative ephemerides, observed atmospheres/terrain, or uncertainty propagation |
+| Data | Fictional deterministic Asteria inputs plus a versioned 128-planet NASA Exoplanet Archive snapshot with source metadata and honest nulls | Gaia astrometry, SIMBAD cross-identifiers, authoritative ephemerides, per-field uncertainties/references, observed atmospheres/terrain, or live catalogue streaming |
 | Universe generation | Seeded catalogue/RNG modules and on-demand procedural visual textures | Persistent sectors, billions of addressable objects, streaming catalogues, or generator-version migrations |
-| Product UI | Inspector, system list, local catalogue search, schematic star map, `localStorage` saved places with memory fallback, runtime settings, shortcut guide, quality, cinematic, and time controls | Cross-system search, cloud sync, shared locations, user accounts, or server persistence |
+| Product UI | Inspector, system list, local simulated-body search, lazy nearby-exoplanet research search, schematic star map, `localStorage` saved places with memory fallback, visual calibration, runtime settings, shortcut guide, quality, cinematic, and time controls | Rendering and travelling through observed host systems, cloud sync, shared locations, user accounts, or server persistence |
 | Platform resilience | Automatic WebGL 2 fallback and an explicit fallback test route | GPU device-loss recovery, offline application caching, browser E2E coverage, or formal performance budgets |
 
-The catalogue is a physically constrained fictional scenario. Its derived values are internally consistent with the documented inputs, but they are not telescope observations. Visual radii and orbital distances are compressed for readability and must not be interpreted as a 1:1 scale model.
+The rendered Asteria catalogue is a physically constrained fictional scenario. Its derived values are internally consistent with the documented inputs, but they are not telescope observations. Visual radii and orbital distances are compressed for readability and must not be interpreted as a 1:1 scale model. The separate NASA research index is observational archive data and is not currently rendered as flyable systems.
 
 ## Controls
 
@@ -119,6 +127,8 @@ The catalogue is a physically constrained fictional scenario. Its derived values
 | **Close approach** | Move closer to the selected planet; this is not terrain landing |
 | **Observation deck** | Reset the camera to the initial system view |
 | Navigation rail | Open Explore, Search, Star map, Saved places, or Settings |
+| Search source switch | Move between 27 rendered Asteria bodies and the lazy-loaded 128-record NASA research archive |
+| Display calibration | Adjust exposure, orbit brightness, or starfield brightness; reset to the balanced observatory defaults |
 | Time transport controls | Pause, resume, change the positive time scale, or reset the epoch |
 | Quality selector | Switch between Performance, Balanced, and Ultra render resolution |
 | Aperture button | Toggle cinematic mode and hide interface chrome |
@@ -156,6 +166,7 @@ http://localhost:5173/?renderer=webgl2
 | `npm run lint` | Run Oxlint across the project |
 | `npm run test` | Run the Vitest unit suite once |
 | `npm run check` | Run lint, tests, and the production build in sequence |
+| `npm run catalog:refresh` | Rebuild the checked-in 128-record NASA archive snapshot from the official TAP endpoint |
 
 ## Architecture
 
@@ -166,12 +177,13 @@ flowchart LR
   Engine -->|400 ms telemetry snapshots| UI
   Domain["Canonical TypeScript domain<br/>8 planets, 18 moons, physics and provenance"] --> Catalog["Derived render and product views"]
   Catalog --> Engine
+  Snapshot["Versioned NASA TAP snapshot<br/>128 planets, 69 hosts"] -->|lazy import on archive open| UI
   Engine --> Renderer["Three.js WebGPURenderer"]
   Renderer -->|preferred backend| GPU["WebGPU and TSL compute<br/>96K galaxy points"]
   Renderer -->|automatic or forced fallback| GL["WebGL 2 and CPU buffers<br/>24K galaxy points"]
 ```
 
-The Three.js animation loop owns camera motion, hierarchical orbital updates, GPU resources, and per-frame rendering. React receives low-frequency snapshots for presentation, keeping reconciliation out of the render hot path. The DOM-free domain layer feeds both renderer and UI views and can later run in a Worker or become a WASM candidate without coupling simulation rules to React.
+The Three.js animation loop owns camera motion, hierarchical orbital updates, GPU resources, and per-frame rendering. React receives low-frequency snapshots for presentation, keeping reconciliation out of the render hot path. Display calibration mutates existing renderer uniforms/material properties in place. The NASA data module and JSON snapshot form a separate lazy chunk, and the search renders results in 20-record batches. The DOM-free domain layer feeds both renderer and UI views and can later run in a Worker or become a WASM candidate without coupling simulation rules to React.
 
 For deeper design notes, see [Architecture](docs/ARCHITECTURE.md) and [Research](docs/RESEARCH.md).
 
@@ -183,11 +195,15 @@ For deeper design notes, see [Architecture](docs/ARCHITECTURE.md) and [Research]
 ├── docs/
 │   ├── assets/                # README and product media
 │   ├── ARCHITECTURE.md        # Engine boundaries and future terrain design
+│   ├── CATALOG_EXPANSION.md   # Real-catalog sources, schema, streaming, and release gates
 │   ├── SCIENCE_MODEL.md       # Inputs, derived equations, provenance, and limitations
 │   └── RESEARCH.md            # Source-grounded SpaceEngine/WebGPU research
 ├── public/                    # Favicon, manifest, robots, and sitemap metadata
+├── scripts/
+│   └── refresh-exoplanet-catalog.mjs # Reproducible NASA TAP snapshot generator
 ├── src/
 │   ├── components/            # Navigator, product tools, saved places, and shortcut dialog
+│   ├── data/                  # Validated observed-catalogue contracts and lazy JSON snapshot
 │   ├── domain/                # Canonical catalogue, physics, f64 orbits, RNG, units, precision
 │   ├── engine/                # Three.js renderer, domain adapters, procedural textures
 │   ├── ui/                    # Reusable HUD components and styles
@@ -234,8 +250,10 @@ The unit suite currently verifies:
 - the eight-planet and eighteen-moon catalogue, rings, nested lookup, and provenance;
 - density, gravity, escape velocity, orbital speed, radiative equilibrium, flux, and conservative environment derivations;
 - elliptic Kepler solving, orbital state, period derivation, and epoch periodicity;
-- astronomical distance/speed formatting; and
-- camera-relative high/low precision splitting and reconstruction.
+- astronomical distance/speed formatting;
+- camera-relative high/low precision splitting and reconstruction;
+- display-setting normalization, persistence, and renderer calibration derivation; and
+- NASA snapshot schema, provenance, uniqueness, ordering, null preservation, and representative record validation.
 
 GitHub Actions runs `npm ci` followed by `npm run check` for pull requests and pushes to `main`.
 
@@ -280,11 +298,14 @@ The public deployment for this repository is <https://space-engine-web.vercel.ap
 - [x] Deterministic f64 domain catalogue, Kepler mechanics, RNG, units, and precision tests
 - [x] Drive renderer, search, map, and scientific Inspector from one canonical domain catalogue
 - [x] Render selectable parent-relative moons and derive their physical/orbital profiles
+- [x] Add persistent exposure, orbit-brightness, and starfield-brightness calibration without GPU resource churn
+- [x] Add a lazy, reproducible 128-planet NASA Exoplanet Archive research index with full source metadata
+- [x] Document the staged 100+ to 100,000-object real-catalog architecture, provenance, rights, caching, and performance gates
 - [ ] Add hierarchical coordinate frames and use high/low values in render shaders
 - [ ] Build six-face cube-sphere quadtree terrain with screen-space error, seams, and tile budgets
 - [ ] Add a Worker-backed low-LOD terrain provider for WebGL 2
 - [ ] Implement physically motivated atmospheric scattering and eclipse/ring shadows
-- [ ] Add licensed catalogue streaming with provenance and generator-versioned persistence
+- [ ] Add release-reviewed Gaia/SIMBAD cross-matching and streamed catalogue tiles with per-field provenance
 - [ ] Add GPU device-loss recovery, browser E2E tests, and measurable performance budgets
 - [ ] Evaluate Rust/WASM SIMD or threads only for profiled CPU bottlenecks
 
