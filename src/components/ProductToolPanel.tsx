@@ -62,15 +62,6 @@ interface ProductToolPanelProps {
   onOpenShortcuts: () => void
 }
 
-const KIND_LABELS: Record<CelestialBodyView['kind'], string> = {
-  star: 'Main-sequence star',
-  terrestrial: 'Terrestrial world',
-  oceanic: 'Ocean world',
-  desert: 'Desert world',
-  'gas-giant': 'Gas giant',
-  'ice-giant': 'Ice giant',
-}
-
 const PANEL_COPY = {
   search: { eyebrow: 'Universal index', title: 'Search', icon: Search },
   locations: { eyebrow: 'Asteria · AE-0001', title: 'Star map', icon: MapIcon },
@@ -90,20 +81,74 @@ const savedDate = new Intl.DateTimeFormat('en-US', {
   minute: '2-digit',
 })
 
+type CatalogFilter = 'all' | 'planets' | 'moons' | 'temperate'
+
+const CATALOG_FILTERS: ReadonlyArray<{
+  readonly id: CatalogFilter
+  readonly label: string
+}> = [
+  { id: 'all', label: 'All' },
+  { id: 'planets', label: 'Planets' },
+  { id: 'moons', label: 'Moons' },
+  { id: 'temperate', label: 'Temperate' },
+]
+
 function distanceLabel(target: CelestialBodyView): string {
-  return target.id === 'asteria' ? 'System origin' : `${target.distanceAu.toFixed(2)} AU`
+  if (target.bodyKind === 'star') return 'System origin'
+  if (target.bodyKind === 'moon' && target.orbit) {
+    return `${Math.round(target.orbit.semiMajorAxisMeters / 1_000).toLocaleString()} km`
+  }
+  return `${target.distanceAu.toFixed(2)} AU`
+}
+
+function bodyRoleLabel(target: CelestialBodyView): string {
+  if (target.bodyKind === 'star') return 'Primary star'
+  if (target.bodyKind === 'moon') return `${target.bodyClass} moon`
+  return target.bodyClass
+}
+
+function massLabel(target: CelestialBodyView): string {
+  if (target.bodyKind === 'star') {
+    return `${(target.massEarths / 332_946).toFixed(2)} M☉`
+  }
+  const digits = target.massEarths < 0.1 ? 3 : target.massEarths < 10 ? 2 : 1
+  return `${target.massEarths.toLocaleString(undefined, {
+    maximumFractionDigits: digits,
+  })} M⊕`
+}
+
+function pressureLabel(target: CelestialBodyView): string {
+  if (target.surfacePressurePascals === null) return 'No model'
+  const bars = target.surfacePressurePascals / 100_000
+  if (bars < 0.01) return `${target.surfacePressurePascals.toLocaleString()} Pa`
+  return `${bars.toLocaleString(undefined, { maximumFractionDigits: 2 })} bar`
 }
 
 function filterTargets(
   targets: readonly CelestialBodyView[],
   query: string,
+  filter: CatalogFilter = 'all',
 ): readonly CelestialBodyView[] {
   const needle = query.trim().toLocaleLowerCase()
-  if (!needle) return targets
-  return targets.filter((target) =>
-    [target.name, target.designation, target.kind, target.description, target.atmosphere]
-      .some((value) => value.toLocaleLowerCase().includes(needle)),
-  )
+  return targets.filter((target) => {
+    const matchesFilter =
+      filter === 'all' ||
+      (filter === 'planets' && target.bodyKind === 'planet') ||
+      (filter === 'moons' && target.bodyKind === 'moon') ||
+      (filter === 'temperate' && target.habitability.tone === 'positive')
+    if (!matchesFilter) return false
+    if (!needle) return true
+    return [
+      target.name,
+      target.designation,
+      target.bodyKind,
+      target.bodyClass,
+      target.parentName ?? '',
+      target.description,
+      target.atmosphere,
+      ...target.facts,
+    ].some((value) => value.toLocaleLowerCase().includes(needle))
+  })
 }
 
 interface SearchToolProps {
@@ -123,10 +168,11 @@ const SearchTool = memo(function SearchTool({
 }: SearchToolProps) {
   const inputId = useId()
   const [query, setQuery] = useState('')
+  const [catalogFilter, setCatalogFilter] = useState<CatalogFilter>('all')
   const deferredQuery = useDeferredValue(query)
   const results = useMemo(
-    () => filterTargets(targets, deferredQuery),
-    [deferredQuery, targets],
+    () => filterTargets(targets, deferredQuery, catalogFilter),
+    [catalogFilter, deferredQuery, targets],
   )
 
   return (
@@ -145,7 +191,11 @@ const SearchTool = memo(function SearchTool({
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={(event) => {
             if (event.key !== 'Enter') return
-            const firstMatch = filterTargets(targets, event.currentTarget.value)[0]
+            const firstMatch = filterTargets(
+              targets,
+              event.currentTarget.value,
+              catalogFilter,
+            )[0]
             if (firstMatch) onSelect(firstMatch.id)
           }}
         />
@@ -158,8 +208,21 @@ const SearchTool = memo(function SearchTool({
         )}
       </div>
 
+      <div className="product-catalog-filters" aria-label="Catalogue filters">
+        {CATALOG_FILTERS.map((filter) => (
+          <button
+            key={filter.id}
+            type="button"
+            aria-pressed={catalogFilter === filter.id}
+            onClick={() => setCatalogFilter(filter.id)}
+          >
+            {filter.label}
+          </button>
+        ))}
+      </div>
+
       <p className="product-search__status" role="status" aria-live="polite">
-        {results.length} {results.length === 1 ? 'destination' : 'destinations'} found
+        {results.length} of {targets.length} indexed bodies
       </p>
 
       {results.length > 0 ? (
@@ -184,7 +247,10 @@ const SearchTool = memo(function SearchTool({
                   />
                   <span>
                     <strong>{target.name}</strong>
-                    <small>{target.designation}</small>
+                    <small>
+                      {target.designation}
+                      {target.parentName ? ` · ${target.parentName} system` : ''}
+                    </small>
                   </span>
                   <span className="product-target-row__distance">{distanceLabel(target)}</span>
                 </button>
@@ -226,36 +292,60 @@ const LocationsTool = memo(function LocationsTool({
   onFocus,
 }: LocationsToolProps) {
   const selected = targets.find((target) => target.id === selectedId) ?? targets[0]
+  const primaryTargets = useMemo(
+    () => targets.filter((target) => target.bodyKind !== 'moon'),
+    [targets],
+  )
+  const selectedPlanetId =
+    selected?.bodyKind === 'planet'
+      ? selected.id
+      : selected?.bodyKind === 'moon'
+        ? selected.parentId
+        : null
+  const satellites = useMemo(
+    () =>
+      selectedPlanetId
+        ? targets.filter(
+            (target) =>
+              target.bodyKind === 'moon' && target.parentId === selectedPlanetId,
+          )
+        : [],
+    [selectedPlanetId, targets],
+  )
+  const planetCount = targets.filter((target) => target.bodyKind === 'planet').length
+  const moonCount = targets.filter((target) => target.bodyKind === 'moon').length
 
   return (
     <div className="product-locations">
       <div className="product-system-summary">
         <div>
-          <small>Procedural system</small>
-          <strong>{targets.length} indexed bodies</strong>
+          <small>Physics-backed synthetic system</small>
+          <strong>{planetCount} planets · {moonCount} moons</strong>
         </div>
-        <span><Sparkles size={14} aria-hidden="true" /> Seed 7A51E2</span>
+        <span><Sparkles size={14} aria-hidden="true" /> {targets.length} bodies</span>
       </div>
 
       <div
         className="product-orbit-map"
-        role="img"
+        role="group"
         aria-label="Schematic map of the Asteria system"
       >
         <span className="product-orbit-map__axis" aria-hidden="true" />
-        {targets.slice(1).map((target, index) => (
+        {primaryTargets.slice(1).map((target, index) => (
           <span
             key={`${target.id}-orbit`}
             className="product-orbit-map__ring"
-            style={{ '--orbit-size': `${56 + index * 38}px` } as CSSProperties}
+            style={{ '--orbit-size': `${52 + index * 34}px` } as CSSProperties}
             aria-hidden="true"
           />
         ))}
-        {targets.map((target, index) => {
-          const selectedTarget = selectedId === target.id
+        {primaryTargets.map((target, index) => {
+          const selectedTarget =
+            selectedId === target.id ||
+            (selected?.bodyKind === 'moon' && selected.parentId === target.id)
           const pointStyle = {
             '--map-angle': `${index * 137.5 - 40}deg`,
-            '--map-radius': `${index === 0 ? 0 : 28 + index * 19}px`,
+            '--map-radius': `${index === 0 ? 0 : 24 + index * 17}px`,
             '--body-color': target.color,
           } as CSSProperties
           return (
@@ -264,7 +354,7 @@ const LocationsTool = memo(function LocationsTool({
               className={`product-map-point${index === 0 ? ' is-star' : ''}${selectedTarget ? ' is-selected' : ''}`}
               style={pointStyle}
               type="button"
-              aria-label={`Select ${target.name}, ${KIND_LABELS[target.kind]}`}
+              aria-label={`Select ${target.name}, ${bodyRoleLabel(target)}`}
               aria-pressed={selectedTarget}
               onClick={() => onSelect(target.id)}
             >
@@ -283,22 +373,72 @@ const LocationsTool = memo(function LocationsTool({
               aria-hidden="true"
             />
             <div>
-              <small>{KIND_LABELS[selected.kind]}</small>
+              <small>{bodyRoleLabel(selected)}</small>
               <h3>{selected.name}</h3>
               <p>{selected.designation}</p>
             </div>
             <strong>{distanceLabel(selected)}</strong>
           </header>
+          <div className="product-science-badges">
+            <span>Physics derived</span>
+            <span className={`is-${selected.habitability.tone}`}>
+              {selected.habitability.label}
+            </span>
+          </div>
           <p>{selected.description}</p>
-          <dl>
-            <div><dt>Atmosphere</dt><dd>{selected.atmosphere}</dd></div>
+          <dl className="product-location-card__science-grid">
+            <div><dt>Mass</dt><dd>{massLabel(selected)}</dd></div>
             <div><dt>Mean radius</dt><dd>{selected.radiusKm.toLocaleString()} km</dd></div>
-            <div><dt>Temperature</dt><dd>{selected.temperatureK.toLocaleString()} K</dd></div>
+            <div><dt>Mean density</dt><dd>{selected.densityKgPerCubicMeter.toLocaleString(undefined, { maximumFractionDigits: 0 })} kg/m³</dd></div>
+            <div><dt>Gravity</dt><dd>{selected.gravityG.toFixed(2)} g</dd></div>
+            <div><dt>Escape velocity</dt><dd>{selected.escapeVelocityKmPerSecond.toFixed(2)} km/s</dd></div>
+            <div><dt>Mean temperature</dt><dd>{selected.temperatureK.toLocaleString()} K</dd></div>
+            <div><dt>Reference pressure</dt><dd>{pressureLabel(selected)}</dd></div>
+            <div><dt>Rotation</dt><dd>{Math.abs(selected.rotationPeriodHours).toLocaleString(undefined, { maximumFractionDigits: 1 })} h{selected.rotationPeriodHours < 0 ? ' retrograde' : ''}</dd></div>
+            {selected.orbit ? (
+              <>
+                <div><dt>Orbital period</dt><dd>{selected.orbit.periodDays.toLocaleString(undefined, { maximumFractionDigits: 2 })} days</dd></div>
+                <div><dt>Eccentricity</dt><dd>{selected.orbit.eccentricity.toFixed(3)}</dd></div>
+              </>
+            ) : null}
           </dl>
+          {selected.facts.length > 0 ? (
+            <ul className="product-location-card__facts" aria-label={`${selected.name} facts`}>
+              {selected.facts.slice(0, 2).map((fact) => <li key={fact}>{fact}</li>)}
+            </ul>
+          ) : null}
           <button type="button" className="product-primary-action" onClick={() => onFocus(selected.id)}>
             <LocateFixed size={16} aria-hidden="true" /> Focus {selected.name}
           </button>
         </article>
+      ) : null}
+
+      {satellites.length > 0 ? (
+        <section className="product-satellite-list" aria-labelledby="satellites-heading">
+          <div className="product-section-heading">
+            <span id="satellites-heading">Satellite system · {satellites.length}</span>
+            <Orbit size={14} aria-hidden="true" />
+          </div>
+          <ul>
+            {satellites.map((moon) => (
+              <li key={moon.id}>
+                <button
+                  type="button"
+                  aria-pressed={selectedId === moon.id}
+                  onClick={() => onSelect(moon.id)}
+                >
+                  <span
+                    className="product-body-swatch"
+                    style={{ '--body-color': moon.color } as CSSProperties}
+                    aria-hidden="true"
+                  />
+                  <span><strong>{moon.name}</strong><small>{moon.bodyClass}</small></span>
+                  <span>{distanceLabel(moon)}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
       ) : null}
     </div>
   )
@@ -416,6 +556,7 @@ const BookmarksTool = memo(function BookmarksTool({
 })
 
 interface SettingsToolProps {
+  targets: readonly CelestialBodyView[]
   capabilities: EngineCapabilities | null
   telemetry: ProductTelemetrySummary | null
   onResetView: () => void
@@ -424,14 +565,37 @@ interface SettingsToolProps {
 }
 
 const SettingsTool = memo(function SettingsTool({
+  targets,
   capabilities,
   telemetry,
   onResetView,
   onOpenQuickTour,
   onOpenShortcuts,
 }: SettingsToolProps) {
+  const planetCount = targets.filter((target) => target.bodyKind === 'planet').length
+  const moonCount = targets.filter((target) => target.bodyKind === 'moon').length
+
   return (
     <div className="product-settings">
+      <section aria-labelledby="science-model-heading">
+        <div className="product-section-heading">
+          <span id="science-model-heading">Scientific model</span>
+          <Database size={14} aria-hidden="true" />
+        </div>
+        <dl className="product-diagnostic-grid">
+          <div><dt>Catalogue</dt><dd>{targets.length} bodies</dd></div>
+          <div><dt>Worlds</dt><dd>{planetCount} + {moonCount} moons</dd></div>
+          <div><dt>Internal units</dt><dd>SI / f64</dd></div>
+          <div><dt>Orbit model</dt><dd>Keplerian</dd></div>
+          <div><dt>Constants</dt><dd>IAU 2015</dd></div>
+          <div><dt>Provenance</dt><dd>Synthetic + derived</dd></div>
+        </dl>
+        <p className="product-inline-note">
+          Catalogue assumptions and equation-derived measurements are labelled separately.
+          Climate labels are exploration heuristics, not biosignature claims.
+        </p>
+      </section>
+
       <section aria-labelledby="runtime-heading">
         <div className="product-section-heading">
           <span id="runtime-heading">Renderer capabilities</span>
@@ -557,6 +721,7 @@ function ProductToolPanelComponent({
           />
         ) : (
           <SettingsTool
+            targets={targets}
             capabilities={capabilities}
             telemetry={telemetry}
             onResetView={onResetView}

@@ -23,9 +23,9 @@
 
 ## Overview
 
-Astral Surveyor is a browser-based vertical slice for testing the engineering foundations of a large-scale universe explorer. The current application renders a deliberately compressed, visual-scale version of the fictional Asteria system. It combines a GPU-initialized spiral starfield, five navigable planets, procedural surface textures, rings, cloud shells, orbital motion, a cinematic HUD, and live renderer telemetry.
+Astral Surveyor is a browser-based vertical slice for testing the engineering foundations of a large-scale universe explorer. The current application renders a deliberately compressed, visual-scale version of the fictional Asteria system. It combines a GPU-initialized spiral starfield, eight planets, eighteen parent-relative moons, procedural surfaces, rings, cloud shells, atmospheric presentation, a cinematic scientific HUD, and live renderer telemetry.
 
-The repository also contains a separate, tested simulation-domain model with a seeded six-planet catalogue, nested moons, f64 Kepler mechanics, astronomical units, and high/low precision helpers. That richer domain model is not yet wired one-to-one into the visual scene; the distinction is intentional and documented below.
+The renderer and product UI now consume the same deterministic domain catalogue. That single source owns f64 Kepler mechanics, nested orbital hierarchy, SI inputs, equation-derived physical measurements, astronomical units, seeded procedural properties, provenance, and high/low precision helpers.
 
 This project is an original clean-room implementation. It is not a port, fork, or web edition of SpaceEngine.
 
@@ -60,12 +60,25 @@ WebAssembly is not currently used. The project first establishes correctness in 
 - **WebGPU-first rendering.** Three.js selects the WebGPU backend when available and initializes 96,000 spiral-galaxy points with a TSL compute pass.
 - **Honest WebGL 2 fallback.** Unsupported or explicitly downgraded clients receive a 24,000-point CPU-generated galaxy while keeping the main navigation and inspection experience.
 - **Seeded visual scene.** An additional 8,000 far stars and the procedural texture generators use repeatable pseudo-random sequences.
-- **Interactive Asteria system.** Select and visit Asteria plus five rendered planets, including rocky, oceanic, terrestrial, gas-giant, and ice-giant presentations.
-- **Orbital simulation.** Elliptic orbits use a Newton-solved eccentric anomaly; simulation time can pause or advance from `0.25x` to `10,000x` through the HUD.
+- **Interactive Asteria system.** Explore one G-class star, eight primary worlds, and eighteen selectable moons spanning lava, desert, ocean, super-Earth, Neptunian, gas-giant, ice-giant, dwarf, volcanic, rocky, icy, and oceanic classes.
+- **Physics-derived catalogue.** Density, reference gravity, escape velocity, orbital period, mean orbital speed, periapsis, apoapsis, stellar flux, and equilibrium temperature are calculated from SI catalogue inputs instead of being independently hand-typed display values.
+- **Hierarchical orbital simulation.** Planets follow deterministic Keplerian ellipses around Asteria; moons follow parent-relative orbits that are transformed into the star-system frame. Simulation time can pause or advance from `0.25x` to `10,000x` through the HUD.
 - **Precision foundations.** The renderer recenters its floating origin beyond a fixed threshold. Separate, unit-tested high/low helpers are ready for future shader integration.
-- **Procedural presentation.** Planets include generated textures, lightweight terrain-like displacement, cloud layers, additive atmosphere shells, rings, stellar glow, and ACES filmic tone mapping.
-- **Working product tools.** Search the six-body visual catalogue, use a schematic system map, save catalogue destinations locally, inspect runtime capabilities, and open an accessible keyboard guide.
-- **Product-grade HUD.** Inspect synthetic physical profiles, focus targets, switch quality presets, enter cinematic mode, and monitor FPS, camera speed, draw calls, star count, and active backend.
+- **Procedural presentation.** Planets and moons include generated textures, class-aware terrain displacement, pressure-scaled atmosphere shells, cloud layers, ring geometry, stellar glow, and ACES filmic tone mapping.
+- **Working product tools.** Search and filter all 27 bodies, inspect satellite families in the system map, save any destination locally, inspect the scientific/runtime model, and open an accessible keyboard guide.
+- **Product-grade scientific HUD.** Switch between Overview, Physics, and Orbit tabs; inspect bulk properties, climate assumptions, atmospheric composition, conservative environment labels, provenance, and the live render pipeline.
+
+## Scientific model and provenance
+
+Astral Surveyor's Asteria system is **fictional and deterministic**, not an observed exoplanet catalogue. Every body exposes provenance so curated scenario assumptions are distinguishable from equation-derived measurements.
+
+- Reference conversions use the [IAU 2015 Resolution B3 nominal constants](https://www.iau.org/common/Uploaded%20files/IAUGA2015-Resolution-B3-recommended-nominal-conversion.pdf).
+- World classes follow the broad terminology used by [NASA Exoplanet Exploration](https://science.nasa.gov/exoplanets/planet-types/).
+- Internal values use SI units and JavaScript `number`/f64 precision.
+- Climate and habitability labels are conservative exploration heuristics, not biosignature detections.
+- Visual radii and orbital distances are compressed independently from the physical catalogue.
+
+The equations, assumptions, input/derived boundary, and limitations are documented in [the scientific model](docs/SCIENCE_MODEL.md).
 
 ## Current capability boundaries
 
@@ -74,16 +87,16 @@ The prototype is intentionally narrower than a production astronomical simulator
 | Area | What works now | Not implemented yet |
 | --- | --- | --- |
 | Scale | Floating-origin recentering and logarithmic depth in a compressed visual system | Physically scaled travel from planetary terrain to interstellar or galactic distances |
-| Coordinates | f64 domain values and tested high/low split utilities | High/low shader integration, hierarchical galaxy/system/planet reference frames, or catalogue-grade sky coordinates |
+| Coordinates | f64 domain values, parent-relative moon transforms, and tested high/low split utilities | High/low shader integration, hierarchical galaxy/system/planet reference frames, or catalogue-grade observed sky coordinates |
 | Terrain | Fixed sphere meshes, seeded textures, and small CPU vertex displacement | Cube-sphere quadtree LOD, tile scheduling, geomorphing, collision, walking, or terrain-level landing |
 | Atmosphere | Transparent additive shells and animated cloud presentation | Rayleigh/Mie scattering, precomputed atmosphere LUTs, volumetric clouds, weather, or physically based eclipses |
-| Physics | Elliptic two-body Kepler motion at visual scale | N-body gravity, perturbations, relativistic trajectories, spacecraft dynamics, or aerodynamics |
-| Data | Fictional, deterministic Asteria data and synthetic display coordinates | Gaia/HYG ingestion, authoritative ephemerides, observed terrain, or scientific provenance pipelines |
+| Physics | Equation-derived bulk properties, stellar environment, and elliptic two-body Kepler motion | N-body gravity, perturbations, resonances, tidal evolution, relativistic trajectories, spacecraft dynamics, or aerodynamics |
+| Data | Fictional deterministic Asteria inputs, explicit synthetic provenance, and derived measurements | Gaia/HYG ingestion, authoritative ephemerides, observed atmospheres/terrain, or uncertainty propagation |
 | Universe generation | Seeded catalogue/RNG modules and on-demand procedural visual textures | Persistent sectors, billions of addressable objects, streaming catalogues, or generator-version migrations |
 | Product UI | Inspector, system list, local catalogue search, schematic star map, `localStorage` saved places with memory fallback, runtime settings, shortcut guide, quality, cinematic, and time controls | Cross-system search, cloud sync, shared locations, user accounts, or server persistence |
 | Platform resilience | Automatic WebGL 2 fallback and an explicit fallback test route | GPU device-loss recovery, offline application caching, browser E2E coverage, or formal performance budgets |
 
-The values shown in the inspector are fictional prototype data. Visual radii and orbital distances are compressed for readability and must not be interpreted as a scientific scale model.
+The catalogue is a physically constrained fictional scenario. Its derived values are internally consistent with the documented inputs, but they are not telescope observations. Visual radii and orbital distances are compressed for readability and must not be interpreted as a 1:1 scale model.
 
 ## Controls
 
@@ -91,8 +104,8 @@ The values shown in the inspector are fictional prototype data. Visual radii and
 | --- | --- |
 | Left-drag | Orbit around the current control target |
 | Mouse wheel | Dolly toward or away from the target |
-| Click a star or planet | Select it and open its inspector |
-| Double-click a star or planet | Fly to its orbital view |
+| Click a star, planet, moon, or ring | Select it and open its inspector |
+| Double-click a star, planet, or moon | Fly to its orbital view |
 | `G` | Focus the currently selected target |
 | `/` | Open and focus the Asteria catalogue search |
 | `?` | Open the keyboard shortcut guide |
@@ -151,14 +164,14 @@ flowchart LR
   User["Pointer, keyboard, and HUD input"] --> UI["React application and HUD"]
   UI -->|commands| Engine["CosmosEngine facade"]
   Engine -->|400 ms telemetry snapshots| UI
-  Catalog["Visual render catalogue and seeded textures"] --> Engine
+  Domain["Canonical TypeScript domain<br/>8 planets, 18 moons, physics and provenance"] --> Catalog["Derived render and product views"]
+  Catalog --> Engine
   Engine --> Renderer["Three.js WebGPURenderer"]
   Renderer -->|preferred backend| GPU["WebGPU and TSL compute<br/>96K galaxy points"]
   Renderer -->|automatic or forced fallback| GL["WebGL 2 and CPU buffers<br/>24K galaxy points"]
-  Domain["Independent TypeScript domain<br/>seeded catalogue, f64 Kepler, units, precision"] -. staged integration .-> Engine
 ```
 
-The Three.js animation loop owns camera motion, orbital updates, GPU resources, and per-frame rendering. React receives low-frequency snapshots for presentation, keeping reconciliation out of the render hot path. The domain layer is DOM-free and unit-tested so it can later run in a Worker or become a WASM candidate without coupling simulation rules to React.
+The Three.js animation loop owns camera motion, hierarchical orbital updates, GPU resources, and per-frame rendering. React receives low-frequency snapshots for presentation, keeping reconciliation out of the render hot path. The DOM-free domain layer feeds both renderer and UI views and can later run in a Worker or become a WASM candidate without coupling simulation rules to React.
 
 For deeper design notes, see [Architecture](docs/ARCHITECTURE.md) and [Research](docs/RESEARCH.md).
 
@@ -170,12 +183,13 @@ For deeper design notes, see [Architecture](docs/ARCHITECTURE.md) and [Research]
 ├── docs/
 │   ├── assets/                # README and product media
 │   ├── ARCHITECTURE.md        # Engine boundaries and future terrain design
+│   ├── SCIENCE_MODEL.md       # Inputs, derived equations, provenance, and limitations
 │   └── RESEARCH.md            # Source-grounded SpaceEngine/WebGPU research
 ├── public/                    # Favicon, manifest, robots, and sitemap metadata
 ├── src/
 │   ├── components/            # Navigator, product tools, saved places, and shortcut dialog
-│   ├── domain/                # Deterministic catalogue, f64 orbits, RNG, units, precision
-│   ├── engine/                # Three.js renderer, scene catalogue, procedural textures
+│   ├── domain/                # Canonical catalogue, physics, f64 orbits, RNG, units, precision
+│   ├── engine/                # Three.js renderer, domain adapters, procedural textures
 │   ├── ui/                    # Reusable HUD components and styles
 │   ├── App.tsx                # UI-to-engine orchestration
 │   └── main.tsx               # React entry point
@@ -217,7 +231,8 @@ npm run check
 The unit suite currently verifies:
 
 - deterministic seeded RNG streams and independent forks;
-- the six-planet simulation-domain catalogue, rings, and nested moon lookup;
+- the eight-planet and eighteen-moon catalogue, rings, nested lookup, and provenance;
+- density, gravity, escape velocity, orbital speed, radiative equilibrium, flux, and conservative environment derivations;
 - elliptic Kepler solving, orbital state, period derivation, and epoch periodicity;
 - astronomical distance/speed formatting; and
 - camera-relative high/low precision splitting and reconstruction.
@@ -263,7 +278,8 @@ The public deployment for this repository is <https://space-engine-web.vercel.ap
 - [x] Visual Asteria navigation, object inspection, time controls, and telemetry
 - [x] Local search, schematic star map, saved places, runtime settings, and shortcut help
 - [x] Deterministic f64 domain catalogue, Kepler mechanics, RNG, units, and precision tests
-- [ ] Replace the separate presentation catalogue with the tested domain model
+- [x] Drive renderer, search, map, and scientific Inspector from one canonical domain catalogue
+- [x] Render selectable parent-relative moons and derive their physical/orbital profiles
 - [ ] Add hierarchical coordinate frames and use high/low values in render shaders
 - [ ] Build six-face cube-sphere quadtree terrain with screen-space error, seams, and tile budgets
 - [ ] Add a Worker-backed low-LOD terrain provider for WebGL 2

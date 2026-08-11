@@ -10,15 +10,6 @@ interface SystemNavigatorProps {
   onFocus: (id: string, surface?: boolean) => void
 }
 
-const KIND_LABELS: Record<NavigationTarget['kind'], string> = {
-  star: 'G2 V star',
-  terrestrial: 'temperate terra',
-  oceanic: 'ocean world',
-  desert: 'rocky desert',
-  'gas-giant': 'gas giant',
-  'ice-giant': 'ice giant',
-}
-
 function SystemNavigatorComponent({
   targets,
   selectedId,
@@ -54,7 +45,7 @@ function SystemNavigatorComponent({
                 <span className="system-navigator__body" style={{ '--body-color': target.color } as CSSProperties} />
                 <span className="system-navigator__label">
                   <strong>{target.name}</strong>
-                  <small>{KIND_LABELS[target.kind]}</small>
+                  <small>{target.bodyClass}</small>
                 </span>
                 {selected ? <LocateFixed size={15} aria-hidden="true" /> : null}
               </button>

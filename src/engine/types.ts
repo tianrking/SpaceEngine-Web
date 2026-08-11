@@ -2,6 +2,8 @@ export type RendererBackend = 'webgpu' | 'webgl2'
 
 export type QualityLevel = 'balanced' | 'ultra' | 'battery'
 
+export type CatalogBodyKind = 'star' | 'planet' | 'moon'
+
 export type CelestialKind =
   | 'star'
   | 'terrestrial'
@@ -10,22 +12,81 @@ export type CelestialKind =
   | 'gas-giant'
   | 'ice-giant'
 
+export interface AtmosphereConstituentView {
+  readonly species: string
+  /** Normalized volume fraction in the range 0..1. */
+  readonly fraction: number
+}
+
+export interface OrbitView {
+  readonly semiMajorAxisMeters: number
+  /** Distance from the primary star. Moons inherit their parent planet's stellar distance. */
+  readonly stellarDistanceAu: number
+  readonly eccentricity: number
+  readonly inclinationDegrees: number
+  readonly periodDays: number
+  readonly periapsisMeters: number
+  readonly apoapsisMeters: number
+  readonly meanVelocityKmPerSecond: number
+  readonly stellarFluxWattsPerSquareMeter: number
+  readonly stellarFluxSolar: number
+}
+
+export interface ProvenanceView {
+  readonly origin: 'synthetic' | 'catalogue' | 'derived'
+  readonly generator: string
+  readonly modelVersion: string
+  readonly seed: string | null
+  readonly notice: string
+  readonly references: readonly string[]
+}
+
+export type HabitabilityTone = 'positive' | 'caution' | 'negative' | 'neutral'
+
+export interface HabitabilityView {
+  readonly label: string
+  readonly tone: HabitabilityTone
+  readonly summary: string
+}
+
 export interface CelestialBodyView {
-  id: string
-  name: string
-  designation: string
-  kind: CelestialKind
-  description: string
-  radiusKm: number
-  massEarths: number
-  temperatureK: number
-  gravityG: number
-  orbitalPeriodDays: number
-  distanceAu: number
-  atmosphere: string
-  discovered: string
-  color: string
-  accent: string
+  readonly id: string
+  readonly name: string
+  readonly designation: string
+  /** Existing presentation class consumed by the current HUD. */
+  readonly kind: CelestialKind
+  /** Canonical catalogue role, independent from the presentation class. */
+  readonly bodyKind: CatalogBodyKind
+  readonly bodyClass: string
+  readonly parentId: string | null
+  readonly parentName: string | null
+  readonly description: string
+  readonly radiusKm: number
+  readonly massKilograms: number
+  readonly massEarths: number
+  readonly densityKgPerCubicMeter: number
+  readonly temperatureK: number
+  readonly equilibriumTemperatureK: number | null
+  readonly greenhouseDeltaK: number | null
+  readonly internalHeatFluxWattsPerSquareMeter: number | null
+  readonly surfaceGravityMetersPerSecondSquared: number
+  readonly gravityG: number
+  readonly escapeVelocityKmPerSecond: number
+  readonly orbitalPeriodDays: number
+  readonly distanceAu: number
+  readonly orbit: OrbitView | null
+  readonly rotationPeriodHours: number
+  readonly axialTiltDegrees: number
+  readonly albedo: number
+  readonly atmosphere: string
+  readonly surfacePressurePascals: number | null
+  readonly atmosphereComposition: readonly AtmosphereConstituentView[]
+  readonly discovered: string
+  readonly provenance: ProvenanceView
+  readonly facts: readonly string[]
+  readonly habitability: HabitabilityView
+  readonly color: string
+  readonly accent: string
 }
 
 export interface EngineTelemetry {
@@ -60,8 +121,10 @@ export interface CosmosEngineEvents {
 }
 
 export interface NavigationTarget {
-  id: string
-  name: string
-  kind: CelestialKind
-  color: string
+  readonly id: string
+  readonly name: string
+  readonly kind: CelestialKind
+  readonly bodyKind: Extract<CatalogBodyKind, 'star' | 'planet'>
+  readonly bodyClass: string
+  readonly color: string
 }

@@ -8,10 +8,19 @@ export {
 } from './ExplorerHud'
 
 export type {
+  CelestialAtmosphere,
+  CelestialAtmosphereComponent,
+  CelestialClassification,
   CelestialCoordinates,
+  CelestialHabitability,
   CelestialMetric,
+  CelestialMetricSection,
+  CelestialProvenance,
+  CelestialStatus,
+  CelestialStatusTone,
   ExplorerHudProps,
   ExplorerOverlay,
+  InspectorTab,
   NavigationRailProps,
   NavigationTool,
   ObjectInspectorProps,

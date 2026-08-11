@@ -1,5 +1,5 @@
-import { useEffect, useId, useRef } from 'react'
-import type { ChangeEvent } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
+import type { ChangeEvent, KeyboardEvent as ReactKeyboardEvent } from 'react'
 import {
   Aperture,
   Bookmark,
@@ -56,7 +56,64 @@ export interface CelestialMetric {
   unit?: string
 }
 
+export type InspectorTab = 'overview' | 'physics' | 'orbit'
+
+export type CelestialStatusTone =
+  | 'neutral'
+  | 'positive'
+  | 'caution'
+  | 'critical'
+  | 'informational'
+
+export interface CelestialClassification {
+  label: string
+  detail?: string
+}
+
+export interface CelestialProvenance {
+  source: string
+  method?: string
+  confidence?: string
+  reference?: string
+}
+
+export interface CelestialMetricSection {
+  id: string
+  title: string
+  /** Defaults to the Physics tab when omitted. */
+  tab?: InspectorTab
+  summary?: string
+  metrics: CelestialMetric[]
+}
+
+export interface CelestialAtmosphereComponent {
+  species: string
+  amount?: string
+}
+
+export interface CelestialAtmosphere {
+  summary?: string
+  pressure?: string
+  composition?: CelestialAtmosphereComponent[]
+}
+
+export interface CelestialStatus {
+  label: string
+  detail?: string
+  tone?: CelestialStatusTone
+}
+
+export interface CelestialHabitability {
+  label: string
+  /** Optional normalized score from 0 to 100. */
+  score?: number
+  summary?: string
+  tone?: CelestialStatusTone
+  factors?: CelestialMetric[]
+}
+
 export interface CelestialCoordinates {
+  /** Supply observed/catalogued coordinates only; the HUD never synthesizes them. */
   rightAscension: string
   declination: string
 }
@@ -69,7 +126,15 @@ export interface SelectedCelestialObject {
   description?: string
   distance?: string
   coordinates?: CelestialCoordinates
+  orbitSummary?: string
   metrics?: CelestialMetric[]
+  classification?: CelestialClassification
+  provenance?: CelestialProvenance
+  quickFacts?: CelestialMetric[]
+  metricSections?: CelestialMetricSection[]
+  atmosphere?: CelestialAtmosphere
+  habitability?: CelestialHabitability
+  status?: CelestialStatus
 }
 
 export interface TopStatusBarProps {
@@ -419,6 +484,253 @@ function EmptyInspector() {
   )
 }
 
+const INSPECTOR_TABS: Array<{ id: InspectorTab; label: string }> = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'physics', label: 'Physics' },
+  { id: 'orbit', label: 'Orbit' },
+]
+
+interface InspectorMetricGridProps {
+  metrics: CelestialMetric[]
+  compact?: boolean
+}
+
+function InspectorMetricGrid({
+  metrics,
+  compact = false,
+}: InspectorMetricGridProps) {
+  return (
+    <dl
+      className={joinClassNames(
+        'se-science-metric-grid',
+        compact && 'is-compact',
+      )}
+    >
+      {metrics.map((metric, index) => (
+        <div key={`${metric.label}-${metric.value}-${index}`}>
+          <dt>{metric.label}</dt>
+          <dd>
+            <span>{metric.value}</span>
+            {metric.unit && <small>{metric.unit}</small>}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  )
+}
+
+interface InspectorMetricSectionProps {
+  section: CelestialMetricSection
+  headingId: string
+}
+
+function InspectorMetricSection({
+  section,
+  headingId,
+}: InspectorMetricSectionProps) {
+  if (section.metrics.length === 0 && !section.summary) return null
+
+  return (
+    <section className="se-science-section" aria-labelledby={headingId}>
+      <div className="se-science-section__heading">
+        <span className="se-section-label" id={headingId}>
+          {section.title}
+        </span>
+        {section.metrics.length > 0 && (
+          <span aria-hidden="true">
+            {section.metrics.length.toString().padStart(2, '0')}
+          </span>
+        )}
+      </div>
+      {section.summary && (
+        <p className="se-science-section__summary">{section.summary}</p>
+      )}
+      {section.metrics.length > 0 && (
+        <InspectorMetricGrid metrics={section.metrics} />
+      )}
+    </section>
+  )
+}
+
+function InspectorTabEmpty({ children }: { children: string }) {
+  return (
+    <div className="se-inspector-tab-empty">
+      <Orbit size={20} strokeWidth={1.3} aria-hidden="true" />
+      <p>{children}</p>
+    </div>
+  )
+}
+
+function statusClass(tone: CelestialStatusTone | undefined) {
+  return `is-${tone ?? 'neutral'}`
+}
+
+interface InspectorOverviewProps {
+  object: SelectedCelestialObject
+  quickFacts: CelestialMetric[]
+  sections: CelestialMetricSection[]
+  idBase: string
+}
+
+function InspectorOverview({
+  object,
+  quickFacts,
+  sections,
+  idBase,
+}: InspectorOverviewProps) {
+  const atmosphere = object.atmosphere
+  const habitability = object.habitability
+  const provenance = object.provenance
+  const habitabilityScore =
+    typeof habitability?.score === 'number' &&
+    Number.isFinite(habitability.score)
+      ? Math.min(100, Math.max(0, habitability.score))
+      : null
+
+  return (
+    <>
+      {(object.classification || object.status?.detail) && (
+        <section
+          className="se-science-identity"
+          aria-labelledby={
+            object.classification ? `${idBase}-classification` : undefined
+          }
+          aria-label={object.classification ? undefined : 'Object status'}
+        >
+          {object.classification && (
+            <div>
+              <span className="se-section-label" id={`${idBase}-classification`}>
+                Classification
+              </span>
+              <strong>{object.classification.label}</strong>
+              {object.classification.detail && (
+                <small>{object.classification.detail}</small>
+              )}
+            </div>
+          )}
+          {object.status?.detail && (
+            <p className="se-science-identity__status">{object.status.detail}</p>
+          )}
+        </section>
+      )}
+
+      {quickFacts.length > 0 && (
+        <section
+          className="se-science-section"
+          aria-labelledby={`${idBase}-quick-facts`}
+        >
+          <div className="se-science-section__heading">
+            <span className="se-section-label" id={`${idBase}-quick-facts`}>
+              Quick facts
+            </span>
+          </div>
+          <InspectorMetricGrid metrics={quickFacts} compact />
+        </section>
+      )}
+
+      {sections.map((section, index) => (
+        <InspectorMetricSection
+          key={section.id}
+          section={section}
+          headingId={`${idBase}-overview-${index}`}
+        />
+      ))}
+
+      {atmosphere && (
+        <section
+          className="se-science-section se-atmosphere"
+          aria-labelledby={`${idBase}-atmosphere`}
+        >
+          <div className="se-science-section__heading">
+            <span className="se-section-label" id={`${idBase}-atmosphere`}>
+              Atmosphere
+            </span>
+            {atmosphere.pressure && <span>{atmosphere.pressure}</span>}
+          </div>
+          {atmosphere.summary && (
+            <p className="se-science-section__summary">{atmosphere.summary}</p>
+          )}
+          {atmosphere.composition && atmosphere.composition.length > 0 && (
+            <ul className="se-atmosphere__composition" aria-label="Atmospheric composition">
+              {atmosphere.composition.map((component, index) => (
+                <li key={`${component.species}-${component.amount ?? index}`}>
+                  <span>{component.species}</span>
+                  {component.amount && <strong>{component.amount}</strong>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+
+      {habitability && (
+        <section
+          className="se-science-section se-habitability"
+          aria-labelledby={`${idBase}-habitability`}
+        >
+          <div className="se-habitability__heading">
+            <span className="se-section-label" id={`${idBase}-habitability`}>
+              Habitability
+            </span>
+            <span
+              className={joinClassNames(
+                'se-science-status',
+                statusClass(habitability.tone),
+              )}
+            >
+              {habitability.label}
+            </span>
+          </div>
+          {habitabilityScore !== null && (
+            <div className="se-habitability__score">
+              <meter
+                min="0"
+                max="100"
+                value={habitabilityScore}
+                aria-label={`Habitability score ${habitabilityScore} out of 100`}
+              />
+              <strong>{Math.round(habitabilityScore)} / 100</strong>
+            </div>
+          )}
+          {habitability.summary && (
+            <p className="se-science-section__summary">{habitability.summary}</p>
+          )}
+          {habitability.factors && habitability.factors.length > 0 && (
+            <InspectorMetricGrid metrics={habitability.factors} compact />
+          )}
+        </section>
+      )}
+
+      {object.description && (
+        <p className="se-object-description">{object.description}</p>
+      )}
+
+      {provenance && (
+        <section
+          className="se-provenance"
+          aria-labelledby={`${idBase}-provenance`}
+        >
+          <Database size={15} strokeWidth={1.5} aria-hidden="true" />
+          <div>
+            <span className="se-section-label" id={`${idBase}-provenance`}>
+              Data provenance
+            </span>
+            <strong>{provenance.source}</strong>
+            {(provenance.method || provenance.confidence) && (
+              <small>
+                {[provenance.method, provenance.confidence]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </small>
+            )}
+            {provenance.reference && <code>{provenance.reference}</code>}
+          </div>
+        </section>
+      )}
+    </>
+  )
+}
+
 export function ObjectInspector({
   selectedObject,
   open = true,
@@ -427,6 +739,88 @@ export function ObjectInspector({
   onClear,
 }: ObjectInspectorProps) {
   const contentId = useId()
+  const tabIdBase = useId()
+  const [activeTab, setActiveTab] = useState<InspectorTab>('overview')
+
+  useEffect(() => {
+    setActiveTab('overview')
+  }, [selectedObject?.id])
+
+  const handleTabKeyDown = (
+    event: ReactKeyboardEvent<HTMLButtonElement>,
+    currentIndex: number,
+  ) => {
+    let nextIndex: number | null = null
+    if (event.key === 'ArrowRight') {
+      nextIndex = (currentIndex + 1) % INSPECTOR_TABS.length
+    } else if (event.key === 'ArrowLeft') {
+      nextIndex =
+        (currentIndex - 1 + INSPECTOR_TABS.length) % INSPECTOR_TABS.length
+    } else if (event.key === 'Home') {
+      nextIndex = 0
+    } else if (event.key === 'End') {
+      nextIndex = INSPECTOR_TABS.length - 1
+    }
+
+    if (nextIndex === null) return
+    event.preventDefault()
+    const nextTab = INSPECTOR_TABS[nextIndex]
+    setActiveTab(nextTab.id)
+    event.currentTarget.parentElement
+      ?.querySelectorAll<HTMLButtonElement>('[role="tab"]')
+      .item(nextIndex)
+      .focus()
+  }
+
+  const quickFacts = selectedObject
+    ? (selectedObject.quickFacts ??
+      [
+        ...(selectedObject.distance
+          ? [{ label: 'Distance', value: selectedObject.distance }]
+          : []),
+        ...(selectedObject.metrics ?? []),
+      ].slice(0, 4))
+    : []
+  const overviewSections =
+    selectedObject?.metricSections?.filter((section) => section.tab === 'overview') ?? []
+  const physicsSections = selectedObject
+    ? [
+        ...(selectedObject.metrics && selectedObject.metrics.length > 0
+          ? [
+              {
+                id: 'legacy-physical-profile',
+                title: 'Physical profile',
+                tab: 'physics' as const,
+                metrics: selectedObject.metrics,
+              },
+            ]
+          : []),
+        ...(selectedObject.metricSections?.filter(
+          (section) => (section.tab ?? 'physics') === 'physics',
+        ) ?? []),
+      ]
+    : []
+  const orbitSections =
+    selectedObject?.metricSections?.filter((section) => section.tab === 'orbit') ?? []
+  const observedPosition: CelestialMetric[] = selectedObject
+    ? [
+        ...(selectedObject.distance
+          ? [{ label: 'Distance', value: selectedObject.distance }]
+          : []),
+        ...(selectedObject.coordinates
+          ? [
+              {
+                label: 'Right ascension',
+                value: selectedObject.coordinates.rightAscension,
+              },
+              {
+                label: 'Declination',
+                value: selectedObject.coordinates.declination,
+              },
+            ]
+          : []),
+      ]
+    : []
 
   return (
     <aside
@@ -471,10 +865,22 @@ export function ObjectInspector({
           ) : (
             <>
               <div className="se-object-title">
-                <span className="se-object-title__type">
-                  <Globe2 size={14} aria-hidden="true" />
-                  {selectedObject.type}
-                </span>
+                <div className="se-object-title__meta">
+                  <span className="se-object-title__type">
+                    <Globe2 size={14} aria-hidden="true" />
+                    {selectedObject.type}
+                  </span>
+                  {selectedObject.status && (
+                    <span
+                      className={joinClassNames(
+                        'se-science-status',
+                        statusClass(selectedObject.status.tone),
+                      )}
+                    >
+                      {selectedObject.status.label}
+                    </span>
+                  )}
+                </div>
                 <h2>{selectedObject.name}</h2>
                 {selectedObject.designation && (
                   <p>{selectedObject.designation}</p>
@@ -492,53 +898,105 @@ export function ObjectInspector({
                 <span aria-hidden="true">F</span>
               </button>
 
-              {(selectedObject.distance || selectedObject.coordinates) && (
-                <dl className="se-position-grid">
-                  {selectedObject.distance && (
-                    <div>
-                      <dt>Distance</dt>
-                      <dd>{selectedObject.distance}</dd>
+              <div className="se-inspector-tabs" role="tablist" aria-label="Scientific data views">
+                {INSPECTOR_TABS.map((tab, index) => (
+                  <button
+                    key={tab.id}
+                    id={`${tabIdBase}-${tab.id}-tab`}
+                    type="button"
+                    role="tab"
+                    aria-selected={activeTab === tab.id}
+                    aria-controls={`${tabIdBase}-${tab.id}-panel`}
+                    tabIndex={activeTab === tab.id ? 0 : -1}
+                    onClick={() => setActiveTab(tab.id)}
+                    onKeyDown={(event) => handleTabKeyDown(event, index)}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              <div
+                className="se-inspector-tab-panel"
+                id={`${tabIdBase}-overview-panel`}
+                role="tabpanel"
+                aria-labelledby={`${tabIdBase}-overview-tab`}
+                tabIndex={0}
+                hidden={activeTab !== 'overview'}
+              >
+                <InspectorOverview
+                  object={selectedObject}
+                  quickFacts={quickFacts}
+                  sections={overviewSections}
+                  idBase={`${tabIdBase}-overview`}
+                />
+              </div>
+
+              <div
+                className="se-inspector-tab-panel"
+                id={`${tabIdBase}-physics-panel`}
+                role="tabpanel"
+                aria-labelledby={`${tabIdBase}-physics-tab`}
+                tabIndex={0}
+                hidden={activeTab !== 'physics'}
+              >
+                {physicsSections.length > 0 ? (
+                  physicsSections.map((section, index) => (
+                    <InspectorMetricSection
+                      key={section.id}
+                      section={section}
+                      headingId={`${tabIdBase}-physics-${index}`}
+                    />
+                  ))
+                ) : (
+                  <InspectorTabEmpty>
+                    No physical measurements are available for this object.
+                  </InspectorTabEmpty>
+                )}
+              </div>
+
+              <div
+                className="se-inspector-tab-panel"
+                id={`${tabIdBase}-orbit-panel`}
+                role="tabpanel"
+                aria-labelledby={`${tabIdBase}-orbit-tab`}
+                tabIndex={0}
+                hidden={activeTab !== 'orbit'}
+              >
+                {selectedObject.orbitSummary && (
+                  <p className="se-orbit-summary">{selectedObject.orbitSummary}</p>
+                )}
+                {observedPosition.length > 0 && (
+                  <section
+                    className="se-science-section"
+                    aria-labelledby={`${tabIdBase}-observed-position`}
+                  >
+                    <div className="se-science-section__heading">
+                      <span
+                        className="se-section-label"
+                        id={`${tabIdBase}-observed-position`}
+                      >
+                        Reference distance
+                      </span>
                     </div>
+                    <InspectorMetricGrid metrics={observedPosition} />
+                  </section>
+                )}
+                {orbitSections.map((section, index) => (
+                  <InspectorMetricSection
+                    key={section.id}
+                    section={section}
+                    headingId={`${tabIdBase}-orbit-${index}`}
+                  />
+                ))}
+                {!selectedObject.orbitSummary &&
+                  observedPosition.length === 0 &&
+                  orbitSections.length === 0 && (
+                    <InspectorTabEmpty>
+                      No orbital solution is available for this object.
+                    </InspectorTabEmpty>
                   )}
-                  {selectedObject.coordinates && (
-                    <>
-                      <div>
-                        <dt>Right ascension</dt>
-                        <dd>{selectedObject.coordinates.rightAscension}</dd>
-                      </div>
-                      <div>
-                        <dt>Declination</dt>
-                        <dd>{selectedObject.coordinates.declination}</dd>
-                      </div>
-                    </>
-                  )}
-                </dl>
-              )}
-
-              {selectedObject.metrics && selectedObject.metrics.length > 0 && (
-                <section className="se-metrics" aria-labelledby="metrics-heading">
-                  <div className="se-section-label" id="metrics-heading">
-                    Physical profile
-                  </div>
-                  <dl>
-                    {selectedObject.metrics.map((metric) => (
-                      <div key={`${metric.label}-${metric.value}`}>
-                        <dt>{metric.label}</dt>
-                        <dd>
-                          {metric.value}
-                          {metric.unit && <small>{metric.unit}</small>}
-                        </dd>
-                      </div>
-                    ))}
-                  </dl>
-                </section>
-              )}
-
-              {selectedObject.description && (
-                <p className="se-object-description">
-                  {selectedObject.description}
-                </p>
-              )}
+              </div>
             </>
           )}
         </div>

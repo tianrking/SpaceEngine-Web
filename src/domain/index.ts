@@ -1,6 +1,7 @@
 export * from './asteria'
 export * from './constants'
 export * from './orbit'
+export * from './physics'
 export * from './precision'
 export * from './rng'
 export * from './system'

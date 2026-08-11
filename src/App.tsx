@@ -8,8 +8,13 @@ import {
 import { ShortcutHelpDialog } from './components/ShortcutHelpDialog'
 import { SystemNavigator } from './components/SystemNavigator'
 import { useSavedPlaces } from './components/useSavedPlaces'
-import { ASTRONOMICAL_UNIT_METERS, formatDistance } from './domain'
-import { BODY_LOOKUP, NAVIGATION_TARGETS, STAR } from './engine/catalog'
+import { formatDistance } from './domain'
+import {
+  BODY_LOOKUP,
+  CATALOG_BODIES,
+  NAVIGATION_TARGETS,
+  STAR,
+} from './engine/catalog'
 import type { CosmosEngine as CosmosEngineInstance } from './engine/CosmosEngine'
 import type {
   CelestialBodyView,
@@ -19,6 +24,9 @@ import type {
 } from './engine/types'
 import {
   ExplorerHud,
+  type CelestialMetric,
+  type CelestialMetricSection,
+  type CelestialStatusTone,
   type ExplorerOverlay,
   type NavigationTool,
   type QualityPreset,
@@ -50,12 +58,7 @@ const QUALITY_TO_ENGINE: Record<QualityPreset, QualityLevel> = {
   ultra: 'ultra',
 }
 
-const PRODUCT_TARGETS: readonly CelestialBodyView[] = NAVIGATION_TARGETS.flatMap(
-  ({ id }) => {
-    const target = BODY_LOOKUP.get(id)
-    return target ? [target] : []
-  },
-)
+const PRODUCT_TARGETS: readonly CelestialBodyView[] = CATALOG_BODIES
 
 const PRODUCT_TARGET_IDS = PRODUCT_TARGETS.map((target) => target.id)
 
@@ -95,41 +98,271 @@ function focusNavigationTool(tool: NavigationTool): void {
   })
 }
 
-function coordinatesFor(body: CelestialBodyView) {
-  const seed = body.id.split('').reduce((total, character) => total + character.charCodeAt(0), 0)
-  const hours = seed % 24
-  const minutes = (seed * 7) % 60
-  const degrees = (seed % 121) - 60
-  const arcMinutes = (seed * 11) % 60
+function massMetric(body: CelestialBodyView): CelestialMetric {
+  if (body.bodyKind === 'star') {
+    return {
+      label: 'Mass',
+      value: (body.massEarths / 332_946).toFixed(2),
+      unit: 'M☉',
+    }
+  }
   return {
-    rightAscension: `${String(hours).padStart(2, '0')}h ${String(minutes).padStart(2, '0')}m`,
-    declination: `${degrees >= 0 ? '+' : '−'}${String(Math.abs(degrees)).padStart(2, '0')}° ${String(arcMinutes).padStart(2, '0')}′`,
+    label: 'Mass',
+    value: body.massEarths.toLocaleString(undefined, {
+      maximumFractionDigits: body.massEarths < 0.1 ? 3 : 2,
+    }),
+    unit: 'M⊕',
   }
 }
 
+function pressureDisplay(body: CelestialBodyView): string {
+  if (body.surfacePressurePascals === null) return 'Not modeled'
+  if (body.surfacePressurePascals < 1_000) {
+    return `${body.surfacePressurePascals.toLocaleString()} Pa`
+  }
+  return `${(body.surfacePressurePascals / 100_000).toLocaleString(undefined, {
+    maximumFractionDigits: 2,
+  })} bar`
+}
+
+function orbitalDistanceDisplay(body: CelestialBodyView): string {
+  if (!body.orbit) return 'System barycenter'
+  if (body.bodyKind === 'moon') {
+    return `${formatDistance(body.orbit.semiMajorAxisMeters, {
+      maximumFractionDigits: 1,
+    })} from ${body.parentName ?? 'parent'}`
+  }
+  return `${body.distanceAu.toLocaleString(undefined, {
+    maximumFractionDigits: 3,
+  })} AU from Asteria`
+}
+
+function habitabilityTone(body: CelestialBodyView): CelestialStatusTone {
+  if (body.habitability.tone === 'negative') return 'critical'
+  return body.habitability.tone
+}
+
+function percentFraction(fraction: number): string {
+  const percentage = fraction * 100
+  return `${percentage.toLocaleString(undefined, {
+    maximumFractionDigits: percentage < 10 ? 1 : 0,
+  })}%`
+}
+
 function toHudObject(body: CelestialBodyView): SelectedCelestialObject {
+  const physicalMetrics: CelestialMetric[] = [
+    massMetric(body),
+    { label: 'Mean radius', value: body.radiusKm.toLocaleString(), unit: 'km' },
+    {
+      label: 'Mean density',
+      value: body.densityKgPerCubicMeter.toLocaleString(undefined, {
+        maximumFractionDigits: 0,
+      }),
+      unit: 'kg/m³',
+    },
+    {
+      label: 'Reference gravity',
+      value: body.surfaceGravityMetersPerSecondSquared.toFixed(2),
+      unit: 'm/s²',
+    },
+    { label: 'Earth gravity', value: body.gravityG.toFixed(2), unit: 'g' },
+    {
+      label: 'Escape velocity',
+      value: body.escapeVelocityKmPerSecond.toFixed(2),
+      unit: 'km/s',
+    },
+    {
+      label: 'Sidereal rotation',
+      value: Math.abs(body.rotationPeriodHours).toLocaleString(undefined, {
+        maximumFractionDigits: 2,
+      }),
+      unit: body.rotationPeriodHours < 0 ? 'h retrograde' : 'h',
+    },
+    {
+      label: 'Axial tilt',
+      value: body.axialTiltDegrees.toFixed(1),
+      unit: '°',
+    },
+  ]
+
+  const climateMetrics: CelestialMetric[] = [
+    {
+      label: 'Mean temperature',
+      value: body.temperatureK.toLocaleString(undefined, {
+        maximumFractionDigits: 1,
+      }),
+      unit: 'K',
+    },
+    ...(body.equilibriumTemperatureK !== null
+      ? [{
+          label: 'Equilibrium temperature',
+          value: body.equilibriumTemperatureK.toFixed(1),
+          unit: 'K',
+        }]
+      : []),
+    ...(body.greenhouseDeltaK !== null
+      ? [{
+          label: 'Greenhouse offset',
+          value: body.greenhouseDeltaK.toFixed(1),
+          unit: 'K',
+        }]
+      : []),
+    { label: 'Bond albedo', value: body.albedo.toFixed(2) },
+    ...(body.bodyKind !== 'star'
+      ? [{ label: 'Reference pressure', value: pressureDisplay(body) }]
+      : []),
+    ...(body.internalHeatFluxWattsPerSquareMeter !== null
+      ? [{
+          label: 'Internal heat flux',
+          value: body.internalHeatFluxWattsPerSquareMeter.toFixed(3),
+          unit: 'W/m²',
+        }]
+      : []),
+  ]
+
+  const orbitMetrics: CelestialMetric[] = body.orbit
+    ? [
+        {
+          label: 'Semi-major axis',
+          value:
+            body.bodyKind === 'moon'
+              ? formatDistance(body.orbit.semiMajorAxisMeters, {
+                  maximumFractionDigits: 1,
+                })
+              : body.distanceAu.toFixed(3),
+          unit: body.bodyKind === 'moon' ? undefined : 'AU',
+        },
+        {
+          label: 'Orbital period',
+          value: body.orbit.periodDays.toLocaleString(undefined, {
+            maximumFractionDigits: 2,
+          }),
+          unit: 'days',
+        },
+        { label: 'Eccentricity', value: body.orbit.eccentricity.toFixed(3) },
+        {
+          label: 'Inclination',
+          value: body.orbit.inclinationDegrees.toFixed(2),
+          unit: '°',
+        },
+        {
+          label: 'Periapsis',
+          value: formatDistance(body.orbit.periapsisMeters, {
+            maximumFractionDigits: 2,
+          }),
+        },
+        {
+          label: 'Apoapsis',
+          value: formatDistance(body.orbit.apoapsisMeters, {
+            maximumFractionDigits: 2,
+          }),
+        },
+        {
+          label: 'Mean orbital speed',
+          value: body.orbit.meanVelocityKmPerSecond.toFixed(2),
+          unit: 'km/s',
+        },
+        {
+          label: 'Stellar flux',
+          value: body.orbit.stellarFluxSolar.toFixed(2),
+          unit: 'S⊕',
+        },
+      ]
+    : []
+
+  const metricSections: CelestialMetricSection[] = [
+    {
+      id: 'climate',
+      title: body.bodyKind === 'star' ? 'Stellar environment' : 'Climate model',
+      tab: 'overview',
+      summary:
+        body.bodyKind === 'star'
+          ? 'Photospheric reference values for the synthetic primary star.'
+          : 'Temperature and pressure are scenario inputs; radiative equilibrium and flux are derived.',
+      metrics: climateMetrics,
+    },
+    {
+      id: 'physical',
+      title: 'Bulk properties',
+      tab: 'physics',
+      metrics: physicalMetrics,
+    },
+    ...(orbitMetrics.length > 0
+      ? [{
+          id: 'orbit',
+          title: 'Keplerian solution',
+          tab: 'orbit' as const,
+          summary: 'Two-body osculating elements at the simulation epoch.',
+          metrics: orbitMetrics,
+        }]
+      : []),
+  ]
+
   return {
     id: body.id,
     name: body.name,
-    type: body.kind.replace('-', ' '),
+    type: body.bodyClass,
     designation: body.designation,
     description: body.description,
-    distance:
-      body.id === STAR.id
-        ? 'System barycenter'
-        : formatDistance(body.distanceAu * ASTRONOMICAL_UNIT_METERS, {
-            maximumFractionDigits: 2,
-          }),
-    coordinates: coordinatesFor(body),
-    metrics: [
-      { label: 'Mean radius', value: body.radiusKm.toLocaleString(), unit: 'km' },
-      { label: 'Mass', value: body.massEarths.toLocaleString(undefined, { maximumFractionDigits: 2 }), unit: 'M⊕' },
+    distance: orbitalDistanceDisplay(body),
+    orbitSummary: body.orbit
+      ? `Deterministic Keplerian orbit around ${body.parentName ?? 'the system barycenter'}; visual distances are logarithmically compressed.`
+      : undefined,
+    classification: {
+      label: body.bodyClass,
+      detail:
+        body.bodyKind === 'moon'
+          ? `Natural satellite of ${body.parentName ?? 'an Asteria world'}`
+          : body.bodyKind === 'planet'
+            ? 'NASA-aligned exoplanet class · fictional Asteria catalogue'
+            : 'Synthetic G-class primary star',
+    },
+    status: {
+      label: 'Synthetic model',
+      detail: body.provenance.notice,
+      tone: 'informational',
+    },
+    quickFacts: [
+      { label: 'Radius', value: body.radiusKm.toLocaleString(), unit: 'km' },
+      massMetric(body),
       { label: 'Temperature', value: body.temperatureK.toLocaleString(), unit: 'K' },
-      { label: 'Surface gravity', value: body.gravityG.toFixed(2), unit: 'g' },
-      ...(body.orbitalPeriodDays > 0
-        ? [{ label: 'Orbital period', value: body.orbitalPeriodDays.toLocaleString(), unit: 'days' }]
-        : []),
+      { label: 'Gravity', value: body.gravityG.toFixed(2), unit: 'g' },
     ],
+    metricSections,
+    atmosphere: {
+      summary: body.atmosphere,
+      pressure:
+        body.bodyKind === 'star' ? undefined : pressureDisplay(body),
+      composition: body.atmosphereComposition.map(({ species, fraction }) => ({
+        species,
+        amount: percentFraction(fraction),
+      })),
+    },
+    habitability: {
+      label: body.habitability.label,
+      summary: body.habitability.summary,
+      tone: habitabilityTone(body),
+      factors: body.orbit
+        ? [
+            {
+              label: 'Stellar flux',
+              value: body.orbit.stellarFluxSolar.toFixed(2),
+              unit: 'S⊕',
+            },
+            {
+              label: 'Equilibrium temperature',
+              value: body.equilibriumTemperatureK?.toFixed(1) ?? '—',
+              unit: 'K',
+            },
+          ]
+        : undefined,
+    },
+    provenance: {
+      source: body.provenance.generator,
+      method: 'Curated scenario inputs · equation-derived physics',
+      confidence: body.provenance.origin === 'synthetic' ? 'Synthetic' : 'Catalogue',
+      reference: `model ${body.provenance.modelVersion}${body.provenance.seed ? ` · seed ${body.provenance.seed}` : ''}`,
+    },
   }
 }
 

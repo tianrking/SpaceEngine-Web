@@ -35,11 +35,23 @@ export type PlanetClass =
   | 'lava'
   | 'terrestrial'
   | 'ocean'
+  | 'super-earth'
+  | 'neptunian'
   | 'gas-giant'
   | 'ice-giant'
   | 'dwarf'
 
 export type MoonClass = 'rocky' | 'icy' | 'oceanic' | 'volcanic'
+
+export interface DataProvenance {
+  /** Asteria uses synthetic values; catalogue data can opt into another origin later. */
+  readonly origin: 'synthetic' | 'catalogue' | 'derived'
+  readonly generator: string
+  readonly modelVersion: string
+  readonly seed?: Seed
+  readonly notice: string
+  readonly references?: readonly string[]
+}
 
 export interface Atmosphere {
   readonly surfacePressurePascals: number
@@ -72,6 +84,7 @@ export interface SurfaceProfile {
 interface CelestialBodyBase {
   readonly id: string
   readonly name: string
+  readonly catalogueDesignation?: string
   readonly kind: CelestialBodyKind
   readonly radiusMeters: number
   readonly massKilograms: number
@@ -81,6 +94,8 @@ interface CelestialBodyBase {
   readonly albedo: number
   readonly color: string
   readonly description: string
+  readonly provenance?: DataProvenance
+  readonly interestingFacts?: readonly string[]
 }
 
 export interface Star extends CelestialBodyBase {
@@ -96,6 +111,12 @@ interface OrbitingBodyBase extends CelestialBodyBase {
   readonly orbit: KeplerOrbit
   readonly surface: SurfaceProfile
   readonly atmosphere?: Atmosphere
+  /** Synthetic globally averaged temperature at the documented reference level. */
+  readonly meanSurfaceTemperatureKelvin?: number
+  /** Difference attributed to the synthetic atmosphere model over radiative equilibrium. */
+  readonly greenhouseDeltaKelvin?: number
+  /** Synthetic endogenic heat escaping per unit surface area. */
+  readonly internalHeatFluxWattsPerSquareMeter?: number
 }
 
 export interface Moon extends OrbitingBodyBase {
@@ -120,4 +141,5 @@ export interface StarSystem {
   readonly epochSeconds: number
   readonly primaryStar: Star
   readonly planets: readonly Planet[]
+  readonly provenance?: DataProvenance
 }

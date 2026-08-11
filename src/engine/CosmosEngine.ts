@@ -9,7 +9,14 @@ import {
   shapeCircle,
   vec3,
 } from 'three/tsl'
-import { BODY_LOOKUP, RENDER_BODIES, STAR, type RenderBody } from './catalog'
+import { ASTERIA_SYSTEM, JULIAN_DAY_SECONDS, orbitalStateAtTime } from '../domain'
+import {
+  BODY_LOOKUP,
+  CATALOG_BODIES,
+  RENDER_BODIES,
+  STAR,
+  type RenderBody,
+} from './catalog'
 import {
   createCloudTexture,
   createPlanetTexture,
@@ -33,7 +40,8 @@ const SIMULATION_EPOCH = Date.UTC(2187, 2, 20, 14, 32, 0)
 
 interface BodyRuntime {
   definition: RenderBody
-  group: THREE.Group
+  orbitNode: THREE.Group
+  visualNode: THREE.Group
   mesh: THREE.Mesh
   cloudMesh: THREE.Mesh | null
 }
@@ -169,7 +177,7 @@ export class CosmosEngine {
   }
 
   getBodies(): readonly CelestialBodyView[] {
-    return [STAR, ...RENDER_BODIES]
+    return CATALOG_BODIES
   }
 
   setTimeScale(nextScale: number): void {
@@ -306,37 +314,56 @@ export class CosmosEngine {
     this.worldRoot.add(starGroup)
     this.bodyObjects.set(STAR.id, starGroup)
 
-    for (const body of RENDER_BODIES) {
-      this.createPlanet(body)
-      this.createOrbit(body)
+    for (const body of RENDER_BODIES.filter(({ bodyKind }) => bodyKind === 'planet')) {
+      this.createBody(body)
     }
+    for (const body of RENDER_BODIES.filter(({ bodyKind }) => bodyKind === 'moon')) {
+      this.createBody(body)
+    }
+    for (const body of RENDER_BODIES) this.createOrbit(body)
   }
 
-  private createPlanet(body: RenderBody): void {
-    const group = new THREE.Group()
-    group.name = body.name
-    group.userData.bodyId = body.id
+  private createBody(body: RenderBody): void {
+    const orbitNode = new THREE.Group()
+    orbitNode.name = `${body.name} orbital frame`
+    orbitNode.userData.bodyId = body.id
+    const visualNode = new THREE.Group()
+    visualNode.name = body.name
+    visualNode.userData.bodyId = body.id
+    visualNode.rotation.z = body.axialTiltRadians
+    orbitNode.add(visualNode)
 
-    const geometry = new THREE.SphereGeometry(body.renderRadius, 96, 64)
-    if (body.kind !== 'gas-giant' && body.kind !== 'ice-giant') {
-      this.displaceRockySurface(geometry, body)
-    }
+    const parentNode =
+      body.parentId === STAR.id
+        ? this.worldRoot
+        : this.bodyRuntimes.get(body.parentId ?? '')?.orbitNode
+    if (!parentNode) throw new Error(`Missing render parent ${body.parentId} for ${body.id}`)
+    parentNode.add(orbitNode)
+    orbitNode.position.copy(
+      this.renderPositionAtTime(body, ASTERIA_SYSTEM.epochSeconds),
+    )
+
+    const widthSegments = body.bodyKind === 'moon' ? 64 : 96
+    const heightSegments = body.bodyKind === 'moon' ? 40 : 64
+    const geometry = new THREE.SphereGeometry(body.renderRadius, widthSegments, heightSegments)
+    if (!body.isGasWorld) this.displaceRockySurface(geometry, body)
 
     const texture = createPlanetTexture(
       body.id,
       body.palette,
-      body.kind === 'gas-giant' || body.kind === 'ice-giant',
+      body.isGasWorld,
+      body.bodyKind === 'moon' ? 256 : 512,
+      body.bodyKind === 'moon' ? 128 : 256,
     )
     this.disposableTextures.push(texture)
     const material = new THREE.MeshStandardNodeMaterial({
       map: texture,
-      roughness: body.kind === 'oceanic' ? 0.72 : 0.91,
+      roughness: body.surfaceRoughness,
       metalness: 0.015,
     })
     const mesh = new THREE.Mesh(geometry, material)
     mesh.userData.bodyId = body.id
-    mesh.rotation.z = body.inclination * 0.42
-    group.add(mesh)
+    visualNode.add(mesh)
     this.raycastTargets.push(mesh)
 
     let cloudMesh: THREE.Mesh | null = null
@@ -354,28 +381,35 @@ export class CosmosEngine {
         new THREE.SphereGeometry(body.renderRadius * 1.018, 80, 48),
         cloudMaterial,
       )
-      group.add(cloudMesh)
+      visualNode.add(cloudMesh)
     }
 
-    const atmosphereMaterial = new THREE.MeshBasicNodeMaterial({
-      color: body.accent,
-      transparent: true,
-      opacity: body.kind === 'desert' ? 0.055 : 0.12,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      side: THREE.BackSide,
+    if (body.atmosphereColor && body.atmosphereOpacity > 0) {
+      const atmosphereMaterial = new THREE.MeshBasicNodeMaterial({
+        color: body.atmosphereColor,
+        transparent: true,
+        opacity: body.atmosphereOpacity,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        side: THREE.BackSide,
+      })
+      const atmosphere = new THREE.Mesh(
+        new THREE.SphereGeometry(body.renderRadius * body.atmosphereScale, 64, 40),
+        atmosphereMaterial,
+      )
+      visualNode.add(atmosphere)
+    }
+
+    if (body.hasRings) this.createRings(visualNode, body)
+
+    this.bodyObjects.set(body.id, orbitNode)
+    this.bodyRuntimes.set(body.id, {
+      definition: body,
+      orbitNode,
+      visualNode,
+      mesh,
+      cloudMesh,
     })
-    const atmosphere = new THREE.Mesh(
-      new THREE.SphereGeometry(body.renderRadius * 1.075, 64, 40),
-      atmosphereMaterial,
-    )
-    group.add(atmosphere)
-
-    if (body.hasRings) this.createRings(group, body)
-
-    this.worldRoot.add(group)
-    this.bodyObjects.set(body.id, group)
-    this.bodyRuntimes.set(body.id, { definition: body, group, mesh, cloudMesh })
   }
 
   private displaceRockySurface(geometry: THREE.SphereGeometry, body: RenderBody): void {
@@ -388,7 +422,7 @@ export class CosmosEngine {
         Math.sin(vector.x * 19 + seed) *
         Math.sin(vector.y * 23 - seed * 0.1) *
         Math.sin(vector.z * 17 + seed * 0.03)
-      vector.multiplyScalar(body.renderRadius * (1 + ridge * 0.008))
+      vector.multiplyScalar(body.renderRadius * (1 + ridge * body.surfaceDisplacement))
       positions.setXYZ(index, vector.x, vector.y, vector.z)
     }
     positions.needsUpdate = true
@@ -402,12 +436,12 @@ export class CosmosEngine {
       map: ringTexture,
       color: body.ringColor ?? '#bca892',
       transparent: true,
-      opacity: 0.62,
+      opacity: body.ringOpacity,
       depthWrite: false,
       side: THREE.DoubleSide,
     })
-    const innerRadius = body.renderRadius * 1.32
-    const outerRadius = body.renderRadius * 2.15
+    const innerRadius = body.renderRadius * body.ringInnerRatio
+    const outerRadius = body.renderRadius * body.ringOuterRatio
     const geometry = new THREE.RingGeometry(innerRadius, outerRadius, 192, 8)
     const positions = geometry.getAttribute('position') as THREE.BufferAttribute
     const uvs = geometry.getAttribute('uv') as THREE.BufferAttribute
@@ -417,19 +451,20 @@ export class CosmosEngine {
     }
     uvs.needsUpdate = true
     const rings = new THREE.Mesh(geometry, material)
+    rings.userData.bodyId = body.id
     rings.rotation.x = Math.PI / 2
-    rings.rotation.z = body.inclination * 1.7 + 0.08
+    rings.rotation.z = body.ringInclinationRadians
     group.add(rings)
+    this.raycastTargets.push(rings)
   }
 
   private createOrbit(body: RenderBody): void {
     const points: THREE.Vector3[] = []
-    const semiMinor = body.orbitRadius * Math.sqrt(1 - body.eccentricity ** 2)
     for (let index = 0; index <= 256; index += 1) {
-      const eccentricAnomaly = (index / 256) * TAU
-      const x = body.orbitRadius * (Math.cos(eccentricAnomaly) - body.eccentricity)
-      const z = semiMinor * Math.sin(eccentricAnomaly)
-      points.push(new THREE.Vector3(x, z * Math.sin(body.inclination), z * Math.cos(body.inclination)))
+      const timeSeconds =
+        body.keplerOrbit.epochSeconds +
+        (body.keplerOrbit.periodSeconds * index) / 256
+      points.push(this.renderPositionAtTime(body, timeSeconds))
     }
     const material = new THREE.LineBasicNodeMaterial({
       color: body.color,
@@ -438,7 +473,21 @@ export class CosmosEngine {
     })
     const orbit = new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), material)
     orbit.name = `${body.name} orbit`
-    this.worldRoot.add(orbit)
+    const parentNode =
+      body.parentId === STAR.id
+        ? this.worldRoot
+        : this.bodyRuntimes.get(body.parentId ?? '')?.orbitNode
+    if (!parentNode) throw new Error(`Missing orbit parent ${body.parentId} for ${body.id}`)
+    parentNode.add(orbit)
+  }
+
+  private renderPositionAtTime(body: RenderBody, timeSeconds: number): THREE.Vector3 {
+    const { positionMeters } = orbitalStateAtTime(body.keplerOrbit, timeSeconds)
+    return new THREE.Vector3(
+      positionMeters.x * body.orbitScale,
+      positionMeters.z * body.orbitScale,
+      positionMeters.y * body.orbitScale,
+    )
   }
 
   private createFarStars(): void {
@@ -561,16 +610,11 @@ export class CosmosEngine {
   }
 
   private updateBodies(deltaSeconds: number): void {
+    const simulationSeconds =
+      ASTERIA_SYSTEM.epochSeconds + this.simulationDays * JULIAN_DAY_SECONDS
     for (const runtime of this.bodyRuntimes.values()) {
-      const { definition, group, mesh, cloudMesh } = runtime
-      const meanAnomaly = definition.phase + (this.simulationDays / definition.orbitalPeriodDays) * TAU
-      const eccentricAnomaly = this.solveEccentricAnomaly(meanAnomaly, definition.eccentricity)
-      const x = definition.orbitRadius * (Math.cos(eccentricAnomaly) - definition.eccentricity)
-      const z =
-        definition.orbitRadius *
-        Math.sqrt(1 - definition.eccentricity ** 2) *
-        Math.sin(eccentricAnomaly)
-      group.position.set(x, z * Math.sin(definition.inclination), z * Math.cos(definition.inclination))
+      const { definition, orbitNode, mesh, cloudMesh } = runtime
+      orbitNode.position.copy(this.renderPositionAtTime(definition, simulationSeconds))
 
       const rotationRate = (deltaSeconds * this.timeScale * 24) / definition.rotationHours
       mesh.rotation.y += rotationRate * 0.018
@@ -585,14 +629,15 @@ export class CosmosEngine {
     if (!selectedObject) return
     const selectedRuntime = this.bodyRuntimes.get(this.selectedId)
     const selectedRadius = this.selectedId === STAR.id ? 3.4 : selectedRuntime?.definition.renderRadius ?? 1
-    const selectedWorldPosition = selectedObject.position.clone().add(this.worldRoot.position)
+    const selectedWorldPosition = selectedObject.getWorldPosition(new THREE.Vector3())
     const distance = this.camera.position.distanceTo(selectedWorldPosition)
     const closeBlend = 1 - THREE.MathUtils.smoothstep(distance, selectedRadius * 7, selectedRadius * 24)
 
     for (const [id, object] of this.bodyObjects) {
       const targetScale = id === this.selectedId ? 1 : 1 - closeBlend * 0.78
-      const nextScale = THREE.MathUtils.lerp(object.scale.x, targetScale, 0.1)
-      object.scale.setScalar(nextScale)
+      const visual = this.bodyRuntimes.get(id)?.visualNode ?? object
+      const nextScale = THREE.MathUtils.lerp(visual.scale.x, targetScale, 0.1)
+      visual.scale.setScalar(nextScale)
     }
   }
 
@@ -691,19 +736,9 @@ export class CosmosEngine {
     if (this.selectedId === STAR.id) return null
     const runtime = this.bodyRuntimes.get(this.selectedId)
     if (!runtime) return null
-    const worldPosition = runtime.group.getWorldPosition(new THREE.Vector3())
+    const worldPosition = runtime.orbitNode.getWorldPosition(new THREE.Vector3())
     const surfaceDistance = Math.max(this.camera.position.distanceTo(worldPosition) - runtime.definition.renderRadius, 0)
     return (surfaceDistance / runtime.definition.renderRadius) * runtime.definition.radiusKm
-  }
-
-  private solveEccentricAnomaly(meanAnomaly: number, eccentricity: number): number {
-    let estimate = meanAnomaly % TAU
-    for (let iteration = 0; iteration < 6; iteration += 1) {
-      estimate -=
-        (estimate - eccentricity * Math.sin(estimate) - meanAnomaly) /
-        (1 - eccentricity * Math.cos(estimate))
-    }
-    return estimate
   }
 
   private readCapabilities(adapter: GPUAdapter | null): EngineCapabilities {
