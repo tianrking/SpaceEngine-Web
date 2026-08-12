@@ -48,6 +48,11 @@ The current domain is intentionally small and internally consistent:
   limit flags, references, external IDs, discovery context, and reproducible
   TAP metadata. The release is inspectable and searchable but is not yet a
   canonical flyable-system graph.
+- [`src/data/catalogOfflineStore.ts`](../src/data/catalogOfflineStore.ts) now
+  persists only hash-verified release assets, atomically activates a verified
+  search core, gates the optional 17-chunk detail pack behind a complete-pack
+  marker, and retains the previous release pointer. The generated Service
+  Worker separately precaches the versioned application shell.
 
 The catalogue expansion must therefore preserve these invariants:
 
@@ -671,6 +676,19 @@ Rules:
 
 ### 7.3 Offline behavior
 
+Implemented checkpoint (2026-08-12): the production build generates an
+atomically versioned application-shell Service Worker; its cached HTML is never
+mutated independently of the hashed JS/CSS assets. After a successful online
+load, the catalogue Worker can recover the verified manifest/search core from
+IndexedDB with the network disabled. Users may explicitly install all 17
+scientific-detail chunks; every cached or downloaded chunk is checked against
+the manifest byte size, SHA-256 digest, and schema before it counts toward pack
+readiness. The ready marker changes only after the complete pack is present, so
+an interrupted installation remains resumable but inactive. Clearing the pack
+removes application-managed detail records while preserving the search core.
+The store retains the previous release pointer, but automated rollback
+activation and its product UI remain future gates.
+
 - Precache the app shell, manifest, notices, indexes, and curated core.
 - Offer explicit optional packs by system, region, or galaxy. Show download
   size, source revisions, license/credit notice, and last verification date.
@@ -721,10 +739,12 @@ unchanged.
 
 **Current checkpoint:** the complete progressive NASA composite release and
 Worker-backed UI prove manifest-driven delivery, content-hash validation,
-cancellable detail loading, bounded memory caching, source visibility, and
-sub-50 ms full-index search. They do **not** satisfy every Stage 1 exit criterion:
-reviewed Gaia identity matches, full field-level reference coverage, rights
-approval, offline atomic updates, and real-system rendering remain release gates.
+cancellable detail loading, bounded memory caching, source visibility,
+verified offline search/core recovery, an explicitly installed full-detail
+pack, and sub-50 ms full-index search. They do **not** satisfy every Stage 1
+exit criterion: reviewed Gaia identity matches, full field-level reference
+coverage, rights approval, automatic rollback activation, and real-system
+rendering remain release gates.
 
 **Goal:** prove source integrity and user value before distributed streaming.
 
@@ -872,10 +892,13 @@ Exit criteria:
       distinguishable in data and UI.
 - [ ] System/galaxy graph and coordinate-frame validation passes.
 - [ ] License, acknowledgement, DOI/bibcode, and offline notices approved.
-- [ ] Manifest/chunk hashes, schema compatibility, and rollback tested.
+- [x] Manifest/chunk hashes, schema compatibility, interrupted-pack readiness,
+      and active/previous release pointers tested.
+- [ ] Automatic previous-release rollback activation and recovery UI tested.
 - [ ] Cold/warm network, Worker, main-thread, search, heap, WebGPU, and WebGL2
       budgets reported with device details.
-- [ ] Data credits remain available with the network disabled.
+- [x] Cached scientific detail keeps its source names, references, release
+      identity, and credits visible with the network disabled.
 
 ## Official references
 

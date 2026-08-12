@@ -836,6 +836,130 @@
   color: var(--tool-coral);
 }
 
+.product-offline-pack {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  background:
+    radial-gradient(circle at 90% 0, rgba(83, 217, 196, 0.09), transparent 42%),
+    rgba(3, 10, 16, 0.72);
+  border: 1px solid rgba(91, 205, 193, 0.16);
+  border-radius: 6px;
+}
+
+.product-offline-pack__summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.product-offline-pack__summary > span {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #b5c9ce;
+  font: 8px/1.3 var(--font-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.product-offline-pack__summary > span.is-ready {
+  color: var(--tool-cyan);
+}
+
+.product-offline-pack__summary > span > svg {
+  flex: none;
+}
+
+.product-offline-pack__summary > small {
+  flex: none;
+  color: var(--tool-faint);
+  font: 7px/1.2 var(--font-mono);
+  text-align: right;
+}
+
+.product-offline-pack > p {
+  margin: 0;
+  color: #718b95;
+  font-size: 8px;
+  line-height: 1.45;
+}
+
+.product-offline-pack > button {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 10px;
+  color: #bcece7;
+  font: 8px/1 var(--font-mono);
+  letter-spacing: 0.04em;
+  background: rgba(67, 211, 192, 0.07);
+  border: 1px solid rgba(91, 205, 193, 0.23);
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.product-offline-pack > button:hover,
+.product-offline-pack > button:focus-visible {
+  color: #effffc;
+  background: rgba(67, 211, 192, 0.13);
+  border-color: rgba(91, 205, 193, 0.48);
+}
+
+.product-offline-pack > button:disabled {
+  cursor: progress;
+  opacity: 0.68;
+}
+
+.product-offline-pack__progress {
+  display: grid;
+  gap: 5px;
+}
+
+.product-offline-pack__progress progress {
+  width: 100%;
+  height: 4px;
+  overflow: hidden;
+  appearance: none;
+  background: rgba(120, 164, 173, 0.12);
+  border: 0;
+  border-radius: 999px;
+}
+
+.product-offline-pack__progress progress::-webkit-progress-bar {
+  background: rgba(120, 164, 173, 0.12);
+}
+
+.product-offline-pack__progress progress::-webkit-progress-value {
+  background: linear-gradient(90deg, var(--tool-cyan), #9af4de);
+  border-radius: 999px;
+}
+
+.product-offline-pack__progress progress::-moz-progress-bar {
+  background: linear-gradient(90deg, var(--tool-cyan), #9af4de);
+  border-radius: 999px;
+}
+
+.product-offline-pack__progress > span {
+  color: var(--tool-muted);
+  font: 7px/1.3 var(--font-mono);
+}
+
+.product-offline-pack > .product-offline-pack__error {
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  color: var(--tool-coral);
+}
+
+.product-offline-pack__error > svg {
+  flex: none;
+}
+
 .product-catalog-controls {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -2408,6 +2532,15 @@
     width: 100%;
   }
 
+  .product-offline-pack__summary {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .product-offline-pack__summary > small {
+    text-align: left;
+  }
+
   .product-nasa-provenance {
     grid-column: auto;
   }
@@ -2467,7 +2600,8 @@
   .product-catalog-sort select,
   .product-nasa-record__toggle,
   .product-nasa-load-more,
-  .product-nasa-load-state > button {
+  .product-nasa-load-state > button,
+  .product-offline-pack > button {
     min-height: 44px;
   }
 

@@ -15,10 +15,14 @@ import {
   ChevronDown,
   ChevronRight,
   CircleHelp,
+  DatabaseZap,
+  HardDriveDownload,
   ExternalLink,
   RefreshCcw,
   Search,
   ShieldCheck,
+  Trash2,
+  WifiOff,
   X,
 } from 'lucide-react'
 import { PROGRESSIVE_EXOPLANET_RELEASE } from '../data/generated/progressiveExoplanetRelease'
@@ -34,8 +38,11 @@ import type {
 } from '../data/progressiveCatalogSearch'
 import type {
   CatalogDetailPayload,
+  CatalogLoadSource,
+  CatalogOfflineProgressPayload,
   CatalogQueryPayload,
 } from '../data/progressiveCatalogProtocol'
+import type { CatalogOfflineStatus } from '../data/catalogOfflineStore'
 
 export const NASA_ARCHIVE_RECORD_COUNT = PROGRESSIVE_EXOPLANET_RELEASE.recordCount
 
@@ -94,6 +101,15 @@ function displayNumber(
 ): string {
   if (value === null || !Number.isFinite(value)) return NOT_REPORTED
   return `${value.toLocaleString('en-US', { maximumFractionDigits })}${unit}`
+}
+
+function displayBytes(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return '0 B'
+  const units = ['B', 'KiB', 'MiB', 'GiB'] as const
+  const exponent = Math.min(Math.floor(Math.log(value) / Math.log(1024)), units.length - 1)
+  return `${(value / 1024 ** exponent).toLocaleString('en-US', {
+    maximumFractionDigits: exponent === 0 ? 0 : 1,
+  })} ${units[exponent]}`
 }
 
 function displayUnit(unit: string): string {
@@ -308,7 +324,11 @@ const ProgressiveRecordDetail = memo(function ProgressiveRecordDetail({
       <div className="product-nasa-detail__runtime" role="status">
         <ShieldCheck size={12} aria-hidden="true" /> Verified content hash
         <span>·</span>
-        {detail.fromMemoryCache ? 'Memory cache' : 'Network/cache storage'}
+        {detail.fromMemoryCache
+          ? 'Memory cache'
+          : detail.fromPersistentCache
+            ? 'Offline storage'
+            : 'Network'}
         <span>·</span>
         {detail.loadMs.toFixed(1)} ms
       </div>
@@ -419,6 +439,116 @@ interface ProgressiveNasaCatalogProps {
   searchInputRef: RefObject<HTMLInputElement | null>
 }
 
+type OfflineOperation =
+  | { readonly status: 'idle' }
+  | { readonly status: 'installing'; readonly progress: CatalogOfflineProgressPayload }
+  | { readonly status: 'removing' }
+  | { readonly status: 'error'; readonly message: string }
+
+interface OfflinePackControlProps {
+  readonly offline: CatalogOfflineStatus
+  readonly loadSource: CatalogLoadSource
+  readonly operation: OfflineOperation
+  readonly onInstall: () => void
+  readonly onRemove: () => void
+}
+
+const OfflinePackControl = memo(function OfflinePackControl({
+  offline,
+  loadSource,
+  operation,
+  onInstall,
+  onRemove,
+}: OfflinePackControlProps) {
+  const totalPackBytes = offline.storedBytes > 0 && offline.packInstalled
+    ? offline.storedBytes
+    : null
+  return (
+    <section className="product-offline-pack" aria-label="Offline catalogue pack">
+      <div className="product-offline-pack__summary">
+        <span className={offline.packInstalled ? 'is-ready' : undefined}>
+          {loadSource === 'offline-cache' ? (
+            <WifiOff size={12} aria-hidden="true" />
+          ) : offline.packInstalled ? (
+            <DatabaseZap size={12} aria-hidden="true" />
+          ) : (
+            <HardDriveDownload size={12} aria-hidden="true" />
+          )}
+          {loadSource === 'offline-cache'
+            ? 'Running from verified offline core'
+            : offline.packInstalled
+              ? 'Full research pack ready'
+              : offline.coreCached
+                ? 'Search core cached'
+                : 'Browser storage optional'}
+        </span>
+        <small>
+          {offline.packInstalled
+            ? `${offline.detailChunksCached}/${offline.detailChunksTotal} chunks · ${displayBytes(totalPackBytes ?? offline.storedBytes)}`
+            : offline.supported
+              ? `${offline.detailChunksCached}/${offline.detailChunksTotal} detail chunks cached`
+              : 'IndexedDB unavailable'}
+        </small>
+      </div>
+
+      {operation.status === 'installing' ? (
+        <div className="product-offline-pack__progress" role="status" aria-live="polite">
+          <progress
+            max={operation.progress.totalChunks}
+            value={operation.progress.completedChunks}
+            aria-label="Offline pack installation progress"
+          />
+          <span>
+            Verifying chunk {operation.progress.completedChunks}/{operation.progress.totalChunks}
+            {' · '}{displayBytes(operation.progress.storedBytes)} / {displayBytes(operation.progress.totalBytes)}
+          </span>
+        </div>
+      ) : null}
+
+      {operation.status === 'error' ? (
+        <p className="product-offline-pack__error" role="alert">
+          <AlertTriangle size={12} aria-hidden="true" /> {operation.message}
+        </p>
+      ) : null}
+
+      {offline.supported ? (
+        offline.packInstalled ? (
+          <button
+            type="button"
+            disabled={operation.status === 'removing'}
+            onClick={onRemove}
+          >
+            {operation.status === 'removing' ? (
+              <RefreshCcw className="is-spinning" size={12} aria-hidden="true" />
+            ) : (
+              <Trash2 size={12} aria-hidden="true" />
+            )}
+            {operation.status === 'removing' ? 'Removing pack…' : 'Remove offline detail pack'}
+          </button>
+        ) : (
+          <button
+            type="button"
+            disabled={operation.status === 'installing'}
+            onClick={onInstall}
+          >
+            {operation.status === 'installing' ? (
+              <RefreshCcw className="is-spinning" size={12} aria-hidden="true" />
+            ) : (
+              <HardDriveDownload size={12} aria-hidden="true" />
+            )}
+            {operation.status === 'installing' ? 'Installing verified pack…' : 'Install full offline pack'}
+          </button>
+        )
+      ) : null}
+      <p>
+        The app shell and search core are cached after first use. The optional pack keeps all
+        scientific details in this browser; interrupted installs never replace the last complete
+        release.
+      </p>
+    </section>
+  )
+})
+
 type CatalogueState =
   | { readonly status: 'loading' }
   | { readonly status: 'error'; readonly message: string }
@@ -426,6 +556,8 @@ type CatalogueState =
       readonly status: 'ready'
       readonly manifest: ProgressiveExoplanetManifest
       readonly decodeMs: number
+      readonly loadSource: CatalogLoadSource
+      readonly offline: CatalogOfflineStatus
     }
 
 type DetailState =
@@ -450,8 +582,10 @@ export const ProgressiveNasaCatalog = memo(function ProgressiveNasaCatalog({
   const [queryError, setQueryError] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [detailState, setDetailState] = useState<DetailState>({ status: 'idle' })
+  const [offlineOperation, setOfflineOperation] = useState<OfflineOperation>({ status: 'idle' })
   const queryRequest = useRef<number | null>(null)
   const detailRequest = useRef<number | null>(null)
+  const offlineRequest = useRef<number | null>(null)
   const deferredQuery = useDeferredValue(query)
   const filterKey = filters.join('|')
 
@@ -461,8 +595,8 @@ export const ProgressiveNasaCatalog = memo(function ProgressiveNasaCatalog({
     void requestCatalogClient()
       .then((client) => client.initialize())
       .then(
-        ({ manifest, decodeMs }) => {
-          if (active) setCatalogue({ status: 'ready', manifest, decodeMs })
+        ({ manifest, decodeMs, loadSource, offline }) => {
+          if (active) setCatalogue({ status: 'ready', manifest, decodeMs, loadSource, offline })
         },
         (error: unknown) => {
           if (active) setCatalogue({ status: 'error', message: errorMessage(error) })
@@ -513,6 +647,7 @@ export const ProgressiveNasaCatalog = memo(function ProgressiveNasaCatalog({
       void requestCatalogClient().then((client) => {
         if (queryRequest.current !== null) client.cancel(queryRequest.current)
         if (detailRequest.current !== null) client.cancel(detailRequest.current)
+        if (offlineRequest.current !== null) client.cancel(offlineRequest.current)
       })
     },
     [],
@@ -602,6 +737,62 @@ export const ProgressiveNasaCatalog = memo(function ProgressiveNasaCatalog({
     [expandedId, requestDetail],
   )
 
+  const updateOfflineStatus = useCallback((offline: CatalogOfflineStatus) => {
+    setCatalogue((current) =>
+      current.status === 'ready' ? { ...current, offline } : current,
+    )
+  }, [])
+
+  const installOfflinePack = useCallback(() => {
+    const emptyProgress: CatalogOfflineProgressPayload = {
+      completedChunks: 0,
+      totalChunks: PROGRESSIVE_EXOPLANET_RELEASE.chunkCount,
+      storedBytes: 0,
+      totalBytes: 0,
+    }
+    setOfflineOperation({ status: 'installing', progress: emptyProgress })
+    void navigator.storage?.persist?.().catch(() => false)
+    void requestCatalogClient().then(
+      (client) => {
+        const request = client.installOfflinePack((progress) => {
+          if (offlineRequest.current !== request.requestId) return
+          setOfflineOperation({ status: 'installing', progress })
+        })
+        offlineRequest.current = request.requestId
+        void request.promise.then(
+          (offline) => {
+            if (offlineRequest.current !== request.requestId) return
+            offlineRequest.current = null
+            updateOfflineStatus(offline)
+            setOfflineOperation({ status: 'idle' })
+          },
+          (error: unknown) => {
+            if (error instanceof DOMException && error.name === 'AbortError') return
+            if (offlineRequest.current !== request.requestId) return
+            offlineRequest.current = null
+            setOfflineOperation({ status: 'error', message: errorMessage(error) })
+          },
+        )
+      },
+      (error: unknown) => {
+        setOfflineOperation({ status: 'error', message: errorMessage(error) })
+      },
+    )
+  }, [updateOfflineStatus])
+
+  const removeOfflinePack = useCallback(() => {
+    setOfflineOperation({ status: 'removing' })
+    void requestCatalogClient().then((client) => client.removeOfflinePack()).then(
+      (offline) => {
+        updateOfflineStatus(offline)
+        setOfflineOperation({ status: 'idle' })
+      },
+      (error: unknown) => {
+        setOfflineOperation({ status: 'error', message: errorMessage(error) })
+      },
+    )
+  }, [updateOfflineStatus])
+
   if (catalogue.status === 'loading') {
     return (
       <div className="product-nasa-async-state">
@@ -652,6 +843,14 @@ export const ProgressiveNasaCatalog = memo(function ProgressiveNasaCatalog({
           loads only when a record is expanded.
         </div>
       </section>
+
+      <OfflinePackControl
+        offline={catalogue.offline}
+        loadSource={catalogue.loadSource}
+        operation={offlineOperation}
+        onInstall={installOfflinePack}
+        onRemove={removeOfflinePack}
+      />
 
       <label htmlFor={inputId}>Search the complete NASA Exoplanet Archive</label>
       <div className="product-search__field">

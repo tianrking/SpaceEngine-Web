@@ -7,10 +7,15 @@ import type {
   ProgressiveCatalogFilter,
   ProgressiveCatalogSort,
 } from './progressiveCatalogSearch'
+import type { CatalogOfflineStatus } from './catalogOfflineStore'
+
+export type CatalogLoadSource = 'network' | 'offline-cache'
 
 export interface CatalogReadyPayload {
   readonly manifest: ProgressiveExoplanetManifest
   readonly decodeMs: number
+  readonly loadSource: CatalogLoadSource
+  readonly offline: CatalogOfflineStatus
 }
 
 export interface CatalogQueryPayload {
@@ -23,7 +28,15 @@ export interface CatalogDetailPayload {
   readonly record: ProgressiveExoplanetRecord
   readonly loadMs: number
   readonly fromMemoryCache: boolean
+  readonly fromPersistentCache: boolean
   readonly cacheEntries: number
+}
+
+export interface CatalogOfflineProgressPayload {
+  readonly completedChunks: number
+  readonly totalChunks: number
+  readonly storedBytes: number
+  readonly totalBytes: number
 }
 
 export type CatalogWorkerRequest =
@@ -42,6 +55,9 @@ export type CatalogWorkerRequest =
       readonly id: string
       readonly chunkId: number
     }
+  | { readonly type: 'offline-status'; readonly requestId: number }
+  | { readonly type: 'install-offline-pack'; readonly requestId: number }
+  | { readonly type: 'remove-offline-pack'; readonly requestId: number }
   | { readonly type: 'cancel'; readonly requestId: number }
 
 export type CatalogWorkerResponse =
@@ -59,6 +75,16 @@ export type CatalogWorkerResponse =
       readonly type: 'detail-result'
       readonly requestId: number
       readonly payload: CatalogDetailPayload
+    }
+  | {
+      readonly type: 'offline-status'
+      readonly requestId: number
+      readonly payload: CatalogOfflineStatus
+    }
+  | {
+      readonly type: 'offline-progress'
+      readonly requestId: number
+      readonly payload: CatalogOfflineProgressPayload
     }
   | {
       readonly type: 'error'

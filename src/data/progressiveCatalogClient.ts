@@ -1,16 +1,21 @@
 import type {
   CatalogDetailPayload,
+  CatalogOfflineProgressPayload,
   CatalogQueryPayload,
   CatalogReadyPayload,
   CatalogWorkerRequest,
   CatalogWorkerResponse,
 } from './progressiveCatalogProtocol'
+import type { CatalogOfflineStatus } from './catalogOfflineStore'
 import type {
   ProgressiveCatalogFilter,
   ProgressiveCatalogSort,
 } from './progressiveCatalogSearch'
 
-type SuccessResponse = Exclude<CatalogWorkerResponse, { type: 'error' }>
+type SuccessResponse = Exclude<
+  CatalogWorkerResponse,
+  { type: 'error' } | { type: 'offline-progress' }
+>
 type RequestWithoutId = CatalogWorkerRequest extends infer Request
   ? Request extends { readonly requestId: number }
     ? Omit<Request, 'requestId'>
@@ -20,9 +25,11 @@ type PendingRequest = {
   resolve: (response: SuccessResponse) => void
   reject: (error: Error) => void
   timeout: ReturnType<typeof setTimeout>
+  onProgress?: (progress: CatalogOfflineProgressPayload) => void
 }
 
 const REQUEST_TIMEOUT_MS = 30_000
+const OFFLINE_INSTALL_TIMEOUT_MS = 180_000
 
 export class ProgressiveCatalogClient {
   readonly #worker: Worker
@@ -45,6 +52,10 @@ export class ProgressiveCatalogClient {
     const response = event.data
     const pending = this.#pending.get(response.requestId)
     if (!pending) return
+    if (response.type === 'offline-progress') {
+      pending.onProgress?.(response.payload)
+      return
+    }
     clearTimeout(pending.timeout)
     this.#pending.delete(response.requestId)
     if (response.type === 'error') pending.reject(new Error(response.message))
@@ -65,6 +76,8 @@ export class ProgressiveCatalogClient {
   #request<T extends SuccessResponse>(
     request: RequestWithoutId,
     expectedType: T['type'],
+    onProgress?: (progress: CatalogOfflineProgressPayload) => void,
+    timeoutMs = REQUEST_TIMEOUT_MS,
   ): { requestId: number; promise: Promise<T['payload']> } {
     const requestId = this.#nextRequestId
     this.#nextRequestId += 1
@@ -79,7 +92,7 @@ export class ProgressiveCatalogClient {
         this.#pending.delete(requestId)
         this.#worker.postMessage({ type: 'cancel', requestId } satisfies CatalogWorkerRequest)
         reject(new Error('Catalogue request timed out.'))
-      }, REQUEST_TIMEOUT_MS)
+      }, timeoutMs)
       this.#pending.set(requestId, {
         resolve: (response) => {
           if (response.type !== expectedType) {
@@ -90,6 +103,7 @@ export class ProgressiveCatalogClient {
         },
         reject,
         timeout,
+        onProgress,
       })
       this.#worker.postMessage({ ...request, requestId } as CatalogWorkerRequest)
     })
@@ -123,6 +137,31 @@ export class ProgressiveCatalogClient {
       { type: 'detail', id, chunkId },
       'detail-result',
     )
+  }
+
+  offlineStatus(): Promise<CatalogOfflineStatus> {
+    return this.#request<Extract<SuccessResponse, { type: 'offline-status' }>>(
+      { type: 'offline-status' },
+      'offline-status',
+    ).promise
+  }
+
+  installOfflinePack(
+    onProgress?: (progress: CatalogOfflineProgressPayload) => void,
+  ): { requestId: number; promise: Promise<CatalogOfflineStatus> } {
+    return this.#request<Extract<SuccessResponse, { type: 'offline-status' }>>(
+      { type: 'install-offline-pack' },
+      'offline-status',
+      onProgress,
+      OFFLINE_INSTALL_TIMEOUT_MS,
+    )
+  }
+
+  removeOfflinePack(): Promise<CatalogOfflineStatus> {
+    return this.#request<Extract<SuccessResponse, { type: 'offline-status' }>>(
+      { type: 'remove-offline-pack' },
+      'offline-status',
+    ).promise
   }
 
   cancel(requestId: number): void {

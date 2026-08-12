@@ -577,13 +577,10 @@ async function sha256Hex(bytes: ArrayBuffer): Promise<string> {
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 
-async function fetchVerifiedJson(
+export async function verifyProgressiveAssetBytes(
   descriptor: CatalogAssetDescriptor,
-  signal?: AbortSignal,
+  bytes: ArrayBuffer,
 ): Promise<unknown> {
-  const response = await fetch(descriptor.path, { signal, cache: 'force-cache' })
-  if (!response.ok) throw new Error(`Catalogue asset failed (${response.status})`)
-  const bytes = await response.arrayBuffer()
   if (bytes.byteLength !== descriptor.bytes) {
     throw new Error(`Catalogue asset size mismatch for ${descriptor.path}`)
   }
@@ -591,6 +588,21 @@ async function fetchVerifiedJson(
     throw new Error(`Catalogue asset integrity mismatch for ${descriptor.path}`)
   }
   return JSON.parse(new TextDecoder().decode(bytes))
+}
+
+export interface VerifiedProgressiveAsset {
+  readonly bytes: ArrayBuffer
+  readonly value: unknown
+}
+
+export async function fetchProgressiveAsset(
+  descriptor: CatalogAssetDescriptor,
+  signal?: AbortSignal,
+): Promise<VerifiedProgressiveAsset> {
+  const response = await fetch(descriptor.path, { signal, cache: 'force-cache' })
+  if (!response.ok) throw new Error(`Catalogue asset failed (${response.status})`)
+  const bytes = await response.arrayBuffer()
+  return { bytes, value: await verifyProgressiveAssetBytes(descriptor, bytes) }
 }
 
 export async function loadProgressiveManifest(
@@ -607,9 +619,13 @@ export async function loadProgressiveManifest(
 export async function loadProgressiveSearchIndex(
   manifest: ProgressiveExoplanetManifest,
   signal?: AbortSignal,
+  cachedBytes?: ArrayBuffer,
 ): Promise<ProgressiveSearchIndex> {
+  const value = cachedBytes
+    ? await verifyProgressiveAssetBytes(manifest.searchIndex, cachedBytes)
+    : (await fetchProgressiveAsset(manifest.searchIndex, signal)).value
   return validateProgressiveSearchIndex(
-    await fetchVerifiedJson(manifest.searchIndex, signal),
+    value,
     manifest,
   )
 }
@@ -618,11 +634,15 @@ export async function loadProgressiveDetailChunk(
   manifest: ProgressiveExoplanetManifest,
   chunkId: number,
   signal?: AbortSignal,
+  cachedBytes?: ArrayBuffer,
 ): Promise<ProgressiveDetailChunk> {
   const descriptor = manifest.chunks[chunkId]
   if (!descriptor) throw new RangeError(`Unknown catalogue chunk: ${chunkId}`)
+  const value = cachedBytes
+    ? await verifyProgressiveAssetBytes(descriptor, cachedBytes)
+    : (await fetchProgressiveAsset(descriptor, signal)).value
   return validateProgressiveDetailChunk(
-    await fetchVerifiedJson(descriptor, signal),
+    value,
     manifest,
     descriptor,
   )
