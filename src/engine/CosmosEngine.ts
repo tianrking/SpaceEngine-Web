@@ -12,6 +12,8 @@ import {
   vec3,
 } from 'three/tsl'
 import { ASTERIA_SYSTEM, JULIAN_DAY_SECONDS, orbitalStateAtTime } from '../domain'
+import type { ProgressiveHostSkyIndex } from '../data/progressiveExoplanetCatalog'
+import type { ObservedSystemBundle } from '../data/progressiveObservedSystem'
 import {
   appendBoundedCameraHistory,
   beginBodyCentering,
@@ -45,6 +47,13 @@ import {
   normalizeDisplaySettings,
 } from './displaySettings'
 import {
+  buildObservedHostPoints,
+  buildObservedSystemRenderModel,
+  observedHostId,
+  type ObservedHostPoint,
+  type ObservedPlanetRenderModel,
+} from './observedScene'
+import {
   createCloudTexture,
   createPlanetTexture,
   createRadialGlowTexture,
@@ -57,6 +66,8 @@ import type {
   DisplaySettings,
   EngineCapabilities,
   EngineTelemetry,
+  ObservedSceneState,
+  ObservedSelection,
   QualityLevel,
   RendererBackend,
 } from './types'
@@ -82,6 +93,8 @@ interface BodyRuntime {
 
 interface CameraFlight {
   centerBodyId: string | null
+  centerObject: THREE.Object3D | null
+  fixedCenter: THREE.Vector3 | null
   startedAt: number
   durationMs: number
   startCamera: THREE.Vector3
@@ -110,6 +123,8 @@ interface StartCameraFlightOptions {
   readonly cameraOffset?: THREE.Vector3
   readonly targetOffset?: THREE.Vector3
   readonly restoreTarget?: SavedCameraView
+  readonly centerObject?: THREE.Object3D
+  readonly fixedCenter?: THREE.Vector3
 }
 
 interface NavigatorWithOptionalGpu {
@@ -125,11 +140,20 @@ interface MutableColorOpacityMaterial {
   opacity: number
 }
 
+interface ObservedPlanetRuntime {
+  readonly definition: ObservedPlanetRenderModel
+  readonly orbitNode: THREE.Group
+  readonly mesh: THREE.Mesh
+}
+
 export class CosmosEngine {
   private readonly host: HTMLElement
   private readonly events: CosmosEngineEvents
   private readonly scene = new THREE.Scene()
   private readonly worldRoot = new THREE.Group()
+  private readonly sharedBackgroundRoot = new THREE.Group()
+  private readonly asteriaRoot = new THREE.Group()
+  private observedRoot: THREE.Group | null = null
   private readonly camera = new THREE.PerspectiveCamera(52, 1, 0.001, 100_000)
   private readonly renderer: THREE.WebGPURenderer
   private readonly controls: OrbitControls
@@ -147,6 +171,21 @@ export class CosmosEngine {
   private readonly previousCameraPosition = new THREE.Vector3()
   private readonly orbitBrightnessBindings: BrightnessBinding[] = []
   private readonly starfieldBrightnessBindings: BrightnessBinding[] = []
+  private observedHostCloud: THREE.Points | null = null
+  private readonly observedHostPoints = new Map<string, ObservedHostPoint>()
+  private readonly observedPlanetRuntimes = new Map<string, ObservedPlanetRuntime>()
+  private observedSystemStarId: string | null = null
+  private observedTrackedObject: THREE.Object3D | null = null
+  private observedRaycastTarget: THREE.Points | null = null
+  private observedSceneState: ObservedSceneState = {
+    mode: 'asteria',
+    activeHost: null,
+    activeSystemId: null,
+    selectedObjectId: null,
+    selectedHost: null,
+    centeredObjectId: null,
+    transitioning: false,
+  }
 
   private backend: RendererBackend = 'webgl2'
   private quality: QualityLevel = 'balanced'
@@ -180,6 +219,7 @@ export class CosmosEngine {
     this.reducedMotionQuery.addEventListener('change', this.onReducedMotionChange)
     this.scene.background = new THREE.Color('#010207')
     this.scene.add(this.worldRoot)
+    this.worldRoot.add(this.sharedBackgroundRoot, this.asteriaRoot)
 
     const forceWebGL = new URLSearchParams(window.location.search).get('renderer') === 'webgl2'
     this.renderer = new THREE.WebGPURenderer({
@@ -264,6 +304,220 @@ export class CosmosEngine {
     return CATALOG_BODIES
   }
 
+  getObservedSceneState(): ObservedSceneState {
+    return { ...this.observedSceneState }
+  }
+
+  showAsteriaSystem(): void {
+    if (!this.initialized) return
+    this.clearObservedScene()
+    this.asteriaRoot.visible = true
+    this.observedSceneState = {
+      mode: 'asteria',
+      activeHost: null,
+      activeSystemId: null,
+      selectedObjectId: null,
+      selectedHost: null,
+      centeredObjectId: null,
+      transitioning: false,
+    }
+    this.resetCameraForScene(new THREE.Vector3(42, 28, 74), 'pelagos')
+    this.select('pelagos')
+    this.emitObservedSceneState()
+  }
+
+  showObservedUniverse(index: ProgressiveHostSkyIndex, focusHost?: string): void {
+    if (!this.initialized) return
+    const points = buildObservedHostPoints(index)
+    const nextRoot = new THREE.Group()
+    nextRoot.name = 'Observed NASA host universe'
+    const positions = new Float32Array(points.length * 3)
+    const colors = new Float32Array(points.length * 3)
+    const color = new THREE.Color()
+    this.observedHostPoints.clear()
+    for (const [pointIndex, point] of points.entries()) {
+      positions[pointIndex * 3] = point.position.x
+      positions[pointIndex * 3 + 1] = point.position.y
+      positions[pointIndex * 3 + 2] = point.position.z
+      color.set(this.observedSpectralColor(point.spectralType))
+      colors[pointIndex * 3] = color.r
+      colors[pointIndex * 3 + 1] = color.g
+      colors[pointIndex * 3 + 2] = color.b
+      this.observedHostPoints.set(point.id, point)
+    }
+    const geometry = new THREE.BufferGeometry()
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3))
+    const material = new THREE.PointsNodeMaterial({
+      size: 5.2,
+      sizeAttenuation: false,
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.92,
+      depthWrite: false,
+    })
+    const cloud = new THREE.Points(geometry, material)
+    cloud.name = 'Observed NASA hosts'
+    cloud.userData.observedHostIds = points.map(({ id }) => id)
+    nextRoot.add(cloud)
+    this.replaceObservedRoot(nextRoot)
+    this.observedHostCloud = cloud
+    this.observedRaycastTarget = cloud
+    this.asteriaRoot.visible = false
+    this.raycaster.params.Points = { threshold: 8 }
+    this.observedSceneState = {
+      mode: 'observed-universe',
+      activeHost: null,
+      activeSystemId: null,
+      selectedObjectId: null,
+      selectedHost: null,
+      centeredObjectId: null,
+      transitioning: false,
+    }
+    this.resetCameraForScene(new THREE.Vector3(1_050, 540, 1_420))
+    if (focusHost) this.focusObservedHost(focusHost)
+    else this.emitObservedSceneState()
+  }
+
+  focusObservedHost(host: string): boolean {
+    if (this.observedSceneState.mode !== 'observed-universe') return false
+    const point = this.observedHostPoints.get(observedHostId(host))
+    if (!point) return false
+    this.selectObservedHost(point, false)
+    this.observedTrackedObject = null
+    this.observedSceneState = {
+      ...this.observedSceneState,
+      centeredObjectId: point.id,
+      transitioning: true,
+    }
+    const center = new THREE.Vector3(point.position.x, point.position.y, point.position.z)
+      .add(this.observedRoot?.position ?? new THREE.Vector3())
+    this.startCameraFlight({
+      centerBodyId: null,
+      center,
+      fixedCenter: center,
+      viewDistance: 42,
+      approachDirection: this.camera.position.clone().sub(this.controls.target).normalize(),
+      durationMs: 1_650,
+      nextState: beginFreeCameraFrame(false, true),
+    })
+    return true
+  }
+
+  loadObservedSystem(bundle: ObservedSystemBundle): void {
+    if (!this.initialized) return
+    const model = buildObservedSystemRenderModel(bundle)
+    const nextRoot = new THREE.Group()
+    nextRoot.name = `Observed system ${bundle.host}`
+    const nextPlanetRuntimes = new Map<string, ObservedPlanetRuntime>()
+
+    const starMaterial = new THREE.MeshBasicNodeMaterial({
+      color: this.observedTemperatureColor(model.starTemperatureKelvin),
+    })
+    const star = new THREE.Mesh(new THREE.SphereGeometry(model.starRadius, 48, 30), starMaterial)
+    star.name = bundle.host
+    star.userData.observedObjectId = model.starId
+    star.userData.observedKind = 'star'
+    star.userData.observedSourceId = bundle.id
+    star.userData.observedHost = bundle.host
+    nextRoot.add(star)
+    const observedStellarLight = new THREE.PointLight(0xffd5a0, 1_450, 0, 1.5)
+    nextRoot.add(observedStellarLight)
+
+    for (const planet of model.planets) {
+      const orbitNode = new THREE.Group()
+      orbitNode.name = `${planet.name} illustrative orbit frame`
+      const planetMaterial = new THREE.MeshStandardNodeMaterial({
+        color: this.observedPlanetColor(planet.radiusEarth),
+        roughness: 0.82,
+        metalness: 0.01,
+      })
+      const mesh = new THREE.Mesh(new THREE.SphereGeometry(planet.radius, 40, 24), planetMaterial)
+      mesh.name = planet.name
+      mesh.userData.observedObjectId = planet.id
+      mesh.userData.observedKind = 'planet'
+      mesh.userData.observedSourceId = planet.sourceId
+      mesh.userData.observedHost = bundle.host
+      mesh.userData.observedAssumptionCount = planet.assumptions.length
+      orbitNode.add(mesh)
+      nextRoot.add(orbitNode)
+      const orbitPoints: THREE.Vector3[] = []
+      for (let index = 0; index <= 160; index += 1) {
+        orbitPoints.push(this.observedPlanetPosition(planet, index / 160 * TAU))
+      }
+      const orbitMaterial = new THREE.LineBasicNodeMaterial({
+        color: 0x6f879b,
+        transparent: true,
+        opacity: ORBIT_BASE_OPACITY,
+      })
+      const orbit = new THREE.Line(new THREE.BufferGeometry().setFromPoints(orbitPoints), orbitMaterial)
+      orbit.name = `${planet.name} illustrative visual orbit`
+      nextRoot.add(orbit)
+      orbitNode.position.copy(this.observedPlanetPosition(planet, planet.phaseRadians))
+      nextPlanetRuntimes.set(planet.id, { definition: planet, orbitNode, mesh })
+    }
+
+    this.replaceObservedRoot(nextRoot)
+    this.observedPlanetRuntimes.clear()
+    for (const [id, runtime] of nextPlanetRuntimes) this.observedPlanetRuntimes.set(id, runtime)
+    this.observedSystemStarId = model.starId
+    this.observedHostCloud = null
+    this.observedRaycastTarget = null
+    this.observedHostPoints.clear()
+    this.asteriaRoot.visible = false
+    this.observedSceneState = {
+      mode: 'observed-system',
+      activeHost: bundle.host,
+      activeSystemId: bundle.id,
+      selectedObjectId: model.starId,
+      selectedHost: bundle.host,
+      centeredObjectId: null,
+      transitioning: false,
+    }
+    this.resetCameraForScene(new THREE.Vector3(42, 26, 70))
+    this.emitObservedSelection({
+      kind: 'star',
+      id: model.starId,
+      sourceId: bundle.id,
+      host: bundle.host,
+      name: bundle.host,
+      observed: true,
+      illustrativeAssumptionCount: 0,
+    })
+    this.emitObservedSceneState()
+  }
+
+  centerOnObservedObject(id: string): boolean {
+    if (this.observedSceneState.mode === 'observed-universe') {
+      const point = this.observedHostPoints.get(id)
+      return point ? this.focusObservedHost(point.host) : false
+    }
+    if (this.observedSceneState.mode !== 'observed-system') return false
+    const object = this.findObservedSystemObject(id)
+    if (!object) return false
+    this.observedTrackedObject = object
+    this.observedSceneState = {
+      ...this.observedSceneState,
+      centeredObjectId: id,
+      transitioning: true,
+    }
+    this.emitObservedSceneState()
+    const center = object.getWorldPosition(new THREE.Vector3())
+    const radius = id === this.observedSystemStarId
+      ? (object.geometry as THREE.SphereGeometry).parameters.radius
+      : this.observedPlanetRuntimes.get(id)?.definition.radius ?? 1
+    this.startCameraFlight({
+      centerBodyId: null,
+      center,
+      centerObject: object,
+      viewDistance: Math.max(radius * 4.2, 2),
+      approachDirection: this.camera.position.clone().sub(this.controls.target).normalize(),
+      durationMs: 1_500,
+      nextState: beginFreeCameraFrame(false, true),
+    })
+    return true
+  }
+
   getDisplaySettings(): DisplaySettings {
     return { ...this.displaySettings }
   }
@@ -336,6 +590,7 @@ export class CosmosEngine {
   }
 
   centerOnBody(id: string, mode: BodyCameraViewMode = 'orbit'): boolean {
+    if (this.observedSceneState.mode !== 'asteria') return false
     const body = BODY_LOOKUP.get(id)
     const target = this.bodyObjects.get(id)
     if (!body || !target) return false
@@ -395,6 +650,14 @@ export class CosmosEngine {
   }
 
   showSystemOverview(): void {
+    if (this.observedSceneState.mode !== 'asteria') {
+      if (this.observedSceneState.mode === 'observed-universe') {
+        this.resetCameraForScene(new THREE.Vector3(1_050, 540, 1_420))
+      } else {
+        this.resetCameraForScene(new THREE.Vector3(42, 26, 70))
+      }
+      return
+    }
     const hadActiveTransition = this.cameraFlight !== null
     this.prepareNavigationHistory(hadActiveTransition, null, 'system')
     const starCenter = this.bodyObjects
@@ -413,6 +676,10 @@ export class CosmosEngine {
   }
 
   resetView(): void {
+    if (this.observedSceneState.mode !== 'asteria') {
+      this.showAsteriaSystem()
+      return
+    }
     this.cameraViewHistory.length = 0
     this.showSystemOverview()
     this.cameraViewHistory.length = 0
@@ -507,6 +774,8 @@ export class CosmosEngine {
     this.trackedCenter.copy(options.center)
     this.cameraFlight = {
       centerBodyId: options.centerBodyId,
+      centerObject: options.centerObject ?? null,
+      fixedCenter: options.fixedCenter?.clone() ?? null,
       startedAt: performance.now(),
       durationMs,
       startCamera: this.camera.position.clone(),
@@ -531,6 +800,7 @@ export class CosmosEngine {
     this.controls.removeEventListener('start', this.cancelCameraFlight)
     this.controls.dispose()
     this.timer.dispose()
+    this.clearObservedScene()
 
     this.scene.traverse((object) => {
       const mesh = object as THREE.Mesh
@@ -570,12 +840,12 @@ export class CosmosEngine {
 
   private createLighting(): void {
     const ambient = new THREE.AmbientLight(0x6e83a6, 0.065)
-    this.worldRoot.add(ambient)
+    this.sharedBackgroundRoot.add(ambient)
 
     const stellarLight = new THREE.PointLight(0xffd5a0, 1800, 0, 1.5)
     stellarLight.position.set(0, 0, 0)
     stellarLight.castShadow = false
-    this.worldRoot.add(stellarLight)
+    this.asteriaRoot.add(stellarLight)
   }
 
   private createStarSystem(): void {
@@ -600,7 +870,7 @@ export class CosmosEngine {
     const glow = new THREE.Sprite(glowMaterial)
     glow.scale.setScalar(24)
     starGroup.add(glow)
-    this.worldRoot.add(starGroup)
+    this.asteriaRoot.add(starGroup)
     this.bodyObjects.set(STAR.id, starGroup)
 
     for (const body of RENDER_BODIES.filter(({ bodyKind }) => bodyKind === 'planet')) {
@@ -624,7 +894,7 @@ export class CosmosEngine {
 
     const parentNode =
       body.parentId === STAR.id
-        ? this.worldRoot
+        ? this.asteriaRoot
         : this.bodyRuntimes.get(body.parentId ?? '')?.orbitNode
     if (!parentNode) throw new Error(`Missing render parent ${body.parentId} for ${body.id}`)
     parentNode.add(orbitNode)
@@ -770,7 +1040,7 @@ export class CosmosEngine {
     orbit.name = `${body.name} orbit`
     const parentNode =
       body.parentId === STAR.id
-        ? this.worldRoot
+        ? this.asteriaRoot
         : this.bodyRuntimes.get(body.parentId ?? '')?.orbitNode
     if (!parentNode) throw new Error(`Missing orbit parent ${body.parentId} for ${body.id}`)
     parentNode.add(orbit)
@@ -826,7 +1096,7 @@ export class CosmosEngine {
       FAR_STAR_BASE_OPACITY,
       this.displaySettings.starfieldBrightness,
     )
-    this.worldRoot.add(new THREE.Points(geometry, material))
+    this.sharedBackgroundRoot.add(new THREE.Points(geometry, material))
     this.starCount += count
   }
 
@@ -881,7 +1151,7 @@ export class CosmosEngine {
     galaxy.frustumCulled = false
     galaxy.name = 'WebGPU compute galaxy'
     galaxy.rotation.x = -0.16
-    this.worldRoot.add(galaxy)
+    this.sharedBackgroundRoot.add(galaxy)
     this.starfieldBrightnessBindings.push({
       apply: (brightness) => {
         const calibration = deriveVisualCalibration(
@@ -930,7 +1200,7 @@ export class CosmosEngine {
       CPU_GALAXY_BASE_OPACITY,
       this.displaySettings.starfieldBrightness,
     )
-    this.worldRoot.add(new THREE.Points(geometry, material))
+    this.sharedBackgroundRoot.add(new THREE.Points(geometry, material))
     this.starCount += count
   }
 
@@ -946,7 +1216,19 @@ export class CosmosEngine {
       if (cloudMesh) cloudMesh.rotation.y += rotationRate * 0.0125
     }
 
-    this.updateScaleLod()
+    if (this.observedSceneState.mode === 'observed-system') {
+      for (const runtime of this.observedPlanetRuntimes.values()) {
+        const { definition, orbitNode, mesh } = runtime
+        if (!definition.staticOrbit && definition.periodDays !== null) {
+          const phase = definition.phaseRadians +
+            (this.simulationDays / definition.periodDays) * TAU
+          orbitNode.position.copy(this.observedPlanetPosition(definition, phase))
+        }
+        mesh.rotation.y += deltaSeconds * this.timeScale * 0.08
+      }
+    }
+
+    if (this.observedSceneState.mode === 'asteria') this.updateScaleLod()
   }
 
   private updateScaleLod(): void {
@@ -1005,7 +1287,9 @@ export class CosmosEngine {
   private updateCameraFlight(now: number): void {
     if (!this.cameraFlight) return
     const flight = this.cameraFlight
-    const center = this.centerWorldPositionFor(flight.centerBodyId)
+    const center = flight.centerObject
+      ? flight.centerObject.getWorldPosition(new THREE.Vector3())
+      : flight.fixedCenter?.clone() ?? this.centerWorldPositionFor(flight.centerBodyId)
     const progress = flight.durationMs === 0
       ? 1
       : THREE.MathUtils.clamp((now - flight.startedAt) / flight.durationMs, 0, 1)
@@ -1025,8 +1309,13 @@ export class CosmosEngine {
   }
 
   private updateTrackedCenter(): void {
-    if (this.cameraFlight || this.cameraCenterState.bodyId === null) return
-    const currentCenter = this.centerWorldPositionFor(this.cameraCenterState.bodyId)
+    if (this.cameraFlight) return
+    const currentCenter = this.observedTrackedObject
+      ? this.observedTrackedObject.getWorldPosition(new THREE.Vector3())
+      : this.cameraCenterState.bodyId === null
+        ? null
+        : this.centerWorldPositionFor(this.cameraCenterState.bodyId)
+    if (!currentCenter) return
     const delta = trackingTranslation(this.trackedCenter, currentCenter)
     const translation = new THREE.Vector3(delta.x, delta.y, delta.z)
     this.camera.position.add(translation)
@@ -1042,7 +1331,14 @@ export class CosmosEngine {
       ...this.cameraCenterState,
       canReturn: this.cameraViewHistory.length > 0,
     })
-    this.trackedCenter.copy(this.currentCenterWorldPosition())
+    this.trackedCenter.copy(
+      this.observedTrackedObject?.getWorldPosition(new THREE.Vector3()) ??
+        this.currentCenterWorldPosition(),
+    )
+    if (this.observedSceneState.mode !== 'asteria') {
+      this.observedSceneState = { ...this.observedSceneState, transitioning: false }
+      this.emitObservedSceneState()
+    }
     this.emitCameraCenterState()
   }
 
@@ -1065,7 +1361,18 @@ export class CosmosEngine {
       this.cameraCenterState,
       this.cameraViewHistory.length > 0,
     )
-    this.trackedCenter.copy(this.centerWorldPositionFor(null))
+    if (this.observedSceneState.mode === 'asteria') {
+      this.trackedCenter.copy(this.centerWorldPositionFor(null))
+    } else {
+      this.observedTrackedObject = null
+      this.trackedCenter.copy(this.controls.target)
+      this.observedSceneState = {
+        ...this.observedSceneState,
+        centeredObjectId: null,
+        transitioning: false,
+      }
+      this.emitObservedSceneState()
+    }
     this.emitCameraCenterState()
   }
 
@@ -1207,6 +1514,205 @@ export class CosmosEngine {
     this.renderer.setSize(width, height, false)
   }
 
+  private resetCameraForScene(position: THREE.Vector3, targetBodyId?: string): void {
+    this.cameraFlight = null
+    this.cameraViewHistory.length = 0
+    this.cameraCenterState = {
+      mode: 'system',
+      bodyId: null,
+      transitioning: false,
+      canReturn: false,
+    }
+    this.camera.position.copy(position)
+    const originShift = this.worldRoot.position.clone()
+    this.worldRoot.position.set(0, 0, 0)
+    this.floatingOriginUnits.sub(originShift)
+    this.controls.target.set(0, 0, 0)
+    this.controls.minDistance = 1.4
+    this.controls.maxDistance = 3_000
+    this.controls.update()
+    this.trackedCenter.set(0, 0, 0)
+    this.observedTrackedObject = null
+    this.previousCameraPosition.copy(position)
+    if (targetBodyId) this.selectedId = targetBodyId
+    this.emitCameraCenterState()
+  }
+
+  private replaceObservedRoot(nextRoot: THREE.Group): void {
+    const previous = this.observedRoot
+    this.observedRoot = nextRoot
+    this.worldRoot.add(nextRoot)
+    if (previous) {
+      this.worldRoot.remove(previous)
+      this.disposeSceneBranch(previous)
+    }
+  }
+
+  private clearObservedScene(): void {
+    if (this.observedRoot) {
+      this.worldRoot.remove(this.observedRoot)
+      this.disposeSceneBranch(this.observedRoot)
+      this.observedRoot = null
+    }
+    this.observedHostCloud = null
+    this.observedRaycastTarget = null
+    this.observedHostPoints.clear()
+    this.observedPlanetRuntimes.clear()
+    this.observedSystemStarId = null
+    this.observedTrackedObject = null
+  }
+
+  private disposeSceneBranch(root: THREE.Object3D): void {
+    root.traverse((object) => {
+      const renderable = object as THREE.Mesh
+      renderable.geometry?.dispose?.()
+      const material = renderable.material
+      if (Array.isArray(material)) material.forEach((entry) => entry.dispose())
+      else material?.dispose?.()
+    })
+    root.clear()
+  }
+
+  private emitObservedSceneState(): void {
+    this.events.onObservedSceneChange?.(this.getObservedSceneState())
+  }
+
+  private emitObservedSelection(selection: ObservedSelection): void {
+    this.events.onObservedSelection?.(selection)
+  }
+
+  private selectObservedHost(point: ObservedHostPoint, openHost: boolean): void {
+    this.observedSceneState = {
+      ...this.observedSceneState,
+      selectedObjectId: point.id,
+      selectedHost: point.host,
+    }
+    this.emitObservedSelection({
+      kind: 'host',
+      id: point.id,
+      host: point.host,
+      distancePc: point.distancePc,
+      raDeg: point.raDeg,
+      decDeg: point.decDeg,
+      skyOnly: point.skyOnly,
+      spectralType: point.spectralType,
+      planetCount: point.planetCount,
+      starCount: point.starCount,
+      gaiaDr3: point.gaiaDr3,
+    })
+    this.emitObservedSceneState()
+    if (openHost) this.events.onObservedHostOpen?.(point.host)
+  }
+
+  private findObservedSystemObject(id: string): THREE.Mesh | null {
+    if (!this.observedRoot) return null
+    if (id === this.observedSystemStarId) {
+      return this.observedRoot.children.find(
+        (child) => child.userData.observedObjectId === id,
+      ) as THREE.Mesh | undefined ?? null
+    }
+    return this.observedPlanetRuntimes.get(id)?.mesh ?? null
+  }
+
+  private intersectObservedScene(): THREE.Intersection | null {
+    if (this.observedSceneState.mode === 'observed-universe' && this.observedRaycastTarget) {
+      const height = Math.max(this.renderer.domElement.clientHeight, 1)
+      const targetDistance = Math.max(this.camera.position.distanceTo(this.controls.target), 1)
+      const worldPerPixel =
+        2 * Math.tan(THREE.MathUtils.degToRad(this.camera.fov) / 2) * targetDistance / height
+      this.raycaster.params.Points = { threshold: Math.max(0.12, worldPerPixel * 6) }
+      return this.raycaster.intersectObject(this.observedRaycastTarget, false)[0] ?? null
+    }
+    if (this.observedSceneState.mode !== 'observed-system' || !this.observedRoot) return null
+    const targets: THREE.Object3D[] = []
+    const star = this.observedSystemStarId
+      ? this.findObservedSystemObject(this.observedSystemStarId)
+      : null
+    if (star) targets.push(star)
+    for (const runtime of this.observedPlanetRuntimes.values()) targets.push(runtime.mesh)
+    return this.raycaster.intersectObjects(targets, false)[0] ?? null
+  }
+
+  private handleObservedIntersection(
+    intersection: THREE.Intersection,
+    openOrCenter: boolean,
+  ): void {
+    if (this.observedSceneState.mode === 'observed-universe') {
+      const hostIds = this.observedHostCloud?.userData.observedHostIds as readonly string[] | undefined
+      const id = hostIds?.[intersection.index ?? -1]
+      const point = id ? this.observedHostPoints.get(id) : undefined
+      if (point) this.selectObservedHost(point, openOrCenter)
+      return
+    }
+    const object = intersection.object
+    const id = object.userData.observedObjectId as string | undefined
+    const kind = object.userData.observedKind as 'star' | 'planet' | undefined
+    const sourceId = object.userData.observedSourceId as string | undefined
+    const host = object.userData.observedHost as string | undefined
+    if (!id || !kind || !sourceId || !host) return
+    const name = object.name || host
+    const assumptionCount = Number(object.userData.observedAssumptionCount ?? 0)
+    this.observedSceneState = {
+      ...this.observedSceneState,
+      selectedObjectId: id,
+      selectedHost: host,
+    }
+    this.emitObservedSelection({
+      kind,
+      id,
+      sourceId,
+      host,
+      name,
+      observed: true,
+      illustrativeAssumptionCount: assumptionCount,
+    })
+    this.emitObservedSceneState()
+    if (openOrCenter) this.centerOnObservedObject(id)
+  }
+
+  private observedPlanetPosition(
+    planet: ObservedPlanetRenderModel,
+    anomaly: number,
+  ): THREE.Vector3 {
+    const semiMajor = planet.orbitRadius
+    const semiMinor = semiMajor * Math.sqrt(1 - planet.eccentricity ** 2)
+    const eccentricOffset = semiMajor * planet.eccentricity
+    return new THREE.Vector3(
+      Math.cos(anomaly) * semiMajor - eccentricOffset,
+      0,
+      Math.sin(anomaly) * semiMinor,
+    )
+      .applyAxisAngle(new THREE.Vector3(0, 1, 0), planet.periapsisRadians)
+      .applyAxisAngle(new THREE.Vector3(1, 0, 0), planet.inclinationRadians)
+      .applyAxisAngle(new THREE.Vector3(0, 1, 0), planet.ascendingNodeRadians)
+  }
+
+  private observedSpectralColor(spectralType: string | null): string {
+    const spectralClass = spectralType?.trim().charAt(0).toUpperCase()
+    return ({
+      O: '#8eb5ff', B: '#a8c7ff', A: '#d5e0ff', F: '#f4f3ff',
+      G: '#fff0b7', K: '#ffc48f', M: '#ff9b78',
+    } as Record<string, string>)[spectralClass ?? ''] ?? '#a9ddd8'
+  }
+
+  private observedTemperatureColor(temperatureKelvin: number | null): string {
+    if (temperatureKelvin === null) return '#ffe0ad'
+    if (temperatureKelvin >= 10_000) return '#a8c7ff'
+    if (temperatureKelvin >= 7_500) return '#d5e0ff'
+    if (temperatureKelvin >= 6_000) return '#f4f3ff'
+    if (temperatureKelvin >= 5_200) return '#fff0b7'
+    if (temperatureKelvin >= 3_700) return '#ffc48f'
+    return '#ff9b78'
+  }
+
+  private observedPlanetColor(radiusEarth: number | null): string {
+    if (radiusEarth === null) return '#8ca9b8'
+    if (radiusEarth < 1.6) return '#83b6b0'
+    if (radiusEarth < 4) return '#7fa7c3'
+    if (radiusEarth < 10) return '#9b91c8'
+    return '#c19b73'
+  }
+
   private readonly onPointerDown = (event: PointerEvent): void => {
     if (event.button !== 0) return
     const bounds = this.renderer.domElement.getBoundingClientRect()
@@ -1215,6 +1721,12 @@ export class CosmosEngine {
       -((event.clientY - bounds.top) / bounds.height) * 2 + 1,
     )
     this.raycaster.setFromCamera(this.pointer, this.camera)
+    const observed = this.intersectObservedScene()
+    if (observed) {
+      this.handleObservedIntersection(observed, false)
+      return
+    }
+    if (this.observedSceneState.mode !== 'asteria') return
     const intersection = this.raycaster.intersectObjects(this.raycastTargets, false)[0]
     const bodyId = intersection?.object.userData.bodyId as string | undefined
     if (bodyId) this.select(bodyId)
@@ -1227,6 +1739,12 @@ export class CosmosEngine {
       -((event.clientY - bounds.top) / bounds.height) * 2 + 1,
     )
     this.raycaster.setFromCamera(this.pointer, this.camera)
+    const observed = this.intersectObservedScene()
+    if (observed) {
+      this.handleObservedIntersection(observed, true)
+      return
+    }
+    if (this.observedSceneState.mode !== 'asteria') return
     const intersection = this.raycaster.intersectObjects(this.raycastTargets, false)[0]
     const bodyId = intersection?.object.userData.bodyId as string | undefined
     if (bodyId) this.focusOn(bodyId)

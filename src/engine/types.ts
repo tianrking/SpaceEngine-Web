@@ -4,6 +4,44 @@ export type QualityLevel = 'balanced' | 'ultra' | 'battery'
 
 export type CameraViewMode = 'free' | 'system' | 'orbit' | 'close'
 
+export type ObservedSceneMode = 'asteria' | 'observed-universe' | 'observed-system'
+
+export interface ObservedSceneState {
+  readonly mode: ObservedSceneMode
+  readonly activeHost: string | null
+  readonly activeSystemId: string | null
+  readonly selectedObjectId: string | null
+  readonly selectedHost: string | null
+  readonly centeredObjectId: string | null
+  readonly transitioning: boolean
+}
+
+export interface ObservedHostSelection {
+  readonly kind: 'host'
+  readonly id: string
+  readonly host: string
+  readonly distancePc: number | null
+  readonly raDeg: number
+  readonly decDeg: number
+  readonly skyOnly: boolean
+  readonly spectralType: string | null
+  readonly planetCount: number
+  readonly starCount: number | null
+  readonly gaiaDr3: string | null
+}
+
+export interface ObservedSystemObjectSelection {
+  readonly kind: 'star' | 'planet'
+  readonly id: string
+  readonly sourceId: string
+  readonly host: string
+  readonly name: string
+  readonly observed: boolean
+  readonly illustrativeAssumptionCount: number
+}
+
+export type ObservedSelection = ObservedHostSelection | ObservedSystemObjectSelection
+
 export interface CameraCenterState {
   readonly mode: CameraViewMode
   readonly bodyId: string | null
@@ -149,6 +187,9 @@ export interface CosmosEngineEvents {
   onSelection?: (body: CelestialBodyView) => void
   onSelectionCleared?: () => void
   onCameraCenterChange?: (state: CameraCenterState) => void
+  onObservedSelection?: (selection: ObservedSelection) => void
+  onObservedHostOpen?: (host: string) => void
+  onObservedSceneChange?: (state: ObservedSceneState) => void
   onError?: (error: Error) => void
 }
 
