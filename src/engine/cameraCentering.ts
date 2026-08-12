@@ -1,6 +1,6 @@
 import type { CameraCenterState, CameraViewMode } from './types'
 
-export type BodyCameraViewMode = Exclude<CameraViewMode, 'system'>
+export type BodyCameraViewMode = Extract<CameraViewMode, 'orbit' | 'close'>
 
 export interface CameraPoint {
   readonly x: number
@@ -76,6 +76,13 @@ export function beginSystemOverview(canReturn: boolean): CameraCenterState {
   return { mode: 'system', bodyId: null, transitioning: true, canReturn }
 }
 
+export function beginFreeCameraFrame(
+  canReturn: boolean,
+  transitioning = false,
+): CameraCenterState {
+  return { mode: 'free', bodyId: null, transitioning, canReturn }
+}
+
 export function completeCameraCentering(
   state: CameraCenterState,
 ): CameraCenterState {
@@ -93,6 +100,16 @@ export function appendBoundedCameraHistory<T>(
   return [...history, view].slice(-limit)
 }
 
+export function recoverInterruptedRestoreTarget<T>(
+  history: readonly T[],
+  restoreTarget: T | null,
+  consumeRestoreTarget: boolean,
+  limit = 8,
+): readonly T[] {
+  if (restoreTarget === null || consumeRestoreTarget) return history
+  return appendBoundedCameraHistory(history, restoreTarget, limit)
+}
+
 export function shouldPushCameraHistory(
   current: CameraCenterState,
   nextBodyId: string | null,
@@ -105,12 +122,37 @@ export function shouldPushCameraHistory(
   )
 }
 
+/** A redirect reuses the original preflight snapshot instead of recording a mid-flight pose. */
+export function shouldPushRedirectedCameraHistory(
+  hadActiveTransition: boolean,
+  current: CameraCenterState,
+  nextBodyId: string | null,
+  nextMode: CameraViewMode,
+): boolean {
+  return !hadActiveTransition && shouldPushCameraHistory(current, nextBodyId, nextMode)
+}
+
 /** Manual input commits the current pose as a free system-frame view without moving it. */
 export function interruptCameraCentering(
   state: CameraCenterState,
   canReturn: boolean,
 ): CameraCenterState {
   return state.transitioning
-    ? { mode: 'system', bodyId: null, transitioning: false, canReturn }
+    ? beginFreeCameraFrame(canReturn)
     : state
+}
+
+export function cameraLodReferenceId(
+  centeredBodyId: string | null,
+  selectedBodyId: string | null,
+): string | null {
+  return centeredBodyId ?? selectedBodyId
+}
+
+export function shouldPreserveBodyScale(
+  bodyId: string,
+  centeredBodyId: string | null,
+  selectedBodyId: string | null,
+): boolean {
+  return bodyId === centeredBodyId || bodyId === selectedBodyId
 }

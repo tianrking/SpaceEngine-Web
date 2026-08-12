@@ -2,7 +2,7 @@ export type RendererBackend = 'webgpu' | 'webgl2'
 
 export type QualityLevel = 'balanced' | 'ultra' | 'battery'
 
-export type CameraViewMode = 'system' | 'orbit' | 'close'
+export type CameraViewMode = 'free' | 'system' | 'orbit' | 'close'
 
 export interface CameraCenterState {
   readonly mode: CameraViewMode

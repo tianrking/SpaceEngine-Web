@@ -2,14 +2,19 @@ import { describe, expect, it } from 'vitest'
 import {
   appendBoundedCameraHistory,
   beginBodyCentering,
+  beginFreeCameraFrame,
   beginSystemOverview,
   cameraDistanceForMode,
+  cameraLodReferenceId,
   completeCameraCentering,
   enclosingVisualRadius,
   minimumCameraDistance,
+  recoverInterruptedRestoreTarget,
   interruptCameraCentering,
   shouldPushCameraHistory,
+  shouldPushRedirectedCameraHistory,
   smoothFlightProgress,
+  shouldPreserveBodyScale,
   trackingTranslation,
 } from './cameraCentering'
 
@@ -66,6 +71,12 @@ describe('camera centering state and geometry', () => {
       transitioning: true,
       canReturn: false,
     })
+    expect(beginFreeCameraFrame(true)).toEqual({
+      mode: 'free',
+      bodyId: null,
+      transitioning: false,
+      canReturn: true,
+    })
   })
 
   it('retains a bounded stack of immediately previous views', () => {
@@ -95,6 +106,51 @@ describe('camera centering state and geometry', () => {
         { mode: 'close', bodyId: 'ione', transitioning: true, canReturn: true },
         true,
       ),
-    ).toEqual({ mode: 'system', bodyId: null, transitioning: false, canReturn: true })
+    ).toEqual({ mode: 'free', bodyId: null, transitioning: false, canReturn: true })
+  })
+
+  it('preserves free and system as distinct null-body frames', () => {
+    const free = beginFreeCameraFrame(false, true)
+    const system = beginSystemOverview(false)
+    expect(free.bodyId).toBeNull()
+    expect(system.bodyId).toBeNull()
+    expect(free.mode).toBe('free')
+    expect(system.mode).toBe('system')
+    expect(completeCameraCentering(free)).toEqual({
+      mode: 'free',
+      bodyId: null,
+      transitioning: false,
+      canReturn: false,
+    })
+  })
+
+  it('redirects an active flight without recording a ghost history entry', () => {
+    const transitioning = beginBodyCentering('pelagos', 'orbit', true)
+    expect(
+      shouldPushRedirectedCameraHistory(true, transitioning, 'ione', 'orbit'),
+    ).toBe(false)
+    const interruptedFree = interruptCameraCentering(transitioning, true)
+    expect(
+      shouldPushRedirectedCameraHistory(false, interruptedFree, 'ione', 'orbit'),
+    ).toBe(true)
+  })
+
+  it('keeps centered and selected bodies distinct for visual LOD', () => {
+    expect(cameraLodReferenceId('orison', 'nyx')).toBe('orison')
+    expect(cameraLodReferenceId(null, 'nyx')).toBe('nyx')
+    expect(shouldPreserveBodyScale('orison', 'orison', 'nyx')).toBe(true)
+    expect(shouldPreserveBodyScale('nyx', 'orison', 'nyx')).toBe(true)
+    expect(shouldPreserveBodyScale('cinder', 'orison', 'nyx')).toBe(false)
+  })
+
+  it('recovers a cancelled restore target unless Back explicitly consumes it', () => {
+    const older = ['system', 'pelagos']
+    expect(
+      recoverInterruptedRestoreTarget(older, 'ione', false, 8),
+    ).toEqual(['system', 'pelagos', 'ione'])
+    expect(
+      recoverInterruptedRestoreTarget(older, 'ione', true, 8),
+    ).toEqual(older)
+    expect(recoverInterruptedRestoreTarget(older, null, false, 8)).toEqual(older)
   })
 })
