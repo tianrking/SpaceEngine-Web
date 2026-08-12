@@ -5,12 +5,12 @@
 Camera selection and camera centering are separate engine states:
 
 - **Selected body** drives inspection and the next explicit navigation command.
-- **Centered body** is the star, planet, or moon whose moving world-space origin is followed by the camera. A system view has no centered body.
+- **Centered body** is the star, planet, or moon whose moving world-space origin is followed by the camera. System overview and Free flight have no centered body, but remain distinct camera states.
 - `Orbit` and `Close` are presentation distances around the same body reference frame; neither is a terrain landing mode.
 
-The animation order is deliberately `orbital update → centered-body translation → keyboard/flight update → floating-origin recenter → controls update → render`. After a centered body's parent-relative transform changes, the engine applies its world-center delta to both camera position and `OrbitControls.target`. Manual orbit/dolly input changes the relative pose but does not detach a completed tracked frame. A transition interrupted by manual input keeps the current pose instead of snapping to its destination.
+The animation order is deliberately `orbital update → centered-body translation → keyboard/flight update → floating-origin recenter → controls update → render`. After a centered body's parent-relative transform changes, the engine applies its world-center delta to both camera position and `OrbitControls.target`. Manual orbit/dolly input changes the relative pose but does not detach a completed tracked frame. A transition interrupted by manual input keeps the current pose instead of snapping to its destination and commits that pose as an explicit Free flight frame.
 
-Previous View stores at most eight snapshots as camera and target offsets relative to each snapshot's center. Restoring a view resolves the center's current world position, so a saved moon view remains meaningful after the moon advances in its orbit. System overview is pushed like another reversible destination; destructive reset clears that history. Ringed bodies use an enclosing outer-ring radius for distance constraints. Reduced-motion preference selects zero-duration transitions, and floating-origin shifts update every live camera anchor in the same local frame.
+Previous View stores at most eight snapshots as camera and target offsets relative to each snapshot's center. Restoring a view resolves the center's current world position, so a saved moon view remains meaningful after the moon advances in its orbit. A restore is transactional: redirecting or cancelling it returns the popped destination to history, while pressing Previous again intentionally consumes it and continues to the next older frame. System overview is pushed like another reversible destination; destructive reset clears that history. Ringed bodies use an enclosing outer-ring radius for distance constraints. Reduced-motion preference selects zero-duration transitions, reacts immediately if the preference changes during flight, and removes its listener on engine disposal. Floating-origin shifts update every live camera anchor in the same local frame.
 
 The implementation is backend-neutral camera/scene-graph logic and therefore follows the same path under WebGPU and WebGL 2. It is not an interstellar coordinate hierarchy: observed NASA catalogue systems remain research records and sky-atlas points, not flyable render scenes.
 
@@ -20,6 +20,8 @@ The implementation is backend-neutral camera/scene-graph logic and therefore fol
 - Star, planet, and parent-relative moon centers remain locked at high time scale while manual orbit/dolly preserves the relative view.
 - Previous View restores up to eight immediate views; system overview is reversible, while reset clears history.
 - Transition cancellation keeps the current pose without a destination snap.
+- Free flight, system overview, and body-centered views remain distinct in engine telemetry and the HUD.
+- Redirecting an in-progress Previous View does not lose its popped history destination.
 - Ringed-body framing stays outside the outer ring; reduced-motion transitions complete immediately.
 - Floating-origin recentering does not double-apply center movement or create a false velocity spike.
 - WebGPU and WebGL 2 use the same camera-state behavior.
