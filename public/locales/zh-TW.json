@@ -1,0 +1,889 @@
+{
+  "version": 1,
+  "locale": "zh-TW",
+  "resources": {
+    "app": {
+      "meta": {
+        "title": "Astral Surveyor · WebGPU 宇宙",
+        "description": "探索以 WebGPU 為核心的程序化恆星系，以及具來源依據的 NASA 系外行星研究目錄。",
+        "imageAlt": "Astral Surveyor 正在探索環系世界 Orison"
+      },
+      "engine": {
+        "viewportLabel": "互動式程序化宇宙視窗",
+        "loading": "正在編譯宇宙渲染管線",
+        "errorTitle": "渲染器初始化失敗",
+        "errorDetail": "此裝置無法啟動宇宙渲染器。",
+        "retry": "重新載入應用程式",
+        "errorAdvice": "請使用目前版本的 Chrome 或 Edge，並啟用硬體加速。"
+      },
+      "units": {
+        "notAvailable": "無可用資料",
+        "notModeled": "尚未建模",
+        "systemBarycenter": "系統質心",
+        "fromParent": "距 {{parent}} {{distance}}",
+        "fromAsteria": "距 Asteria {{distance}} AU",
+        "retrogradeHours": "小時（逆行）",
+        "days": "天"
+      },
+      "metrics": {
+        "mass": "質量",
+        "meanRadius": "平均半徑",
+        "meanDensity": "平均密度",
+        "referenceGravity": "參考重力",
+        "earthGravity": "地球重力倍數",
+        "escapeVelocity": "逃逸速度",
+        "meanTemperature": "平均溫度",
+        "equilibriumTemperature": "平衡溫度",
+        "greenhouseOffset": "溫室效應增溫",
+        "bondAlbedo": "邦德反照率",
+        "referencePressure": "參考壓力",
+        "internalHeatFlux": "內部熱通量",
+        "rotationPeriod": "自轉週期",
+        "axialTilt": "轉軸傾角",
+        "semiMajorAxis": "半長軸",
+        "eccentricity": "離心率",
+        "inclination": "軌道傾角",
+        "orbitalPeriod": "軌道週期",
+        "periapsis": "近拱點",
+        "apoapsis": "遠拱點",
+        "meanOrbitalSpeed": "平均軌道速度",
+        "stellarFlux": "恆星輻照通量",
+        "siderealRotation": "恆星日自轉",
+        "radius": "半徑",
+        "temperature": "溫度",
+        "gravity": "重力"
+      },
+      "sections": {
+        "physicalModel": "物理模型",
+        "climateModel": "氣候模型",
+        "rotationalState": "自轉狀態",
+        "orbitalSolution": "軌道解",
+        "orbitalSolutionSummary": "在模擬時間求值的確定性二體開普勒解。",
+        "climateSummary": "溫度與壓力為情境輸入；輻射平衡與通量由公式推導。",
+        "physicsSummary": "參考值採用 SI 輸入與有文件依據的名義天文常數。",
+        "rotationSummary": "恆星日自轉與轉軸傾角為確定性目錄輸入。",
+        "stellarEnvironment": "恆星環境",
+        "stellarSummary": "合成主星的光球層參考值。",
+        "bulkProperties": "整體物理性質",
+        "keplerianSolution": "開普勒軌道解",
+        "twoBodyEpoch": "模擬曆元時的二體瞬時軌道根數。"
+      },
+      "body": {
+        "syntheticSource": "Astral Surveyor 確定性 Asteria 模型",
+        "syntheticMethod": "策展情境輸入 · 方程式推導物理量",
+        "syntheticConfidence": "合成資料",
+        "modelReference": "模型 {{version}}{{seedPart}}",
+        "seedReference": " · 種子 {{seed}}",
+        "syntheticDescription": "為此模擬產生的合成教育資料；並非望遠鏡觀測天文目錄。",
+        "nasaAlignedClass": "NASA 對齊分類 · 虛構 Asteria 目錄",
+        "parentFallback": "母體",
+        "naturalSatelliteOf": "{{parent}} 的天然衛星",
+        "previousCameraFrame": "上一個相機視角",
+        "syntheticPrimary": "合成 G 型主星",
+        "syntheticStatus": "合成模型",
+        "orbitSummary": "繞 {{parent}} 的確定性開普勒軌道；視覺距離採對數壓縮。",
+        "stellarPlasma": "氫氦恆星電漿",
+        "noAtmosphere": "無持續存在的大氣層",
+        "class": {
+          "star": "{{spectralType}} 型主序星",
+          "lava": "熔岩世界",
+          "terrestrial": "類地世界",
+          "ocean": "海洋世界",
+          "superEarth": "超級地球",
+          "neptunian": "海王星型世界",
+          "gasGiant": "氣態巨行星",
+          "iceGiant": "冰巨行星",
+          "dwarf": "矮行星",
+          "rockyMoon": "岩質衛星",
+          "icyMoon": "冰質衛星",
+          "oceanicMoon": "海洋衛星",
+          "volcanicMoon": "火山衛星"
+        }
+      },
+      "habitability": {
+        "notApplicable": {
+          "label": "不適用",
+          "summary": "恆星光球層不適用表面宜居性篩選。"
+        },
+        "insufficientData": {
+          "label": "資料不足",
+          "summary": "確定性模型缺少足夠的環境資料以進行篩選。"
+        },
+        "nonSurfaceWorld": {
+          "label": "無固態表面世界",
+          "summary": "這顆巨行星沒有傳統意義上可抵達的固態表面。"
+        },
+        "outsideHz": {
+          "label": "保守宜居帶之外",
+          "summary": "其模型恆星環境位於保守液態水區域之外。"
+        },
+        "withinHz": {
+          "label": "宜居帶軌道",
+          "summary": "軌道通過保守通量篩選；這不代表具備宜居性或生命。"
+        },
+        "temperateCandidate": {
+          "label": "溫帶候選",
+          "summary": "合成溫度、壓力與恆星通量通過保守的第一階段篩選。"
+        }
+      },
+      "renderMetrics": {
+        "region": "渲染管線指標",
+        "starsTitle": "目前渲染圖中的程序化恆星",
+        "drawsTitle": "上一幀的繪製呼叫",
+        "backendTitle": "目前渲染後端",
+        "stars": "{{count}}K 顆恆星",
+        "pending": "—",
+        "draws": "{{count}} 次繪製",
+        "gpuCompute": "GPU 運算",
+        "cpuFallback": "CPU 相容模式"
+      }
+    },
+    "hud": {
+      "brand": {
+        "name": "Astral Surveyor",
+        "tagline": "宇宙觀測站"
+      },
+      "locale": {
+        "label": "語言"
+      },
+      "status": {
+        "region": "模擬狀態",
+        "fpsTitle": "每秒渲染幀數",
+        "cameraVelocity": "相機速度",
+        "renderingQuality": "渲染品質",
+        "cinematicEnable": "開啟電影模式",
+        "cinematicDisable": "關閉電影模式",
+        "cinematicTitle": "電影模式",
+        "gpu": {
+          "activeLabel": "WebGPU 已啟用",
+          "activeDetail": "原生運算",
+          "initializingLabel": "GPU 啟動中",
+          "initializingDetail": "正在準備管線",
+          "fallbackLabel": "WebGL 備援",
+          "fallbackDetail": "相容模式",
+          "unavailableLabel": "GPU 無法使用",
+          "unavailableDetail": "渲染已暫停"
+        },
+        "quality": {
+          "performance": "效能",
+          "balanced": "平衡",
+          "ultra": "極致"
+        }
+      },
+      "navigation": {
+        "region": "宇宙導覽",
+        "home": "觀測甲板",
+        "explore": "探索",
+        "search": "搜尋",
+        "locations": "星圖",
+        "bookmarks": "已儲存地點",
+        "settings": "設定"
+      },
+      "inspector": {
+        "region": "所選天體檢視器",
+        "collapse": "收合天體檢視器",
+        "open": "開啟天體檢視器",
+        "eyebrow": "天體分析",
+        "telemetry": "即時遙測",
+        "clear": "清除所選天體",
+        "clearTitle": "清除選取",
+        "emptyTitle": "尚未選取目標",
+        "emptyDescription": "選擇一個世界、恆星或深空天體進行檢視。",
+        "searchShortcut": "鍵盤快捷鍵：斜線",
+        "openSearch": "開啟全域搜尋",
+        "objectStatus": "天體狀態",
+        "classification": "分類",
+        "quickFacts": "快速資料",
+        "atmosphere": "大氣層",
+        "atmosphereComposition": "大氣組成",
+        "habitability": "宜居性",
+        "habitabilityScore": "宜居性分數：{{score}}／100",
+        "provenance": "資料來源",
+        "physicalProfile": "物理特性",
+        "distance": "距離",
+        "rightAscension": "赤經",
+        "declination": "赤緯",
+        "referenceDistance": "參考距離",
+        "tabsLabel": "科學資料檢視",
+        "tabs": {
+          "overview": "概覽",
+          "physics": "物理",
+          "orbit": "軌道"
+        },
+        "noPhysics": "此天體沒有可用的物理測量資料。",
+        "noOrbit": "此天體沒有可用的軌道解。",
+        "centerTarget": "置中目標",
+        "stateLabel": "選取與相機狀態",
+        "selected": "已選取",
+        "centered": "已置中",
+        "centering": "置中中",
+        "centeredOn": "已置中：{{name}}",
+        "centeringOn": "置中中：{{name}}",
+        "cameraCenteredTitle": "相機已置中於 {{name}}",
+        "cameraCenteringTitle": "相機正在置中於 {{name}}"
+      },
+      "camera": {
+        "reference": "相機參考系",
+        "selected": "已選取",
+        "camera": "相機",
+        "orbit": "軌道",
+        "closeApproach": "近距離觀察",
+        "orbitTracking": "軌道追蹤",
+        "previousView": "上一個視角",
+        "previousViewFallback": "上一個視角",
+        "systemOverview": "系統概覽",
+        "systemFrame": "系統參考系",
+        "freeFlight": "自由飛行",
+        "bodyTrackingUnlocked": "已解除天體追蹤",
+        "systemUnlocked": "系統參考系 · 已解除天體追蹤",
+        "transitionInProgress": "相機轉場進行中",
+        "notLocked": "相機未鎖定任何天體",
+        "preparingMode": "正在準備{{mode}}",
+        "centerOn": "正在置中於 {{name}}",
+        "centerOnEllipsis": "正在置中於 {{name}}…",
+        "centeredOn": "已置中於 {{name}}",
+        "centeredAnnouncement": "已置中於 {{name}}，{{mode}}",
+        "returnFree": "正在返回自由飛行視角",
+        "returnFreeEllipsis": "正在返回自由飛行視角…",
+        "returnSystem": "正在返回系統概覽",
+        "returnSystemEllipsis": "正在返回系統概覽…",
+        "bodyControls": "天體中心相機控制",
+        "freeControls": "自由飛行相機控制",
+        "systemControls": "系統相機控制",
+        "viewModeFor": "{{name}} 的視角模式",
+        "currentOrbit": "目前視角：軌道追蹤",
+        "trackOrbit": "從軌道追蹤（G）",
+        "currentClose": "目前視角：近距離觀察",
+        "moveClose": "移至近距離觀察（Shift+G）",
+        "closeUnavailable": "此天體不支援近距離觀察",
+        "returnTo": "返回{{view}}",
+        "returnToTitle": "返回{{view}}（Backspace）",
+        "currentSystem": "目前視角：系統概覽",
+        "returnSystemTitle": "返回系統概覽（0）",
+        "centerCameraOn": "將相機置中於 {{name}}",
+        "orbitSelectedTitle": "以軌道視角置中所選天體（G）",
+        "closeSelectedTitle": "以近距離視角置中所選天體（Shift+G）",
+        "currentView": "目前視角",
+        "trackSelected": "追蹤所選天體",
+        "nearBodyInspection": "近天體檢視"
+      },
+      "time": {
+        "region": "模擬時間控制",
+        "label": "模擬時間",
+        "unavailable": "無法取得時間",
+        "decrease": "降低時間倍率",
+        "increase": "提高時間倍率",
+        "resume": "繼續模擬",
+        "pause": "暫停模擬",
+        "scale": "時間倍率",
+        "paused": "已暫停",
+        "reset": "重設模擬時間",
+        "realTime": "返回即時速度"
+      },
+      "welcome": {
+        "close": "關閉歡迎畫面",
+        "eyebrow": "WebGPU 宇宙模擬器",
+        "title": "每一片地平線都能抵達。",
+        "description": "跨越天文尺度、研究程序化世界，從全系統觀測站平順移動至精確的近天體視角。",
+        "capabilities": "核心能力",
+        "navigationTitle": "無縫導覽",
+        "navigationDetail": "從系統到近距離觀察",
+        "worldsTitle": "模型豐富的世界",
+        "worldsDetail": "物理 + 程序化細節",
+        "gpuTitle": "GPU 原生",
+        "gpuDetail": "運算驅動",
+        "begin": "開始探索",
+        "tour": "進行 30 秒快速導覽",
+        "note": "建議使用滑鼠 + 鍵盤 · 支援觸控操作"
+      },
+      "tour": {
+        "fieldGuide": "探索指南",
+        "close": "關閉快速導覽",
+        "progress": "導覽進度",
+        "goToStep": "前往導覽第 {{step}} 步",
+        "back": "上一步",
+        "enter": "進入宇宙",
+        "next": "下一步",
+        "steps": {
+          "navigateEyebrow": "01 · 導覽",
+          "navigateTitle": "不受邊界限制地移動",
+          "navigateDescription": "選取目標、聚焦其軌道，然後從行星尺度平順加速至星際空間。",
+          "inspectEyebrow": "02 · 檢視",
+          "inspectTitle": "讀懂宇宙",
+          "inspectDescription": "每個所選天體的物理特性、即時座標與程序化分類都集中呈現。",
+          "captureEyebrow": "03 · 捕捉",
+          "captureTitle": "構圖不可能的景象",
+          "captureDescription": "使用電影模式清除視覺干擾，構圖日食、行星環、大氣層與深空景觀。"
+        }
+      }
+    },
+    "nasa": {
+      "common": {
+        "notReported": "未提供",
+        "source": "來源",
+        "openSourceFor": "開啟 {{label}} 的來源引用",
+        "retryDetail": "重試詳細資料",
+        "yesFlagged": "已標記",
+        "no": "否"
+      },
+      "filters": {
+        "nearby": "近距離",
+        "nearbyQualifier": "< 25 pc",
+        "earthSize": "類地尺寸",
+        "earthSizeQualifier": "≤ 1.8 R⊕",
+        "temperate": "溫和",
+        "temperateQualifier": "180–320 K",
+        "recent": "近期發現",
+        "recentQualifier": "≥ 2020"
+      },
+      "sorts": {
+        "name": "名稱",
+        "distance": "最近",
+        "discovery": "最新發現"
+      },
+      "detail": {
+        "verifiedHash": "內容雜湊已驗證",
+        "memoryCache": "記憶體快取",
+        "offlineStorage": "離線儲存空間",
+        "network": "網路",
+        "positionIdentity": "位置與識別",
+        "planet": "行星",
+        "orbitTransit": "軌道與凌日",
+        "climateObserving": "氣候與觀測價值",
+        "hostStar": "宿主恒星",
+        "discoverySystem": "發現與系統",
+        "distance": "距離",
+        "rightAscension": "赤經",
+        "declination": "赤緯",
+        "referenceFrame": "參考框架",
+        "radius": "半徑",
+        "mass": "質量",
+        "density": "密度",
+        "massBasis": "質量來源",
+        "controversialFlag": "爭議標記",
+        "period": "週期",
+        "semiMajorAxis": "半長軸",
+        "eccentricity": "離心率",
+        "inclination": "軌道傾角",
+        "transitDuration": "凌日持續時間",
+        "transitDepth": "凌日深度",
+        "rvAmplitude": "徑向速度振幅",
+        "equilibriumTemperature": "平衡溫度",
+        "insolation": "恒星輻照",
+        "transmissionMetric": "透射光譜指標",
+        "emissionMetric": "發射光譜指標",
+        "transmissionSpectra": "透射光譜",
+        "emissionSpectra": "發射光譜",
+        "jwstObservations": "JWST 觀測",
+        "spectralType": "光譜型",
+        "effectiveTemperature": "有效溫度",
+        "age": "年齡",
+        "metallicity": "金屬量",
+        "luminosity": "光度",
+        "gaiaMagnitude": "Gaia 星等",
+        "year": "年份",
+        "method": "方法",
+        "facility": "設施",
+        "instrument": "儀器",
+        "telescope": "望遠鏡",
+        "knownPlanets": "已知行星",
+        "systemStars": "系統恒星",
+        "discoveryPaper": "發現論文",
+        "integrityTitle": "資料完整性與溯源",
+        "release": "版本 {{revision}}",
+        "retrievedNotice": "擷取日期：{{date}}。這筆觀測檔案可供檢視，但尚未是可飛行的渲染系統。",
+        "reproducibleQuery": "可重現的來源查詢",
+        "columnDefinitions": "欄位定義",
+        "dataCredits": "資料致謝",
+        "compositePolicy": "複合欄位可能來自不同文獻來源，並標示為歸檔複合資料。",
+        "nullPolicy": "缺失或非有限的來源儲存格維持為 null；不推算任何科學數值。"
+      },
+      "offline": {
+        "region": "離線目錄套件",
+        "fullReady": "完整研究套件已就緒",
+        "verifiedCore": "正使用已驗證的離線核心",
+        "coreCached": "搜尋核心已快取",
+        "optional": "可選的瀏覽器儲存空間",
+        "installedSummary": "{{cached}}/{{total}} 筆詳情 + 星空圖集 · {{bytes}}",
+        "availableSummary": "{{cached}}/{{total}} 筆詳情 · 圖集{{atlas}}",
+        "cached": "已快取",
+        "onDemand": "按需載入",
+        "unavailable": "IndexedDB 無法使用",
+        "progress": "離線套件安裝進度",
+        "verifyingAtlas": "正在驗證已觀測宿主星空索引",
+        "verifyingDetail": "正在驗證詳情 {{completed}}/{{total}}",
+        "removing": "正在移除套件…",
+        "remove": "移除離線研究套件",
+        "installing": "正在安裝已驗證套件…",
+        "install": "安裝完整離線套件",
+        "explanation": "首次使用後，應用外殼與搜尋核心會被快取。可選套件會在此瀏覽器保留觀測宿主圖集與所有科學詳情；中斷的安裝絕不會取代上一個完整版本。"
+      },
+      "load": {
+        "announcement": "正在載入 NASA 漸進式目錄",
+        "verifyingIndex": "正在驗證完整歸檔索引",
+        "workerIndex": "正在專用 Worker 載入內容尋址搜尋索引。",
+        "unavailable": "歸檔無法使用",
+        "retry": "重試已驗證載入",
+        "fallbackError": "漸進式目錄無法完成此請求。",
+        "preparingCanvas": "正在準備 GPU 友善的星空畫布",
+        "skyUnavailable": "觀測星空無法使用",
+        "retryAtlas": "重試已驗證圖集",
+        "loadingCoordinates": "正在載入 4,749 個已觀測宿主座標",
+        "decodingCoordinates": "內容尋址 ICRS 索引在主執行緒之外解碼。",
+        "fetchingDetail": "正在擷取並驗證一個科學詳情區塊…"
+      },
+      "release": {
+        "region": "目錄版本狀態",
+        "hashesVerified": "資產雜湊已驗證",
+        "timings": "打包索引 {{prepare}} ms · 就緒 {{ready}} ms",
+        "snapshot": "快照 {{date}}",
+        "planets": "{{count}} 顆已確認行星",
+        "inventory": "{{hosts}} 個宿主系統 · {{chunks}} 個不可變詳情區塊 · 版本 {{revision}}",
+        "budget": "搜尋保留在 Worker 中；只有展開記錄時才載入科學詳情。"
+      },
+      "search": {
+        "viewGroup": "NASA 目錄檢視模式",
+        "recordsView": "研究記錄",
+        "skyView": "觀測星空",
+        "skyLabel": "篩選 NASA 已觀測宿主系統",
+        "recordsLabel": "搜尋完整 NASA Exoplanet Archive",
+        "skyPlaceholder": "宿主系統名稱…",
+        "recordsPlaceholder": "行星、宿主、光譜型、方法…",
+        "clear": "清除 NASA 歸檔搜尋",
+        "filtersGroup": "NASA 歸檔篩選條件",
+        "sort": "排序",
+        "sortLabel": "排序 NASA 歸檔結果",
+        "searching": "正在搜尋已驗證索引…",
+        "resultStatus": "NASA 完整歸檔 · 顯示 {{total}} 筆符合項目中的 {{shown}} 筆 · {{ms}} ms",
+        "updating": " · 更新中…",
+        "resultsLabel": "NASA 歸檔結果",
+        "observed": "觀測資料",
+        "composite": "歸檔複合記錄",
+        "hostSystem": "{{host}} 宿主系統",
+        "loadMore": "再載入 {{count}} 筆",
+        "allShown": "已顯示全部 {{count}} 筆符合記錄",
+        "empty": "找不到符合的歸檔記錄",
+        "emptyHint": "移除篩選條件，或以行星、宿主、方法或設施搜尋。"
+      },
+      "atlas": {
+        "eyebrow": "已觀測宿主星空",
+        "title": "ICRS 發現圖集",
+        "hosts": "{{visible}} / {{total}} 個宿主",
+        "runtime": "{{ms}} ms · {{source}}",
+        "sourceMemory": "Worker 記憶體",
+        "sourceOffline": "離線儲存空間",
+        "sourceNetwork": "已驗證網路資產",
+        "canvasLabel": "{{count}} 個 NASA 系外行星宿主系統的互動式 ICRS 地圖",
+        "axisHint": "ICRS · 赤經向左增加 ←",
+        "instructions": "選擇一個點，或將焦點移到地圖後使用方向鍵。按 Enter 開啟該宿主的已驗證行星記錄。點大小代表已知行星數；如有資料，顏色依回報光譜分類。這是已確認行星宿主的發現地圖，並非近鄰恒星的完整統計調查。",
+        "observedHost": "已觀測宿主",
+        "spectralMissing": "光譜型未一致提供",
+        "planetCount_one": "{{count}} 顆已確認行星",
+        "planetCount_other": "{{count}} 顆已確認行星",
+        "rightAscension": "赤經",
+        "declination": "赤緯",
+        "distance": "距離",
+        "systemStars": "系統恒星",
+        "coordinateFrame": "座標框架",
+        "conflict": "複合資料列在 {{fields}} 不一致；已刻意省略衝突的摘要欄位。",
+        "open": "開啟已驗證系統記錄",
+        "empty": "沒有符合搜尋的已觀測宿主",
+        "emptyHint": "清除或縮短宿主名稱即可還原圖集。"
+      }
+    },
+    "tools": {
+      "panel": {
+        "search": {
+          "eyebrow": "通用索引",
+          "title": "搜尋"
+        },
+        "locations": {
+          "eyebrow": "Asteria · AE-0001",
+          "title": "星圖"
+        },
+        "bookmarks": {
+          "eyebrow": "本機目錄",
+          "title": "已儲存地點"
+        },
+        "settings": {
+          "eyebrow": "即時診斷",
+          "title": "設定"
+        },
+        "close": "關閉{{title}}"
+      },
+      "common": {
+        "systemOrigin": "系統原點",
+        "primaryStar": "主恆星",
+        "noModel": "無模型",
+        "centerOrbit": "在軌道視角中以{{name}}為中心",
+        "selectBody": "選取{{name}}，{{role}}",
+        "parentSystem": "{{parent}}系統",
+        "bodies": "{{count}} 個天體",
+        "planetsAndMoons": "{{planets}} 顆行星 · {{moons}} 顆衛星",
+        "retrograde": "逆行",
+        "days": "日"
+      },
+      "search": {
+        "sourceLabel": "目錄來源",
+        "simulationSource": "Asteria 模擬",
+        "simulationSourceAria": "Asteria 模擬，{{count}} 個天體",
+        "nasaSource": "NASA 資料庫",
+        "nasaSourceAria": "NASA 系外行星資料庫，{{count}} 筆紀錄",
+        "inputLabel": "搜尋 Asteria 目錄",
+        "placeholder": "名稱、編號、分類…",
+        "clear": "清除搜尋",
+        "filterLabel": "目錄篩選器",
+        "filters": {
+          "all": "全部",
+          "planets": "行星",
+          "moons": "衛星",
+          "temperate": "溫和"
+        },
+        "indexedStatus": "{{total}} 個已索引天體中的 {{visible}} 個",
+        "resultsLabel": "搜尋結果",
+        "emptyTitle": "找不到相符目的地",
+        "emptyHelp": "請嘗試行星名稱、目錄編號，或「氣態巨行星」等分類。"
+      },
+      "locations": {
+        "syntheticSystem": "具物理依據的合成系統",
+        "mapLabel": "Asteria 系統示意圖",
+        "physicsDerived": "物理推導",
+        "metrics": {
+          "mass": "質量",
+          "meanRadius": "平均半徑",
+          "meanDensity": "平均密度",
+          "gravity": "重力",
+          "escapeVelocity": "逃逸速度",
+          "meanTemperature": "平均溫度",
+          "referencePressure": "參考壓力",
+          "rotation": "自轉",
+          "orbitalPeriod": "軌道週期",
+          "eccentricity": "離心率"
+        },
+        "factsLabel": "{{name}}相關資訊",
+        "center": "以{{name}}為中心",
+        "satellites": "衛星系統 · {{count}}"
+      },
+      "bookmarks": {
+        "storedDevice": "已儲存於此裝置",
+        "memoryOnly": "僅暫存於記憶體",
+        "schemaStatus": "結構 v1 · {{count}}/{{limit}} 個地點",
+        "storageAvailable": "本機儲存空間可用",
+        "currentBodyLabel": "目前天體",
+        "currentTarget": "目前目標",
+        "remove": "移除",
+        "savePlace": "儲存地點",
+        "selectBeforeSaving": "請先選取天體再儲存地點。",
+        "savedDestinations": "已儲存目的地",
+        "clearAll": "全部清除",
+        "savedAt": "儲存於 {{date}}",
+        "removeSavedAria": "從已儲存地點移除{{name}}",
+        "removeTitle": "移除{{name}}",
+        "emptyTitle": "尚無已儲存地點",
+        "emptyHelp": "儲存目前世界，建立個人觀測行程。"
+      },
+      "settings": {
+        "language": {
+          "heading": "語言",
+          "label": "介面語言",
+          "help": "變更會立即套用並儲存於此裝置。"
+        },
+        "science": {
+          "heading": "科學模型",
+          "catalogue": "目錄",
+          "worlds": "世界",
+          "internalUnits": "內部單位",
+          "orbitModel": "軌道模型",
+          "keplerian": "克卜勒軌道",
+          "constants": "常數",
+          "provenance": "資料來源",
+          "syntheticDerived": "合成 + 推導",
+          "note": "目錄假設與方程式推導量會分別標示。氣候標籤僅為探索啟發，並非生物特徵宣稱。"
+        },
+        "calibration": {
+          "heading": "顯示校正",
+          "reset": "重設",
+          "intro": "配合此顯示器調整場景對比與導引線可見度。數值皆經正規化，且可在不變更模擬資料的情況下還原。",
+          "controls": {
+            "exposure": {
+              "label": "曝光",
+              "description": "調整色調映射前的場景亮度。"
+            },
+            "orbitBrightness": {
+              "label": "軌道亮度",
+              "description": "平衡軌道導引線與渲染場景。"
+            },
+            "starfieldBrightness": {
+              "label": "星空亮度",
+              "description": "調整背景恆星亮度。"
+            }
+          }
+        },
+        "runtime": {
+          "heading": "渲染器能力",
+          "backend": "後端",
+          "adapter": "顯示卡",
+          "webgpu": "WebGPU",
+          "computeStars": "恆星運算",
+          "logDepth": "對數深度",
+          "maxTexture": "最大紋理",
+          "starting": "啟動中…",
+          "browserDefault": "瀏覽器預設",
+          "available": "可用",
+          "unavailable": "不可用",
+          "checking": "檢查中…",
+          "enabled": "已啟用",
+          "disabled": "已停用",
+          "cpuFallback": "CPU 相容模式",
+          "unknown": "未知"
+        },
+        "telemetry": {
+          "heading": "即時遙測",
+          "frameRate": "影格率",
+          "frameTime": "影格時間",
+          "drawCalls": "繪製呼叫",
+          "triangles": "三角形",
+          "starField": "星空",
+          "quality": "品質",
+          "qualityLevels": {
+            "battery": "效能",
+            "balanced": "平衡",
+            "ultra": "極致"
+          },
+          "pending": "渲染器啟動後將提供遙測資料。",
+          "floatingOrigin": "浮動原點 · {{distance}} km"
+        },
+        "utilities": {
+          "heading": "工具",
+          "resetTitle": "重設觀測平台",
+          "resetHelp": "還原預設相機與目標",
+          "tourTitle": "開啟快速導覽",
+          "tourHelp": "重播三步驟飛行介紹",
+          "shortcutsTitle": "鍵盤指南",
+          "shortcutsHelp": "查看導覽與介面快捷鍵"
+        }
+      },
+      "footer": {
+        "explore": "探索",
+        "shortcuts": "快捷鍵"
+      },
+      "shortcuts": {
+        "eyebrow": "飛行手冊",
+        "title": "鍵盤快捷鍵",
+        "close": "關閉鍵盤快捷鍵",
+        "actions": {
+          "search": "開啟通用搜尋",
+          "guide": "顯示此鍵盤指南",
+          "escape": "關閉面板並返回探索",
+          "center": "在軌道視角中置中選取的天體",
+          "approach": "可用時切換至近距離接近",
+          "previous": "返回上一個相機視角",
+          "overview": "返回系統總覽",
+          "fly": "在目前參考座標系中飛行",
+          "vertical": "垂直移動",
+          "pause": "暫停或繼續模擬時間"
+        },
+        "note": "文字欄位會接收輸入，因此搜尋欄取得焦點時飛行控制不會啟用。"
+      },
+      "navigator": {
+        "browserLabel": "Asteria 系統瀏覽器",
+        "currentSystem": "目前系統",
+        "centeredStatus": "中心為",
+        "centeringStatus": "正在置中",
+        "inTransit": "移動中",
+        "closeApproach": "近距離",
+        "orbit": "軌道",
+        "objectsLabel": "天體",
+        "targetAria": "{{name}}，{{class}}{{selected}}{{centered}}{{centering}}",
+        "selectedSuffix": "，已選取",
+        "centeredSuffix": "，相機已置中",
+        "centeringSuffix": "，相機正在置中",
+        "cameraViews": "{{name}}的相機視角",
+        "centering": "置中中…",
+        "orbitActive": "軌道視角使用中",
+        "goOrbit": "前往軌道",
+        "approachActive": "近距離視角使用中",
+        "hints": {
+          "orbit": "拖曳以環繞",
+          "fly": "WASD + Q/E 飛行",
+          "center": "置中選取項目"
+        }
+      }
+    }
+  },
+  "science": {
+    "asteria": {
+      "description": "一顆作為確定性恆星系主星的合成 G1 V 型類比恆星。",
+      "facts": [
+        "其半徑、溫度與光度在模型精度範圍內彼此一致。",
+        "Asteria 是虛構天體，不得將其描述為已觀測恆星。"
+      ]
+    },
+    "cinder": {
+      "description": "一顆富含鐵的合成熔岩行星，表面遍布熾熱的火山盆地。",
+      "facts": [
+        "其偏心軌道使接收的輻射通量產生顯著季節變化。",
+        "稀薄的碳質大氣無法有效重新分配晝側熱量。",
+        "小型火山衛星 Scoria 始終遠在 Cinder 的順行穩定極限之內。"
+      ]
+    },
+    "cinder-scoria": {
+      "description": "一顆受高溫炙烤、帶有暗色矽酸鹽平原的合成火山衛星。",
+      "facts": [
+        "在合成模型中，微弱的潮汐形變維持著孤立的火山中心。"
+      ]
+    },
+    "aurelia": {
+      "description": "一顆溫暖的合成類地行星，擁有鹽漠與濃密的琥珀色天空。",
+      "facts": [
+        "高表面壓力使短暫存在的極地鹵水得以穩定。",
+        "其唯一衛星的質量足以緩和長期轉軸傾角變化。"
+      ]
+    },
+    "aurelia-cyra": {
+      "description": "一顆同步自轉的合成矽酸鹽衛星。",
+      "facts": [
+        "一座廣闊的背面盆地記錄了該恆星系早期的撞擊轟炸。"
+      ]
+    },
+    "pelagos": {
+      "description": "一顆溫和的合成海洋行星，擁有火山群島與活躍板塊。",
+      "facts": [
+        "氣候模型將 Pelagos 置於 Asteria 的保守宜居帶內。",
+        "模型未宣稱存在任何生物特徵；所有環境數值皆為模擬而生成。"
+      ]
+    },
+    "pelagos-tethra": {
+      "description": "一顆受微弱潮汐加熱塑造的小型合成內側衛星。",
+      "facts": [
+        "Tethra 在 Pelagos 稀薄的塵埃環中清出一條狹窄空隙。"
+      ]
+    },
+    "pelagos-neris": {
+      "description": "一顆具有模型化地下海洋、外覆冰殼的合成衛星。",
+      "facts": [
+        "微弱的潮汐形變可使冰殼下方維持液態水。",
+        "冰殼下液態水是模型推論，並非觀測結果，也不代表存在生命。"
+      ]
+    },
+    "viridia": {
+      "description": "一顆涼爽的合成超級地球，擁有淺海與綠色玄武岩大陸。",
+      "facts": [
+        "Viridia 位於保守宜居帶的外半部。",
+        "較強的重力形成了尺度較緊湊、但相對稠密的大氣。"
+      ]
+    },
+    "viridia-luma": {
+      "description": "一顆富含揮發物、具有明亮年輕放射紋系統的合成衛星。",
+      "facts": [
+        "Luma 已與 Viridia 潮汐鎖定。"
+      ]
+    },
+    "orison": {
+      "description": "一顆具有條帶的合成氣態巨行星，周圍環繞寬廣的矽酸鹽與冰質環系。",
+      "facts": [
+        "所列半徑、壓力與溫度皆指一巴等壓面，而非固體表面。",
+        "在此簡化模型中，五顆主要衛星構成穩定的共振架構。"
+      ]
+    },
+    "orison-ember": {
+      "description": "一顆受共振加熱、具有富硫平原的合成火山衛星。",
+      "facts": [
+        "局部火山噴口的溫度遠高於所列的全球平均溫度。"
+      ]
+    },
+    "orison-ione": {
+      "description": "一顆明亮的合成冰質衛星，表面由年輕的構造陡崖切割。",
+      "facts": [
+        "在合成模型中，深層內部海洋在熱力學上是合理的。"
+      ]
+    },
+    "orison-lyric": {
+      "description": "一顆具有分異結構與模型化鹵水層的合成冰質衛星。",
+      "facts": [
+        "其感應磁場特徵來自模擬，而非實際測量。"
+      ]
+    },
+    "orison-kestrel": {
+      "description": "一顆表面密布撞擊坑的暗色合成岩質衛星。",
+      "facts": [
+        "Kestrel 對稀薄的外側 E 環發揮牧羊作用。"
+      ]
+    },
+    "orison-morrow": {
+      "description": "一顆帶有巨大古老撞擊盆地的合成外側衛星。",
+      "facts": [
+        "Morrow 是模型中最外側的規則大型衛星。"
+      ]
+    },
+    "caelora": {
+      "description": "一顆青色的合成海王星型行星，在甲烷霾下幾乎側躺自轉。",
+      "facts": [
+        "極端的轉軸傾角造成長達數十年的合成季節。",
+        "所列氣候數值皆指一巴等壓面。"
+      ]
+    },
+    "caelora-mistral": {
+      "description": "一顆位於 Caelora 環系邊緣的合成冰質牧羊衛星。",
+      "facts": [
+        "其軌道共振維持著環系陡峭清晰的外緣。"
+      ]
+    },
+    "caelora-serein": {
+      "description": "一顆具有平滑再造平原的合成冰質衛星。",
+      "facts": [
+        "稀少的撞擊坑數量暗示模型中近期曾發生冰火山表面再造。"
+      ]
+    },
+    "caelora-pale": {
+      "description": "一顆被捕獲的合成衛星，運行於傾斜且略帶偏心的軌道。",
+      "facts": [
+        "Pale 很可能形成於這個生成恆星系的其他區域。"
+      ]
+    },
+    "caelora-vanta": {
+      "description": "一顆暗色的合成外側不規則衛星。",
+      "facts": [
+        "在 Caelora 的模型衛星中，Vanta 的軌道傾角最大。"
+      ]
+    },
+    "erebus": {
+      "description": "一顆緊湊型合成冰巨行星，具有深靛色的氫—甲烷大氣。",
+      "facts": [
+        "Erebus 輻射出少量形成時殘留的熱量。",
+        "在合成模型中，其狹窄的炭黑色環在光學上相當稀薄。"
+      ]
+    },
+    "erebus-rime": {
+      "description": "一顆明亮的合成內側冰質衛星。",
+      "facts": [
+        "Rime 與 Erebus 的狹窄環系交換塵埃。"
+      ]
+    },
+    "erebus-noctis": {
+      "description": "一顆暗色、富含矽酸鹽的合成外側衛星。",
+      "facts": [
+        "Noctis 可能是早期微行星盤中被捕獲的殘留天體。"
+      ]
+    },
+    "nyx": {
+      "description": "一顆遙遠的合成海王星型行星，具有紫色霾與稀薄塵埃環。",
+      "facts": [
+        "Nyx 繞行一周約需一個半地球世紀。",
+        "一巴等壓面的大氣以氫、氦與甲烷建模。"
+      ]
+    },
+    "nyx-wisp": {
+      "description": "一顆位於 Nyx 塵埃環附近的小型合成冰質衛星。",
+      "facts": [
+        "Wisp 藉由微隕石撞擊為環系補充細微粒子。"
+      ]
+    },
+    "nyx-shade": {
+      "description": "一顆體型偏大的合成外側伴衛星，已與 Nyx 同步鎖定。",
+      "facts": [
+        "Shade 與 Nyx 繞共同質心運行，而該質心仍位於 Nyx 內部。"
+      ]
+    }
+  }
+}

@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, type KeyboardEvent, type MouseEvent } from 'react'
 import { Keyboard, X } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 interface ShortcutHelpDialogProps {
   open: boolean
@@ -7,19 +8,20 @@ interface ShortcutHelpDialogProps {
 }
 
 const SHORTCUTS = [
-  { keys: ['/'], action: 'Open universal search' },
-  { keys: ['?'], action: 'Show this keyboard guide' },
-  { keys: ['Esc'], action: 'Close a panel and return to Explore' },
-  { keys: ['G'], action: 'Center the selected body in orbit view' },
-  { keys: ['Shift', 'G'], action: 'Move to a close approach when available' },
-  { keys: ['Backspace'], action: 'Return to the previous camera view' },
-  { keys: ['0'], action: 'Return to the system overview' },
-  { keys: ['W', 'A', 'S', 'D'], action: 'Fly through the current reference frame' },
-  { keys: ['Q', 'E'], action: 'Move vertically' },
-  { keys: ['Space'], action: 'Pause or resume simulation time' },
+  { keys: ['/'], actionKey: 'search' },
+  { keys: ['?'], actionKey: 'guide' },
+  { keys: ['Esc'], actionKey: 'escape' },
+  { keys: ['G'], actionKey: 'center' },
+  { keys: ['Shift', 'G'], actionKey: 'approach' },
+  { keys: ['Backspace'], actionKey: 'previous' },
+  { keys: ['0'], actionKey: 'overview' },
+  { keys: ['W', 'A', 'S', 'D'], actionKey: 'fly' },
+  { keys: ['Q', 'E'], actionKey: 'vertical' },
+  { keys: ['Space'], actionKey: 'pause' },
 ] as const
 
 export function ShortcutHelpDialog({ open, onClose }: ShortcutHelpDialogProps) {
+  const { t } = useTranslation('tools')
   const titleId = useId()
   const closeButtonRef = useRef<HTMLButtonElement>(null)
 
@@ -67,14 +69,14 @@ export function ShortcutHelpDialog({ open, onClose }: ShortcutHelpDialogProps) {
             <Keyboard size={20} />
           </span>
           <div>
-            <small>Flight manual</small>
-            <h2 id={titleId}>Keyboard shortcuts</h2>
+            <small>{t('shortcuts.eyebrow')}</small>
+            <h2 id={titleId}>{t('shortcuts.title')}</h2>
           </div>
           <button
             ref={closeButtonRef}
             type="button"
             onClick={onClose}
-            aria-label="Close keyboard shortcuts"
+            aria-label={t('shortcuts.close')}
           >
             <X size={18} aria-hidden="true" />
           </button>
@@ -82,17 +84,17 @@ export function ShortcutHelpDialog({ open, onClose }: ShortcutHelpDialogProps) {
 
         <dl className="shortcut-dialog__list">
           {SHORTCUTS.map((shortcut) => (
-            <div key={shortcut.action}>
+            <div key={shortcut.actionKey}>
               <dt>
                 {shortcut.keys.map((key) => <kbd key={key}>{key}</kbd>)}
               </dt>
-              <dd>{shortcut.action}</dd>
+              <dd>{t(`shortcuts.actions.${shortcut.actionKey}`)}</dd>
             </div>
           ))}
         </dl>
 
         <p>
-          Text fields capture typing, so flight controls remain inactive while search is focused.
+          {t('shortcuts.note')}
         </p>
       </div>
     </div>

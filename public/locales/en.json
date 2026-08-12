@@ -1,0 +1,889 @@
+{
+  "version": 1,
+  "locale": "en",
+  "resources": {
+    "app": {
+      "meta": {
+        "title": "Astral Surveyor · WebGPU Universe",
+        "description": "Explore a WebGPU-first procedural star system and a source-backed NASA exoplanet research catalogue.",
+        "imageAlt": "Astral Surveyor exploring the ringed world Orison"
+      },
+      "engine": {
+        "viewportLabel": "Interactive procedural universe viewport",
+        "loading": "Compiling universe pipelines",
+        "errorTitle": "Renderer initialization failed",
+        "errorDetail": "The universe renderer could not start on this device.",
+        "retry": "Reload application",
+        "errorAdvice": "Try a current Chrome or Edge build with hardware acceleration enabled."
+      },
+      "units": {
+        "notAvailable": "Not available",
+        "notModeled": "Not modeled",
+        "systemBarycenter": "System barycenter",
+        "fromParent": "{{distance}} from {{parent}}",
+        "fromAsteria": "{{distance}} AU from Asteria",
+        "retrogradeHours": "h retrograde",
+        "days": "days"
+      },
+      "metrics": {
+        "mass": "Mass",
+        "meanRadius": "Mean radius",
+        "meanDensity": "Mean density",
+        "referenceGravity": "Reference gravity",
+        "earthGravity": "Earth gravity",
+        "escapeVelocity": "Escape velocity",
+        "meanTemperature": "Mean temperature",
+        "equilibriumTemperature": "Equilibrium temperature",
+        "greenhouseOffset": "Greenhouse offset",
+        "bondAlbedo": "Bond albedo",
+        "referencePressure": "Reference pressure",
+        "internalHeatFlux": "Internal heat flux",
+        "rotationPeriod": "Rotation period",
+        "axialTilt": "Axial tilt",
+        "semiMajorAxis": "Semi-major axis",
+        "eccentricity": "Eccentricity",
+        "inclination": "Inclination",
+        "orbitalPeriod": "Orbital period",
+        "periapsis": "Periapsis",
+        "apoapsis": "Apoapsis",
+        "meanOrbitalSpeed": "Mean orbital speed",
+        "stellarFlux": "Stellar flux",
+        "siderealRotation": "Sidereal rotation",
+        "radius": "Radius",
+        "temperature": "Temperature",
+        "gravity": "Gravity"
+      },
+      "sections": {
+        "physicalModel": "Physical model",
+        "climateModel": "Climate model",
+        "rotationalState": "Rotational state",
+        "orbitalSolution": "Orbital solution",
+        "orbitalSolutionSummary": "Deterministic two-body Kepler solution evaluated at simulation time.",
+        "climateSummary": "Temperature and pressure are scenario inputs; radiative equilibrium and flux are derived.",
+        "physicsSummary": "Reference values use SI inputs and documented nominal astronomical constants.",
+        "rotationSummary": "Sidereal rotation and obliquity are deterministic catalogue inputs.",
+        "stellarEnvironment": "Stellar environment",
+        "stellarSummary": "Photospheric reference values for the synthetic primary star.",
+        "bulkProperties": "Bulk properties",
+        "keplerianSolution": "Keplerian solution",
+        "twoBodyEpoch": "Two-body osculating elements at the simulation epoch."
+      },
+      "body": {
+        "syntheticSource": "Astral Surveyor deterministic Asteria model",
+        "syntheticMethod": "Curated scenario inputs · equation-derived physics",
+        "syntheticConfidence": "Synthetic",
+        "modelReference": "model {{version}}{{seedPart}}",
+        "seedReference": " · seed {{seed}}",
+        "syntheticDescription": "Synthetic educational data generated for this simulation; it is not an observed astronomical catalogue.",
+        "nasaAlignedClass": "NASA-aligned exoplanet class · fictional Asteria catalogue",
+        "parentFallback": "parent",
+        "naturalSatelliteOf": "Natural satellite of {{parent}}",
+        "previousCameraFrame": "previous camera frame",
+        "syntheticPrimary": "Synthetic G-class primary star",
+        "syntheticStatus": "Synthetic model",
+        "orbitSummary": "Deterministic Keplerian orbit around {{parent}}; visual distances are logarithmically compressed.",
+        "stellarPlasma": "Hydrogen–helium stellar plasma",
+        "noAtmosphere": "No persistent atmosphere",
+        "class": {
+          "star": "{{spectralType}} main-sequence star",
+          "lava": "Lava world",
+          "terrestrial": "Terrestrial world",
+          "ocean": "Ocean world",
+          "superEarth": "Super-Earth",
+          "neptunian": "Neptunian world",
+          "gasGiant": "Gas giant",
+          "iceGiant": "Ice giant",
+          "dwarf": "Dwarf planet",
+          "rockyMoon": "Rocky moon",
+          "icyMoon": "Icy moon",
+          "oceanicMoon": "Oceanic moon",
+          "volcanicMoon": "Volcanic moon"
+        }
+      },
+      "habitability": {
+        "notApplicable": {
+          "label": "Not applicable",
+          "summary": "Surface habitability screening does not apply to a stellar photosphere."
+        },
+        "insufficientData": {
+          "label": "Insufficient data",
+          "summary": "The deterministic model does not contain enough environmental data for screening."
+        },
+        "nonSurfaceWorld": {
+          "label": "Non-surface world",
+          "summary": "This giant world has no conventionally accessible solid surface."
+        },
+        "outsideHz": {
+          "label": "Outside conservative HZ",
+          "summary": "Its modeled stellar environment falls outside the conservative liquid-water zone."
+        },
+        "withinHz": {
+          "label": "Habitable-zone orbit",
+          "summary": "The orbit passes a conservative flux screen; this is not evidence of habitability or life."
+        },
+        "temperateCandidate": {
+          "label": "Temperate candidate",
+          "summary": "Synthetic temperature, pressure, and stellar-flux values pass a conservative first screen."
+        }
+      },
+      "renderMetrics": {
+        "region": "Render pipeline metrics",
+        "starsTitle": "Procedural stars in the current render graph",
+        "drawsTitle": "Draw calls in the last rendered frame",
+        "backendTitle": "Active renderer backend",
+        "stars": "{{count}}K stars",
+        "pending": "—",
+        "draws": "{{count}} draws",
+        "gpuCompute": "GPU compute",
+        "cpuFallback": "CPU fallback"
+      }
+    },
+    "hud": {
+      "brand": {
+        "name": "Astral Surveyor",
+        "tagline": "Universe observatory"
+      },
+      "locale": {
+        "label": "Language"
+      },
+      "status": {
+        "region": "Simulation status",
+        "fpsTitle": "Rendered frames per second",
+        "cameraVelocity": "Camera velocity",
+        "renderingQuality": "Rendering quality",
+        "cinematicEnable": "Enable cinematic mode",
+        "cinematicDisable": "Disable cinematic mode",
+        "cinematicTitle": "Cinematic mode",
+        "gpu": {
+          "activeLabel": "WebGPU active",
+          "activeDetail": "Native compute",
+          "initializingLabel": "GPU starting",
+          "initializingDetail": "Preparing pipeline",
+          "fallbackLabel": "WebGL fallback",
+          "fallbackDetail": "Compatibility mode",
+          "unavailableLabel": "GPU unavailable",
+          "unavailableDetail": "Rendering paused"
+        },
+        "quality": {
+          "performance": "Performance",
+          "balanced": "Balanced",
+          "ultra": "Ultra"
+        }
+      },
+      "navigation": {
+        "region": "Universe navigation",
+        "home": "Observation deck",
+        "explore": "Explore",
+        "search": "Search",
+        "locations": "Star map",
+        "bookmarks": "Saved places",
+        "settings": "Settings"
+      },
+      "inspector": {
+        "region": "Selected object inspector",
+        "collapse": "Collapse object inspector",
+        "open": "Open object inspector",
+        "eyebrow": "Object analysis",
+        "telemetry": "Live telemetry",
+        "clear": "Clear selected object",
+        "clearTitle": "Clear selection",
+        "emptyTitle": "No target selected",
+        "emptyDescription": "Choose a world, star or deep-space object to inspect it.",
+        "searchShortcut": "Keyboard shortcut: slash",
+        "openSearch": "Open universal search",
+        "objectStatus": "Object status",
+        "classification": "Classification",
+        "quickFacts": "Quick facts",
+        "atmosphere": "Atmosphere",
+        "atmosphereComposition": "Atmospheric composition",
+        "habitability": "Habitability",
+        "habitabilityScore": "Habitability score {{score}} out of 100",
+        "provenance": "Data provenance",
+        "physicalProfile": "Physical profile",
+        "distance": "Distance",
+        "rightAscension": "Right ascension",
+        "declination": "Declination",
+        "referenceDistance": "Reference distance",
+        "tabsLabel": "Scientific data views",
+        "tabs": {
+          "overview": "Overview",
+          "physics": "Physics",
+          "orbit": "Orbit"
+        },
+        "noPhysics": "No physical measurements are available for this object.",
+        "noOrbit": "No orbital solution is available for this object.",
+        "centerTarget": "Center target",
+        "stateLabel": "Selection and camera state",
+        "selected": "Selected",
+        "centered": "Centered",
+        "centering": "Centering",
+        "centeredOn": "Centered: {{name}}",
+        "centeringOn": "Centering: {{name}}",
+        "cameraCenteredTitle": "Camera centered on {{name}}",
+        "cameraCenteringTitle": "Camera centering on {{name}}"
+      },
+      "camera": {
+        "reference": "Camera reference",
+        "selected": "Selected",
+        "camera": "Camera",
+        "orbit": "Orbit",
+        "closeApproach": "Close approach",
+        "orbitTracking": "Orbit tracking",
+        "previousView": "Previous view",
+        "previousViewFallback": "previous view",
+        "systemOverview": "System overview",
+        "systemFrame": "System frame",
+        "freeFlight": "Free flight",
+        "bodyTrackingUnlocked": "Body tracking unlocked",
+        "systemUnlocked": "System frame · Body tracking unlocked",
+        "transitionInProgress": "Camera transition in progress",
+        "notLocked": "Camera is not locked to a body",
+        "preparingMode": "Preparing {{mode}}",
+        "centerOn": "Centering on {{name}}",
+        "centerOnEllipsis": "Centering on {{name}}…",
+        "centeredOn": "Centered on {{name}}",
+        "centeredAnnouncement": "Centered on {{name}}, {{mode}}",
+        "returnFree": "Returning to free-flight view",
+        "returnFreeEllipsis": "Returning to free-flight view…",
+        "returnSystem": "Returning to system overview",
+        "returnSystemEllipsis": "Returning to system overview…",
+        "bodyControls": "Body-centered camera controls",
+        "freeControls": "Free-flight camera controls",
+        "systemControls": "System camera controls",
+        "viewModeFor": "View mode for {{name}}",
+        "currentOrbit": "Current view: orbit tracking",
+        "trackOrbit": "Track from orbit (G)",
+        "currentClose": "Current view: close approach",
+        "moveClose": "Move to close approach (Shift+G)",
+        "closeUnavailable": "Close approach is unavailable for this body",
+        "returnTo": "Return to {{view}}",
+        "returnToTitle": "Return to {{view}} (Backspace)",
+        "currentSystem": "Current view: system overview",
+        "returnSystemTitle": "Return to system overview (0)",
+        "centerCameraOn": "Center camera on {{name}}",
+        "orbitSelectedTitle": "Center selected body in orbit view (G)",
+        "closeSelectedTitle": "Center selected body at close approach (Shift+G)",
+        "currentView": "Current view",
+        "trackSelected": "Track selected body",
+        "nearBodyInspection": "Near-body inspection"
+      },
+      "time": {
+        "region": "Simulation time controls",
+        "label": "Simulation time",
+        "unavailable": "Time unavailable",
+        "decrease": "Decrease time scale",
+        "increase": "Increase time scale",
+        "resume": "Resume simulation",
+        "pause": "Pause simulation",
+        "scale": "Time scale",
+        "paused": "Paused",
+        "reset": "Reset simulation time",
+        "realTime": "Return to real time"
+      },
+      "welcome": {
+        "close": "Close welcome screen",
+        "eyebrow": "WebGPU universe simulator",
+        "title": "Every horizon is reachable.",
+        "description": "Cross astronomical scales, study procedural worlds and move from a system-wide observatory to precise near-body views without breaking the journey.",
+        "capabilities": "Core capabilities",
+        "navigationTitle": "Seamless navigation",
+        "navigationDetail": "System to close approach",
+        "worldsTitle": "Model-rich worlds",
+        "worldsDetail": "Physics + procedural detail",
+        "gpuTitle": "GPU native",
+        "gpuDetail": "Compute driven",
+        "begin": "Begin exploration",
+        "tour": "Take the 30-second tour",
+        "note": "Mouse + keyboard recommended · Touch controls supported"
+      },
+      "tour": {
+        "fieldGuide": "Field guide",
+        "close": "Close quick tour",
+        "progress": "Tour progress",
+        "goToStep": "Go to tour step {{step}}",
+        "back": "Back",
+        "enter": "Enter universe",
+        "next": "Next",
+        "steps": {
+          "navigateEyebrow": "01 · Navigate",
+          "navigateTitle": "Move without boundaries",
+          "navigateDescription": "Select a target, focus its orbit, then accelerate smoothly from planetary scale to interstellar space.",
+          "inspectEyebrow": "02 · Inspect",
+          "inspectTitle": "Read the universe",
+          "inspectDescription": "Every selected body exposes physical properties, live coordinates and procedural classification in one place.",
+          "captureEyebrow": "03 · Capture",
+          "captureTitle": "Compose the impossible",
+          "captureDescription": "Use cinematic mode to clear visual noise and frame eclipses, rings, atmospheres and deep-space vistas."
+        }
+      }
+    },
+    "nasa": {
+      "common": {
+        "notReported": "Not reported",
+        "source": "Source",
+        "openSourceFor": "Open source reference for {{label}}",
+        "retryDetail": "Retry detail",
+        "yesFlagged": "Flagged",
+        "no": "No"
+      },
+      "filters": {
+        "nearby": "Nearby",
+        "nearbyQualifier": "< 25 pc",
+        "earthSize": "Earth-size",
+        "earthSizeQualifier": "≤ 1.8 R⊕",
+        "temperate": "Temperate",
+        "temperateQualifier": "180–320 K",
+        "recent": "Recent",
+        "recentQualifier": "≥ 2020"
+      },
+      "sorts": {
+        "name": "Name",
+        "distance": "Nearest",
+        "discovery": "Newest"
+      },
+      "detail": {
+        "verifiedHash": "Verified content hash",
+        "memoryCache": "Memory cache",
+        "offlineStorage": "Offline storage",
+        "network": "Network",
+        "positionIdentity": "Position & identity",
+        "planet": "Planet",
+        "orbitTransit": "Orbit & transit",
+        "climateObserving": "Climate & observing value",
+        "hostStar": "Host star",
+        "discoverySystem": "Discovery & system",
+        "distance": "Distance",
+        "rightAscension": "Right ascension",
+        "declination": "Declination",
+        "referenceFrame": "Reference frame",
+        "radius": "Radius",
+        "mass": "Mass",
+        "density": "Density",
+        "massBasis": "Mass basis",
+        "controversialFlag": "Controversial flag",
+        "period": "Period",
+        "semiMajorAxis": "Semi-major axis",
+        "eccentricity": "Eccentricity",
+        "inclination": "Inclination",
+        "transitDuration": "Transit duration",
+        "transitDepth": "Transit depth",
+        "rvAmplitude": "RV amplitude",
+        "equilibriumTemperature": "Equilibrium temp.",
+        "insolation": "Insolation",
+        "transmissionMetric": "Transmission metric",
+        "emissionMetric": "Emission metric",
+        "transmissionSpectra": "Transmission spectra",
+        "emissionSpectra": "Emission spectra",
+        "jwstObservations": "JWST observations",
+        "spectralType": "Spectral type",
+        "effectiveTemperature": "Effective temp.",
+        "age": "Age",
+        "metallicity": "Metallicity",
+        "luminosity": "Luminosity",
+        "gaiaMagnitude": "Gaia magnitude",
+        "year": "Year",
+        "method": "Method",
+        "facility": "Facility",
+        "instrument": "Instrument",
+        "telescope": "Telescope",
+        "knownPlanets": "Known planets",
+        "systemStars": "System stars",
+        "discoveryPaper": "Discovery paper",
+        "integrityTitle": "Data integrity & provenance",
+        "release": "release {{revision}}",
+        "retrievedNotice": "Retrieved {{date}}. This observed archive record is inspectable but is not yet a flyable rendered system.",
+        "reproducibleQuery": "Reproducible source query",
+        "columnDefinitions": "Column definitions",
+        "dataCredits": "Data credits",
+        "compositePolicy": "Composite fields can originate from different literature sources and are labelled archive composite.",
+        "nullPolicy": "Absent or non-finite source cells remain null; no scientific value is imputed."
+      },
+      "offline": {
+        "region": "Offline catalogue pack",
+        "fullReady": "Full research pack ready",
+        "verifiedCore": "Running from verified offline core",
+        "coreCached": "Search core cached",
+        "optional": "Browser storage optional",
+        "installedSummary": "{{cached}}/{{total}} details + sky atlas · {{bytes}}",
+        "availableSummary": "{{cached}}/{{total}} details · atlas {{atlas}}",
+        "cached": "cached",
+        "onDemand": "on demand",
+        "unavailable": "IndexedDB unavailable",
+        "progress": "Offline pack installation progress",
+        "verifyingAtlas": "Verifying observed-host sky index",
+        "verifyingDetail": "Verifying detail {{completed}}/{{total}}",
+        "removing": "Removing pack…",
+        "remove": "Remove offline research pack",
+        "installing": "Installing verified pack…",
+        "install": "Install full offline pack",
+        "explanation": "The app shell and search core are cached after first use. The optional pack keeps the observed-host atlas and every scientific detail in this browser; interrupted installs never replace the last complete release."
+      },
+      "load": {
+        "announcement": "Loading the progressive NASA catalogue",
+        "verifyingIndex": "Verifying the full archive index",
+        "workerIndex": "Loading a content-addressed search index in a dedicated Worker.",
+        "unavailable": "Archive unavailable",
+        "retry": "Retry verified load",
+        "fallbackError": "The progressive catalogue could not complete the request.",
+        "preparingCanvas": "Preparing the GPU-friendly sky canvas",
+        "skyUnavailable": "Observed sky unavailable",
+        "retryAtlas": "Retry verified atlas",
+        "loadingCoordinates": "Loading 4,749 observed host coordinates",
+        "decodingCoordinates": "The content-addressed ICRS index is decoded off the main thread.",
+        "fetchingDetail": "Fetching and verifying one scientific detail chunk…"
+      },
+      "release": {
+        "region": "Catalogue release status",
+        "hashesVerified": "Asset hashes verified",
+        "timings": "{{prepare}} ms packed index · {{ready}} ms ready",
+        "snapshot": "Snapshot {{date}}",
+        "planets": "{{count}} confirmed planets",
+        "inventory": "{{hosts}} host systems · {{chunks}} immutable detail chunks · release {{revision}}",
+        "budget": "Search stays in the Worker; scientific detail loads only when a record is expanded."
+      },
+      "search": {
+        "viewGroup": "NASA catalogue view",
+        "recordsView": "Research records",
+        "skyView": "Observed sky",
+        "skyLabel": "Filter observed NASA host systems",
+        "recordsLabel": "Search the complete NASA Exoplanet Archive",
+        "skyPlaceholder": "Host system name…",
+        "recordsPlaceholder": "Planet, host, spectral type, method…",
+        "clear": "Clear NASA archive search",
+        "filtersGroup": "NASA archive filters",
+        "sort": "Sort",
+        "sortLabel": "Sort NASA archive results",
+        "searching": "Searching verified index…",
+        "resultStatus": "NASA full archive · Showing {{shown}} of {{total}} matches · {{ms}} ms",
+        "updating": " · Updating…",
+        "resultsLabel": "NASA archive results",
+        "observed": "Observed",
+        "composite": "Archive composite",
+        "hostSystem": "{{host}} host system",
+        "loadMore": "Load {{count}} more",
+        "allShown": "All {{count}} matching records shown",
+        "empty": "No matching archive records",
+        "emptyHint": "Remove a filter or search by planet, host, method, or facility."
+      },
+      "atlas": {
+        "eyebrow": "Observed host sky",
+        "title": "ICRS discovery atlas",
+        "hosts": "{{visible}} / {{total}} hosts",
+        "runtime": "{{ms}} ms · {{source}}",
+        "sourceMemory": "Worker memory",
+        "sourceOffline": "Offline storage",
+        "sourceNetwork": "Verified network asset",
+        "canvasLabel": "Interactive ICRS map of {{count}} NASA exoplanet host systems",
+        "axisHint": "ICRS · RA increases ←",
+        "instructions": "Select a point, or focus the map and use arrow keys. Press Enter to open the host’s verified planet records. Point size encodes known planets; colour follows reported spectral class when available. This is a discovery map of confirmed planet hosts, not a statistically complete census of nearby stars.",
+        "observedHost": "Observed host",
+        "spectralMissing": "Spectral type not consistently reported",
+        "planetCount_one": "{{count}} confirmed planet",
+        "planetCount_other": "{{count}} confirmed planets",
+        "rightAscension": "Right ascension",
+        "declination": "Declination",
+        "distance": "Distance",
+        "systemStars": "System stars",
+        "coordinateFrame": "Coordinate frame",
+        "conflict": "Composite rows disagree on {{fields}}; the conflicting summary field is intentionally omitted.",
+        "open": "Open verified system records",
+        "empty": "No observed host matches this search",
+        "emptyHint": "Clear or shorten the host name to restore the atlas."
+      }
+    },
+    "tools": {
+      "panel": {
+        "search": {
+          "eyebrow": "Universal index",
+          "title": "Search"
+        },
+        "locations": {
+          "eyebrow": "Asteria · AE-0001",
+          "title": "Star map"
+        },
+        "bookmarks": {
+          "eyebrow": "Local catalogue",
+          "title": "Saved places"
+        },
+        "settings": {
+          "eyebrow": "Runtime diagnostics",
+          "title": "Settings"
+        },
+        "close": "Close {{title}}"
+      },
+      "common": {
+        "systemOrigin": "System origin",
+        "primaryStar": "Primary star",
+        "noModel": "No model",
+        "centerOrbit": "Center on {{name}} in orbit view",
+        "selectBody": "Select {{name}}, {{role}}",
+        "parentSystem": "{{parent}} system",
+        "bodies": "{{count}} bodies",
+        "planetsAndMoons": "{{planets}} planets · {{moons}} moons",
+        "retrograde": "retrograde",
+        "days": "days"
+      },
+      "search": {
+        "sourceLabel": "Catalogue source",
+        "simulationSource": "Asteria simulation",
+        "simulationSourceAria": "Asteria simulation, {{count}} bodies",
+        "nasaSource": "NASA archive",
+        "nasaSourceAria": "NASA Exoplanet Archive, {{count}} records",
+        "inputLabel": "Search the Asteria catalogue",
+        "placeholder": "Name, designation, class…",
+        "clear": "Clear search",
+        "filterLabel": "Catalogue filters",
+        "filters": {
+          "all": "All",
+          "planets": "Planets",
+          "moons": "Moons",
+          "temperate": "Temperate"
+        },
+        "indexedStatus": "{{visible}} of {{total}} indexed bodies",
+        "resultsLabel": "Search results",
+        "emptyTitle": "No matching destinations",
+        "emptyHelp": "Try a planet name, catalogue code, or class such as “giant”."
+      },
+      "locations": {
+        "syntheticSystem": "Physics-backed synthetic system",
+        "mapLabel": "Schematic map of the Asteria system",
+        "physicsDerived": "Physics derived",
+        "metrics": {
+          "mass": "Mass",
+          "meanRadius": "Mean radius",
+          "meanDensity": "Mean density",
+          "gravity": "Gravity",
+          "escapeVelocity": "Escape velocity",
+          "meanTemperature": "Mean temperature",
+          "referencePressure": "Reference pressure",
+          "rotation": "Rotation",
+          "orbitalPeriod": "Orbital period",
+          "eccentricity": "Eccentricity"
+        },
+        "factsLabel": "Facts about {{name}}",
+        "center": "Center on {{name}}",
+        "satellites": "Satellite system · {{count}}"
+      },
+      "bookmarks": {
+        "storedDevice": "Stored on this device",
+        "memoryOnly": "Memory only",
+        "schemaStatus": "Schema v1 · {{count}}/{{limit}} places",
+        "storageAvailable": "Local storage available",
+        "currentBodyLabel": "Current celestial body",
+        "currentTarget": "Current target",
+        "remove": "Remove",
+        "savePlace": "Save place",
+        "selectBeforeSaving": "Select a body before saving a place.",
+        "savedDestinations": "Saved destinations",
+        "clearAll": "Clear all",
+        "savedAt": "Saved {{date}}",
+        "removeSavedAria": "Remove {{name}} from saved places",
+        "removeTitle": "Remove {{name}}",
+        "emptyTitle": "No saved places yet",
+        "emptyHelp": "Save the current world to build a personal observing itinerary."
+      },
+      "settings": {
+        "language": {
+          "heading": "Language",
+          "label": "Interface language",
+          "help": "Changes apply immediately and are saved on this device."
+        },
+        "science": {
+          "heading": "Scientific model",
+          "catalogue": "Catalogue",
+          "worlds": "Worlds",
+          "internalUnits": "Internal units",
+          "orbitModel": "Orbit model",
+          "keplerian": "Keplerian",
+          "constants": "Constants",
+          "provenance": "Provenance",
+          "syntheticDerived": "Synthetic + derived",
+          "note": "Catalogue assumptions and equation-derived measurements are labelled separately. Climate labels are exploration heuristics, not biosignature claims."
+        },
+        "calibration": {
+          "heading": "Display calibration",
+          "reset": "Reset",
+          "intro": "Match scene contrast and guide visibility to this display. Values are normalized and can be restored without changing simulation data.",
+          "controls": {
+            "exposure": {
+              "label": "Exposure",
+              "description": "Adjust scene luminance before tone mapping."
+            },
+            "orbitBrightness": {
+              "label": "Orbit brightness",
+              "description": "Balance orbital guides against the rendered scene."
+            },
+            "starfieldBrightness": {
+              "label": "Starfield brightness",
+              "description": "Tune background-star luminance for the display."
+            }
+          }
+        },
+        "runtime": {
+          "heading": "Renderer capabilities",
+          "backend": "Backend",
+          "adapter": "Adapter",
+          "webgpu": "WebGPU",
+          "computeStars": "Compute stars",
+          "logDepth": "Log depth",
+          "maxTexture": "Max texture",
+          "starting": "Starting…",
+          "browserDefault": "Browser default",
+          "available": "Available",
+          "unavailable": "Unavailable",
+          "checking": "Checking…",
+          "enabled": "Enabled",
+          "disabled": "Disabled",
+          "cpuFallback": "CPU fallback",
+          "unknown": "Unknown"
+        },
+        "telemetry": {
+          "heading": "Live telemetry",
+          "frameRate": "Frame rate",
+          "frameTime": "Frame time",
+          "drawCalls": "Draw calls",
+          "triangles": "Triangles",
+          "starField": "Star field",
+          "quality": "Quality",
+          "qualityLevels": {
+            "battery": "Performance",
+            "balanced": "Balanced",
+            "ultra": "Ultra"
+          },
+          "pending": "Telemetry becomes available after the renderer starts.",
+          "floatingOrigin": "Floating origin · {{distance}} km"
+        },
+        "utilities": {
+          "heading": "Utilities",
+          "resetTitle": "Reset observation deck",
+          "resetHelp": "Restore the default camera and target",
+          "tourTitle": "Open quick tour",
+          "tourHelp": "Replay the three-step flight introduction",
+          "shortcutsTitle": "Keyboard guide",
+          "shortcutsHelp": "Review navigation and interface shortcuts"
+        }
+      },
+      "footer": {
+        "explore": "Explore",
+        "shortcuts": "Shortcuts"
+      },
+      "shortcuts": {
+        "eyebrow": "Flight manual",
+        "title": "Keyboard shortcuts",
+        "close": "Close keyboard shortcuts",
+        "actions": {
+          "search": "Open universal search",
+          "guide": "Show this keyboard guide",
+          "escape": "Close a panel and return to Explore",
+          "center": "Center the selected body in orbit view",
+          "approach": "Move to a close approach when available",
+          "previous": "Return to the previous camera view",
+          "overview": "Return to the system overview",
+          "fly": "Fly through the current reference frame",
+          "vertical": "Move vertically",
+          "pause": "Pause or resume simulation time"
+        },
+        "note": "Text fields capture typing, so flight controls remain inactive while search is focused."
+      },
+      "navigator": {
+        "browserLabel": "Asteria system browser",
+        "currentSystem": "Current system",
+        "centeredStatus": "Centered on",
+        "centeringStatus": "Centering on",
+        "inTransit": "In transit",
+        "closeApproach": "Close approach",
+        "orbit": "Orbit",
+        "objectsLabel": "Celestial objects",
+        "targetAria": "{{name}}, {{class}}{{selected}}{{centered}}{{centering}}",
+        "selectedSuffix": ", selected",
+        "centeredSuffix": ", camera centered",
+        "centeringSuffix": ", camera centering",
+        "cameraViews": "Camera views for {{name}}",
+        "centering": "Centering…",
+        "orbitActive": "Orbit active",
+        "goOrbit": "Go to orbit",
+        "approachActive": "Approach active",
+        "hints": {
+          "orbit": "drag to orbit",
+          "fly": "WASD + Q/E to fly",
+          "center": "center selected"
+        }
+      }
+    }
+  },
+  "science": {
+    "asteria": {
+      "description": "A synthetic G1 V analogue used as the deterministic system primary.",
+      "facts": [
+        "Its radius, temperature and luminosity are mutually consistent to model precision.",
+        "Asteria is fictional and must not be presented as an observed star."
+      ]
+    },
+    "cinder": {
+      "description": "A synthetic iron-rich lava planet crossed by incandescent volcanic basins.",
+      "facts": [
+        "Its eccentric orbit drives a large seasonal change in received flux.",
+        "The tenuous carbon atmosphere cannot efficiently redistribute dayside heat.",
+        "A compact volcanic moon, Scoria, remains well inside Cinder's prograde stability limit."
+      ]
+    },
+    "cinder-scoria": {
+      "description": "A synthetic scorched volcanic moon with dark silicate plains.",
+      "facts": [
+        "Weak tidal flexing sustains isolated volcanic centers in the synthetic model."
+      ]
+    },
+    "aurelia": {
+      "description": "A synthetic warm terrestrial planet with salt deserts and dense amber skies.",
+      "facts": [
+        "High surface pressure stabilizes transient polar brines.",
+        "Its single moon is massive enough to moderate long-term obliquity changes."
+      ]
+    },
+    "aurelia-cyra": {
+      "description": "A synthetic, synchronously rotating silicate moon.",
+      "facts": [
+        "A broad far-side basin records the system’s early bombardment."
+      ]
+    },
+    "pelagos": {
+      "description": "A synthetic temperate ocean planet with volcanic archipelagos and active plates.",
+      "facts": [
+        "The climate model places Pelagos inside Asteria’s conservative habitable zone.",
+        "No biosignature is claimed; all environmental values are generated for simulation."
+      ]
+    },
+    "pelagos-tethra": {
+      "description": "A compact synthetic inner moon shaped by weak tidal heating.",
+      "facts": [
+        "Tethra clears a narrow lane through Pelagos’s faint dust torus."
+      ]
+    },
+    "pelagos-neris": {
+      "description": "A synthetic ice-shelled moon with a modeled subsurface ocean.",
+      "facts": [
+        "Weak tidal flexing can maintain liquid water beneath the ice shell.",
+        "Subsurface water is a model inference, not an observation or life claim."
+      ]
+    },
+    "viridia": {
+      "description": "A synthetic cool super-Earth with shallow seas and basaltic green continents.",
+      "facts": [
+        "Viridia sits in the outer half of the conservative habitable zone.",
+        "Its higher gravity produces a compact but comparatively dense atmosphere."
+      ]
+    },
+    "viridia-luma": {
+      "description": "A synthetic volatile-rich moon with bright young ray systems.",
+      "facts": [
+        "Luma is synchronously locked to Viridia."
+      ]
+    },
+    "orison": {
+      "description": "A synthetic banded gas giant encircled by a broad silicate-and-ice ring system.",
+      "facts": [
+        "The quoted radius, pressure and temperature refer to the one-bar level, not a solid surface.",
+        "Five major moons occupy a stable resonant architecture in this simplified model."
+      ]
+    },
+    "orison-ember": {
+      "description": "A synthetic resonantly heated volcanic moon with sulfur-rich plains.",
+      "facts": [
+        "Localized volcanic vents greatly exceed the listed global mean temperature."
+      ]
+    },
+    "orison-ione": {
+      "description": "A synthetic bright ice moon cut by young tectonic scarps.",
+      "facts": [
+        "A deep internal ocean is thermally plausible in the synthetic model."
+      ]
+    },
+    "orison-lyric": {
+      "description": "A synthetic differentiated ice moon with modeled briny layers.",
+      "facts": [
+        "Its induced-field signature is simulated, not measured."
+      ]
+    },
+    "orison-kestrel": {
+      "description": "A synthetic dark rocky moon with a heavily cratered surface.",
+      "facts": [
+        "Kestrel shepherds the diffuse outer E ring."
+      ]
+    },
+    "orison-morrow": {
+      "description": "A synthetic outer moon marked by a giant ancient impact basin.",
+      "facts": [
+        "Morrow is the outermost regular major moon in the model."
+      ]
+    },
+    "caelora": {
+      "description": "A synthetic cyan Neptunian planet rotating nearly on its side beneath methane haze.",
+      "facts": [
+        "Its extreme obliquity produces decades-long synthetic seasons.",
+        "The quoted climate values refer to the one-bar atmospheric level."
+      ]
+    },
+    "caelora-mistral": {
+      "description": "A synthetic icy shepherd moon at the edge of Caelora’s rings.",
+      "facts": [
+        "Its resonances maintain the ring system’s sharp outer edge."
+      ]
+    },
+    "caelora-serein": {
+      "description": "A synthetic ice moon with smooth resurfaced plains.",
+      "facts": [
+        "Sparse crater counts imply recent cryovolcanic resurfacing in the model."
+      ]
+    },
+    "caelora-pale": {
+      "description": "A synthetic captured moon on an inclined, mildly eccentric orbit.",
+      "facts": [
+        "Pale likely formed elsewhere in the generated system."
+      ]
+    },
+    "caelora-vanta": {
+      "description": "A synthetic dark outer irregular moon.",
+      "facts": [
+        "Vanta’s orbit is the most inclined among Caelora’s modeled moons."
+      ]
+    },
+    "erebus": {
+      "description": "A synthetic compact ice giant with a deep indigo hydrogen-methane atmosphere.",
+      "facts": [
+        "Erebus radiates modest residual formation heat.",
+        "Its narrow charcoal rings are optically thin in the synthetic model."
+      ]
+    },
+    "erebus-rime": {
+      "description": "A synthetic bright inner ice moon.",
+      "facts": [
+        "Rime exchanges dust with Erebus’s narrow rings."
+      ]
+    },
+    "erebus-noctis": {
+      "description": "A synthetic, dark silicate-rich outer moon.",
+      "facts": [
+        "Noctis may be a captured remnant of an early planetesimal disk."
+      ]
+    },
+    "nyx": {
+      "description": "A synthetic remote Neptunian planet with violet haze and a faint dusty ring.",
+      "facts": [
+        "Nyx completes one orbit in roughly one and a half Earth centuries.",
+        "The one-bar atmosphere is modeled as hydrogen, helium and methane."
+      ]
+    },
+    "nyx-wisp": {
+      "description": "A synthetic small ice moon embedded near Nyx’s dust ring.",
+      "facts": [
+        "Wisp supplies fine particles to the ring through micrometeoroid impacts."
+      ]
+    },
+    "nyx-shade": {
+      "description": "A synthetic oversized outer companion synchronously locked to Nyx.",
+      "facts": [
+        "Shade and Nyx orbit a barycenter that remains inside Nyx."
+      ]
+    }
+  }
+}

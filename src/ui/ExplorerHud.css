@@ -1783,6 +1783,43 @@
   transform: rotate(4deg);
 }
 
+.se-overlay-locale {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  gap: 7px;
+  padding: 0 8px;
+  color: var(--se-muted);
+  background: rgba(5, 13, 19, 0.68);
+  border: 1px solid var(--se-line);
+  border-radius: 5px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.se-welcome-card > .se-overlay-locale {
+  position: absolute;
+  z-index: 3;
+  top: 17px;
+  left: 17px;
+}
+
+.se-overlay-locale select {
+  width: auto;
+  max-width: 118px;
+  min-height: 32px;
+  padding: 0 20px 0 0;
+  color: var(--se-text);
+  background: transparent;
+  border: 0;
+  font-family: var(--se-mono);
+  font-size: 10px;
+}
+
+.se-overlay-locale select:focus-visible {
+  outline-offset: 3px;
+}
+
 .se-welcome-card__mark {
   position: relative;
   width: 72px;
@@ -2023,6 +2060,17 @@
   font-size: 9px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
+}
+
+.se-tour-card__topline-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.se-tour-card__topline .se-overlay-locale {
+  min-height: 34px;
+  text-transform: none;
 }
 
 .se-tour-card h2 {
@@ -2603,6 +2651,16 @@
 
   .se-welcome-card {
     width: calc(100vw - 24px);
+    padding-top: 66px;
+  }
+
+  .se-welcome-card > .se-overlay-locale {
+    top: 13px;
+    left: 13px;
+  }
+
+  .se-overlay-locale select {
+    max-width: 92px;
   }
 
   .se-welcome-card__note {

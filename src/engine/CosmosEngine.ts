@@ -193,7 +193,6 @@ export class CosmosEngine {
     this.renderer.toneMappingExposure = this.displaySettings.exposure
     this.renderer.setClearColor(0x010207, 1)
     this.renderer.domElement.className = 'cosmos-canvas'
-    this.renderer.domElement.setAttribute('aria-label', 'Interactive procedural universe viewport')
     this.renderer.domElement.setAttribute(
       'aria-keyshortcuts',
       'G Shift+G Backspace 0 W A S D Q E Space',

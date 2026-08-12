@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { TFunction } from 'i18next'
+import { useTranslation } from 'react-i18next'
 import { AlertTriangle, Cpu, Layers3, LoaderCircle, Sparkles } from 'lucide-react'
 import {
   ProductToolPanel,
@@ -24,6 +26,8 @@ import type {
   EngineTelemetry,
   QualityLevel,
 } from './engine/types'
+import { localeOption } from './i18n'
+import { localizedScienceNarrative } from './i18n/science'
 import {
   ExplorerHud,
   type BodyCenteredCameraView,
@@ -72,6 +76,7 @@ const QUALITY_TO_ENGINE: Record<QualityPreset, QualityLevel> = {
 const PRODUCT_TARGETS: readonly CelestialBodyView[] = CATALOG_BODIES
 
 const PRODUCT_TARGET_IDS = PRODUCT_TARGETS.map((target) => target.id)
+const MAIN_SEQUENCE_SUFFIX = / main-sequence star$/u
 
 function toProductTool(tool: NavigationTool): ProductTool | null {
   return tool === 'search' ||
@@ -91,61 +96,62 @@ function isEditableTarget(target: EventTarget | null): boolean {
   )
 }
 
-const NAVIGATION_TOOL_LABELS: Record<NavigationTool, string> = {
-  home: 'Observation deck',
-  explore: 'Explore',
-  search: 'Search',
-  locations: 'Star map',
-  bookmarks: 'Saved places',
-  settings: 'Settings',
-}
-
 function focusNavigationTool(tool: NavigationTool): void {
-  const label = NAVIGATION_TOOL_LABELS[tool]
   window.requestAnimationFrame(() => {
     document
-      .querySelector<HTMLButtonElement>(`.se-nav-button[aria-label="${label}"]`)
+      .querySelector<HTMLButtonElement>(
+        `.se-nav-button[data-navigation-tool="${tool}"]`,
+      )
       ?.focus()
   })
 }
 
-function massMetric(body: CelestialBodyView): CelestialMetric {
+function localizeBodyClass(
+  body: Pick<CelestialBodyView, 'bodyKind' | 'bodyClass'>,
+  t: TFunction,
+): string {
   if (body.bodyKind === 'star') {
-    return {
-      label: 'Mass',
-      value: (body.massEarths / 332_946).toFixed(2),
-      unit: 'M☉',
-    }
+    return t('body.class.star', {
+      spectralType: body.bodyClass.replace(MAIN_SEQUENCE_SUFFIX, ''),
+    })
   }
-  return {
-    label: 'Mass',
-    value: body.massEarths.toLocaleString(undefined, {
-      maximumFractionDigits: body.massEarths < 0.1 ? 3 : 2,
-    }),
-    unit: 'M⊕',
+  const classKey: Readonly<Record<string, string>> = {
+    'Lava world': 'lava',
+    'Terrestrial world': 'terrestrial',
+    'Ocean world': 'ocean',
+    'Super-Earth': 'superEarth',
+    'Neptunian world': 'neptunian',
+    'Gas giant': 'gasGiant',
+    'Ice giant': 'iceGiant',
+    'Dwarf planet': 'dwarf',
+    'Rocky moon': 'rockyMoon',
+    'Icy moon': 'icyMoon',
+    'Oceanic moon': 'oceanicMoon',
+    'Volcanic moon': 'volcanicMoon',
   }
+  const key = classKey[body.bodyClass]
+  return key ? t(`body.class.${key}`) : body.bodyClass
 }
 
-function pressureDisplay(body: CelestialBodyView): string {
-  if (body.surfacePressurePascals === null) return 'Not modeled'
-  if (body.surfacePressurePascals < 1_000) {
-    return `${body.surfacePressurePascals.toLocaleString()} Pa`
+function localizeHabitability(
+  body: CelestialBodyView,
+  t: TFunction,
+): { label: string; summary: string } {
+  const labelKey: Readonly<Record<string, string>> = {
+    'Not applicable': 'notApplicable',
+    'Insufficient data': 'insufficientData',
+    'Non-surface world': 'nonSurfaceWorld',
+    'Outside conservative HZ': 'outsideHz',
+    'Habitable-zone orbit': 'withinHz',
+    'Temperate candidate': 'temperateCandidate',
   }
-  return `${(body.surfacePressurePascals / 100_000).toLocaleString(undefined, {
-    maximumFractionDigits: 2,
-  })} bar`
-}
-
-function orbitalDistanceDisplay(body: CelestialBodyView): string {
-  if (!body.orbit) return 'System barycenter'
-  if (body.bodyKind === 'moon') {
-    return `${formatDistance(body.orbit.semiMajorAxisMeters, {
-      maximumFractionDigits: 1,
-    })} from ${body.parentName ?? 'parent'}`
-  }
-  return `${body.distanceAu.toLocaleString(undefined, {
-    maximumFractionDigits: 3,
-  })} AU from Asteria`
+  const key = labelKey[body.habitability.label]
+  return key
+    ? {
+        label: t(`habitability.${key}.label`),
+        summary: t(`habitability.${key}.summary`),
+      }
+    : body.habitability
 }
 
 function habitabilityTone(body: CelestialBodyView): CelestialStatusTone {
@@ -153,79 +159,202 @@ function habitabilityTone(body: CelestialBodyView): CelestialStatusTone {
   return body.habitability.tone
 }
 
-function percentFraction(fraction: number): string {
+function massMetric(
+  body: CelestialBodyView,
+  t: TFunction,
+  locale: string,
+): CelestialMetric {
+  if (body.bodyKind === 'star') {
+    return {
+      label: t('metrics.mass'),
+      value: (body.massEarths / 332_946).toLocaleString(locale, {
+        maximumFractionDigits: 2,
+        minimumFractionDigits: 2,
+      }),
+      unit: 'M☉',
+    }
+  }
+  return {
+    label: t('metrics.mass'),
+    value: body.massEarths.toLocaleString(locale, {
+      maximumFractionDigits: body.massEarths < 0.1 ? 3 : 2,
+    }),
+    unit: 'M⊕',
+  }
+}
+
+function pressureDisplay(
+  body: CelestialBodyView,
+  t: TFunction,
+  locale: string,
+): string {
+  if (body.surfacePressurePascals === null) return t('units.notModeled')
+  if (body.surfacePressurePascals < 1_000) {
+    return `${body.surfacePressurePascals.toLocaleString(locale)} Pa`
+  }
+  return `${(body.surfacePressurePascals / 100_000).toLocaleString(locale, {
+    maximumFractionDigits: 2,
+  })} bar`
+}
+
+function orbitalDistanceDisplay(
+  body: CelestialBodyView,
+  t: TFunction,
+  locale: string,
+): string {
+  if (!body.orbit) return t('units.systemBarycenter')
+  if (body.bodyKind === 'moon') {
+    return t('units.fromParent', {
+      distance: formatDistance(body.orbit.semiMajorAxisMeters, {
+        locale,
+        maximumFractionDigits: 1,
+      }),
+      parent: body.parentName ?? t('body.parentFallback'),
+    })
+  }
+  return t('units.fromAsteria', {
+    distance: body.distanceAu.toLocaleString(locale, {
+      maximumFractionDigits: 3,
+    }),
+  })
+}
+
+function atmosphereSummary(body: CelestialBodyView, t: TFunction): string {
+  if (body.bodyKind === 'star') return t('body.stellarPlasma')
+  if (body.atmosphereComposition.length === 0) return t('body.noAtmosphere')
+  return body.atmosphere
+}
+
+function orbitDistance(
+  body: CelestialBodyView,
+  locale: string,
+  maximumFractionDigits: number,
+): string {
+  return formatDistance(body.orbit?.semiMajorAxisMeters ?? 0, {
+    locale,
+    maximumFractionDigits,
+  })
+}
+
+function percentFraction(fraction: number, locale: string): string {
   const percentage = fraction * 100
-  return `${percentage.toLocaleString(undefined, {
+  return `${percentage.toLocaleString(locale, {
     maximumFractionDigits: percentage < 10 ? 1 : 0,
   })}%`
 }
 
-function toHudObject(body: CelestialBodyView): SelectedCelestialObject {
+function toHudObject(
+  body: CelestialBodyView,
+  t: TFunction,
+  locale: string,
+  language: string,
+): SelectedCelestialObject {
+  const localizedClass = localizeBodyClass(body, t)
+  const habitability = localizeHabitability(body, t)
+  const narrative = localizedScienceNarrative(body, language)
   const physicalMetrics: CelestialMetric[] = [
-    massMetric(body),
-    { label: 'Mean radius', value: body.radiusKm.toLocaleString(), unit: 'km' },
+    massMetric(body, t, locale),
     {
-      label: 'Mean density',
-      value: body.densityKgPerCubicMeter.toLocaleString(undefined, {
+      label: t('metrics.meanRadius'),
+      value: body.radiusKm.toLocaleString(locale),
+      unit: 'km',
+    },
+    {
+      label: t('metrics.meanDensity'),
+      value: body.densityKgPerCubicMeter.toLocaleString(locale, {
         maximumFractionDigits: 0,
       }),
       unit: 'kg/m³',
     },
     {
-      label: 'Reference gravity',
-      value: body.surfaceGravityMetersPerSecondSquared.toFixed(2),
+      label: t('metrics.referenceGravity'),
+      value: body.surfaceGravityMetersPerSecondSquared.toLocaleString(locale, {
+        maximumFractionDigits: 2,
+        minimumFractionDigits: 2,
+      }),
       unit: 'm/s²',
     },
-    { label: 'Earth gravity', value: body.gravityG.toFixed(2), unit: 'g' },
     {
-      label: 'Escape velocity',
-      value: body.escapeVelocityKmPerSecond.toFixed(2),
+      label: t('metrics.earthGravity'),
+      value: body.gravityG.toLocaleString(locale, {
+        maximumFractionDigits: 2,
+        minimumFractionDigits: 2,
+      }),
+      unit: 'g',
+    },
+    {
+      label: t('metrics.escapeVelocity'),
+      value: body.escapeVelocityKmPerSecond.toLocaleString(locale, {
+        maximumFractionDigits: 2,
+        minimumFractionDigits: 2,
+      }),
       unit: 'km/s',
     },
     {
-      label: 'Sidereal rotation',
-      value: Math.abs(body.rotationPeriodHours).toLocaleString(undefined, {
+      label: t('metrics.siderealRotation'),
+      value: Math.abs(body.rotationPeriodHours).toLocaleString(locale, {
         maximumFractionDigits: 2,
       }),
-      unit: body.rotationPeriodHours < 0 ? 'h retrograde' : 'h',
+      unit: body.rotationPeriodHours < 0 ? t('units.retrogradeHours') : 'h',
     },
     {
-      label: 'Axial tilt',
-      value: body.axialTiltDegrees.toFixed(1),
+      label: t('metrics.axialTilt'),
+      value: body.axialTiltDegrees.toLocaleString(locale, {
+        maximumFractionDigits: 1,
+        minimumFractionDigits: 1,
+      }),
       unit: '°',
     },
   ]
 
   const climateMetrics: CelestialMetric[] = [
     {
-      label: 'Mean temperature',
-      value: body.temperatureK.toLocaleString(undefined, {
+      label: t('metrics.meanTemperature'),
+      value: body.temperatureK.toLocaleString(locale, {
         maximumFractionDigits: 1,
       }),
       unit: 'K',
     },
     ...(body.equilibriumTemperatureK !== null
       ? [{
-          label: 'Equilibrium temperature',
-          value: body.equilibriumTemperatureK.toFixed(1),
+          label: t('metrics.equilibriumTemperature'),
+          value: body.equilibriumTemperatureK.toLocaleString(locale, {
+            maximumFractionDigits: 1,
+            minimumFractionDigits: 1,
+          }),
           unit: 'K',
         }]
       : []),
     ...(body.greenhouseDeltaK !== null
       ? [{
-          label: 'Greenhouse offset',
-          value: body.greenhouseDeltaK.toFixed(1),
+          label: t('metrics.greenhouseOffset'),
+          value: body.greenhouseDeltaK.toLocaleString(locale, {
+            maximumFractionDigits: 1,
+            minimumFractionDigits: 1,
+          }),
           unit: 'K',
         }]
       : []),
-    { label: 'Bond albedo', value: body.albedo.toFixed(2) },
+    {
+      label: t('metrics.bondAlbedo'),
+      value: body.albedo.toLocaleString(locale, {
+        maximumFractionDigits: 2,
+        minimumFractionDigits: 2,
+      }),
+    },
     ...(body.bodyKind !== 'star'
-      ? [{ label: 'Reference pressure', value: pressureDisplay(body) }]
+      ? [{
+          label: t('metrics.referencePressure'),
+          value: pressureDisplay(body, t, locale),
+        }]
       : []),
     ...(body.internalHeatFluxWattsPerSquareMeter !== null
       ? [{
-          label: 'Internal heat flux',
-          value: body.internalHeatFluxWattsPerSquareMeter.toFixed(3),
+          label: t('metrics.internalHeatFlux'),
+          value: body.internalHeatFluxWattsPerSquareMeter.toLocaleString(locale, {
+            maximumFractionDigits: 3,
+            minimumFractionDigits: 3,
+          }),
           unit: 'W/m²',
         }]
       : []),
@@ -234,48 +363,66 @@ function toHudObject(body: CelestialBodyView): SelectedCelestialObject {
   const orbitMetrics: CelestialMetric[] = body.orbit
     ? [
         {
-          label: 'Semi-major axis',
+          label: t('metrics.semiMajorAxis'),
           value:
             body.bodyKind === 'moon'
-              ? formatDistance(body.orbit.semiMajorAxisMeters, {
-                  maximumFractionDigits: 1,
-                })
-              : body.distanceAu.toFixed(3),
+              ? orbitDistance(body, locale, 1)
+              : body.distanceAu.toLocaleString(locale, {
+                  maximumFractionDigits: 3,
+                  minimumFractionDigits: 3,
+                }),
           unit: body.bodyKind === 'moon' ? undefined : 'AU',
         },
         {
-          label: 'Orbital period',
-          value: body.orbit.periodDays.toLocaleString(undefined, {
+          label: t('metrics.orbitalPeriod'),
+          value: body.orbit.periodDays.toLocaleString(locale, {
             maximumFractionDigits: 2,
           }),
-          unit: 'days',
+          unit: t('units.days'),
         },
-        { label: 'Eccentricity', value: body.orbit.eccentricity.toFixed(3) },
         {
-          label: 'Inclination',
-          value: body.orbit.inclinationDegrees.toFixed(2),
+          label: t('metrics.eccentricity'),
+          value: body.orbit.eccentricity.toLocaleString(locale, {
+            maximumFractionDigits: 3,
+            minimumFractionDigits: 3,
+          }),
+        },
+        {
+          label: t('metrics.inclination'),
+          value: body.orbit.inclinationDegrees.toLocaleString(locale, {
+            maximumFractionDigits: 2,
+            minimumFractionDigits: 2,
+          }),
           unit: '°',
         },
         {
-          label: 'Periapsis',
+          label: t('metrics.periapsis'),
           value: formatDistance(body.orbit.periapsisMeters, {
+            locale,
             maximumFractionDigits: 2,
           }),
         },
         {
-          label: 'Apoapsis',
+          label: t('metrics.apoapsis'),
           value: formatDistance(body.orbit.apoapsisMeters, {
+            locale,
             maximumFractionDigits: 2,
           }),
         },
         {
-          label: 'Mean orbital speed',
-          value: body.orbit.meanVelocityKmPerSecond.toFixed(2),
+          label: t('metrics.meanOrbitalSpeed'),
+          value: body.orbit.meanVelocityKmPerSecond.toLocaleString(locale, {
+            maximumFractionDigits: 2,
+            minimumFractionDigits: 2,
+          }),
           unit: 'km/s',
         },
         {
-          label: 'Stellar flux',
-          value: body.orbit.stellarFluxSolar.toFixed(2),
+          label: t('metrics.stellarFlux'),
+          value: body.orbit.stellarFluxSolar.toLocaleString(locale, {
+            maximumFractionDigits: 2,
+            minimumFractionDigits: 2,
+          }),
           unit: 'S⊕',
         },
       ]
@@ -284,26 +431,30 @@ function toHudObject(body: CelestialBodyView): SelectedCelestialObject {
   const metricSections: CelestialMetricSection[] = [
     {
       id: 'climate',
-      title: body.bodyKind === 'star' ? 'Stellar environment' : 'Climate model',
+      title:
+        body.bodyKind === 'star'
+          ? t('sections.stellarEnvironment')
+          : t('sections.climateModel'),
       tab: 'overview',
       summary:
         body.bodyKind === 'star'
-          ? 'Photospheric reference values for the synthetic primary star.'
-          : 'Temperature and pressure are scenario inputs; radiative equilibrium and flux are derived.',
+          ? t('sections.stellarSummary')
+          : t('sections.climateSummary'),
       metrics: climateMetrics,
     },
     {
       id: 'physical',
-      title: 'Bulk properties',
+      title: t('sections.bulkProperties'),
       tab: 'physics',
+      summary: t('sections.physicsSummary'),
       metrics: physicalMetrics,
     },
     ...(orbitMetrics.length > 0
       ? [{
           id: 'orbit',
-          title: 'Keplerian solution',
+          title: t('sections.keplerianSolution'),
           tab: 'orbit' as const,
-          summary: 'Two-body osculating elements at the simulation epoch.',
+          summary: t('sections.twoBodyEpoch'),
           metrics: orbitMetrics,
         }]
       : []),
@@ -312,74 +463,111 @@ function toHudObject(body: CelestialBodyView): SelectedCelestialObject {
   return {
     id: body.id,
     name: body.name,
-    type: body.bodyClass,
+    type: localizedClass,
     designation: body.designation,
     closeApproachAvailable: body.bodyKind !== 'star',
-    description: body.description,
-    distance: orbitalDistanceDisplay(body),
+    description: narrative.description,
+    distance: orbitalDistanceDisplay(body, t, locale),
     orbitSummary: body.orbit
-      ? `Deterministic Keplerian orbit around ${body.parentName ?? 'the system barycenter'}; visual distances are logarithmically compressed.`
+      ? t('body.orbitSummary', {
+          parent: body.parentName ?? t('units.systemBarycenter'),
+        })
       : undefined,
     classification: {
-      label: body.bodyClass,
+      label: localizedClass,
       detail:
         body.bodyKind === 'moon'
-          ? `Natural satellite of ${body.parentName ?? 'an Asteria world'}`
+          ? t('body.naturalSatelliteOf', {
+              parent: body.parentName ?? t('body.parentFallback'),
+            })
           : body.bodyKind === 'planet'
-            ? 'NASA-aligned exoplanet class · fictional Asteria catalogue'
-            : 'Synthetic G-class primary star',
+            ? t('body.nasaAlignedClass')
+            : t('body.syntheticPrimary'),
     },
     status: {
-      label: 'Synthetic model',
-      detail: body.provenance.notice,
+      label: t('body.syntheticStatus'),
+      detail: t('body.syntheticDescription'),
       tone: 'informational',
     },
     quickFacts: [
-      { label: 'Radius', value: body.radiusKm.toLocaleString(), unit: 'km' },
-      massMetric(body),
-      { label: 'Temperature', value: body.temperatureK.toLocaleString(), unit: 'K' },
-      { label: 'Gravity', value: body.gravityG.toFixed(2), unit: 'g' },
+      {
+        label: t('metrics.radius'),
+        value: body.radiusKm.toLocaleString(locale),
+        unit: 'km',
+      },
+      massMetric(body, t, locale),
+      {
+        label: t('metrics.temperature'),
+        value: body.temperatureK.toLocaleString(locale),
+        unit: 'K',
+      },
+      {
+        label: t('metrics.gravity'),
+        value: body.gravityG.toLocaleString(locale, {
+          maximumFractionDigits: 2,
+          minimumFractionDigits: 2,
+        }),
+        unit: 'g',
+      },
     ],
     metricSections,
     atmosphere: {
-      summary: body.atmosphere,
+      summary: atmosphereSummary(body, t),
       pressure:
-        body.bodyKind === 'star' ? undefined : pressureDisplay(body),
+        body.bodyKind === 'star'
+          ? undefined
+          : pressureDisplay(body, t, locale),
       composition: body.atmosphereComposition.map(({ species, fraction }) => ({
         species,
-        amount: percentFraction(fraction),
+        amount: percentFraction(fraction, locale),
       })),
     },
     habitability: {
-      label: body.habitability.label,
-      summary: body.habitability.summary,
+      label: habitability.label,
+      summary: habitability.summary,
       tone: habitabilityTone(body),
       factors: body.orbit
         ? [
             {
-              label: 'Stellar flux',
-              value: body.orbit.stellarFluxSolar.toFixed(2),
+              label: t('metrics.stellarFlux'),
+              value: body.orbit.stellarFluxSolar.toLocaleString(locale, {
+                maximumFractionDigits: 2,
+                minimumFractionDigits: 2,
+              }),
               unit: 'S⊕',
             },
             {
-              label: 'Equilibrium temperature',
-              value: body.equilibriumTemperatureK?.toFixed(1) ?? '—',
+              label: t('metrics.equilibriumTemperature'),
+              value:
+                body.equilibriumTemperatureK?.toLocaleString(locale, {
+                  maximumFractionDigits: 1,
+                  minimumFractionDigits: 1,
+                }) ?? '—',
               unit: 'K',
             },
           ]
         : undefined,
     },
     provenance: {
-      source: body.provenance.generator,
-      method: 'Curated scenario inputs · equation-derived physics',
-      confidence: body.provenance.origin === 'synthetic' ? 'Synthetic' : 'Catalogue',
-      reference: `model ${body.provenance.modelVersion}${body.provenance.seed ? ` · seed ${body.provenance.seed}` : ''}`,
+      source: t('body.syntheticSource'),
+      method: t('body.syntheticMethod'),
+      confidence: t('body.syntheticConfidence'),
+      reference: t('body.modelReference', {
+        version: body.provenance.modelVersion,
+        seedPart: body.provenance.seed
+          ? t('body.seedReference', { seed: body.provenance.seed })
+          : '',
+      }),
     },
   }
 }
 
 function App() {
+  const { t, i18n } = useTranslation('app')
+  const resolvedLocale = localeOption(i18n.resolvedLanguage)
   const viewportRef = useRef<HTMLDivElement>(null)
+  const initialViewportLabelRef = useRef(t('engine.viewportLabel'))
+  initialViewportLabelRef.current = t('engine.viewportLabel')
   const engineRef = useRef<CosmosEngineInstance | null>(null)
   const previousTimeScaleRef = useRef(1)
   const currentTimeScaleRef = useRef(1)
@@ -395,7 +583,7 @@ function App() {
   const [cinematic, setCinematic] = useState(false)
   const [activeTool, setActiveTool] = useState<NavigationTool>('explore')
   const [inspectorOpen, setInspectorOpen] = useState(true)
-  const [engineError, setEngineError] = useState<string | null>(null)
+  const [engineFailed, setEngineFailed] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const {
     displaySettings,
@@ -443,17 +631,20 @@ function App() {
         onCameraCenterChange: (nextCameraCenter) => {
           if (active) setCameraCenter(nextCameraCenter)
         },
-        onError: (error) => {
-          if (active) setEngineError(error.message)
+        onError: () => {
+          if (active) setEngineFailed(true)
         },
       })
+      host
+        .querySelector<HTMLCanvasElement>('canvas')
+        ?.setAttribute('aria-label', initialViewportLabelRef.current)
       engineRef.current = engine
       await engine.init()
       engine.setDisplaySettings(displaySettingsRef.current)
     }
 
-    void bootEngine().catch((reason: unknown) => {
-      if (active) setEngineError(reason instanceof Error ? reason.message : String(reason))
+    void bootEngine().catch(() => {
+      if (active) setEngineFailed(true)
     })
 
     return () => {
@@ -468,9 +659,22 @@ function App() {
     engineRef.current?.setDisplaySettings(displaySettings)
   }, [displaySettings])
 
+  useEffect(() => {
+    viewportRef.current
+      ?.querySelector<HTMLCanvasElement>('canvas')
+      ?.setAttribute('aria-label', t('engine.viewportLabel'))
+  }, [capabilities, t])
+
   const hudObject = useMemo(
-    () => (selectedBody ? toHudObject(selectedBody) : null),
-    [selectedBody],
+    () => selectedBody
+      ? toHudObject(
+          selectedBody,
+          t,
+          resolvedLocale.intlLocale,
+          resolvedLocale.code,
+        )
+      : null,
+    [resolvedLocale.code, resolvedLocale.intlLocale, selectedBody, t],
   )
 
   const cameraView = useMemo<BodyCenteredCameraView | null>(() => {
@@ -484,17 +688,17 @@ function App() {
       centeredObject: {
         id: centeredBody.id,
         name: centeredBody.name,
-        type: centeredBody.bodyClass,
+        type: localizeBodyClass(centeredBody, t),
         designation: centeredBody.designation,
       },
       mode: cameraCenter.mode === 'close' ? 'close-approach' : 'orbit',
       transitioning: cameraCenter.transitioning,
       closeApproachAvailable: centeredBody.bodyKind !== 'star',
-      previousViewLabel: 'previous camera frame',
+      previousViewLabel: t('body.previousCameraFrame'),
     }
-  }, [cameraCenter])
+  }, [cameraCenter, t])
 
-  const webGpuStatus: WebGpuStatus = engineError
+  const webGpuStatus: WebGpuStatus = engineFailed
     ? 'unavailable'
     : capabilities === null
       ? 'initializing'
@@ -688,6 +892,35 @@ function App() {
   ])
 
   const productTool = toProductTool(activeTool)
+  const localizedProductTargets = useMemo(
+    () => PRODUCT_TARGETS.map((target) => {
+      const bodyClass = localizeBodyClass(target, t)
+      const habitability = localizeHabitability(target, t)
+      const narrative = localizedScienceNarrative(
+        target,
+        resolvedLocale.code,
+      )
+      return {
+        ...target,
+        bodyClass,
+        description: narrative.description,
+        atmosphere: atmosphereSummary(target, t),
+        facts: narrative.facts,
+        habitability: {
+          ...target.habitability,
+          ...habitability,
+        },
+      }
+    }),
+    [resolvedLocale.code, t],
+  )
+  const localizedNavigationTargets = useMemo(
+    () => NAVIGATION_TARGETS.map((target) => ({
+      ...target,
+      bodyClass: localizeBodyClass(target, t),
+    })),
+    [t],
+  )
   const settingsTelemetry = useMemo<ProductTelemetrySummary | null>(
     () => activeTool === 'settings'
       ? {
@@ -773,7 +1006,7 @@ function App() {
       />
 
       <SystemNavigator
-        targets={NAVIGATION_TARGETS}
+        targets={localizedNavigationTargets}
         selectedId={selectedBody?.id ?? null}
         centeredId={cameraCenter.bodyId}
         centeredViewMode={
@@ -792,7 +1025,7 @@ function App() {
       {productTool && !cinematic && overlay === null ? (
         <ProductToolPanel
           tool={productTool}
-          targets={PRODUCT_TARGETS}
+          targets={localizedProductTargets}
           selectedId={selectedBody?.id ?? null}
           savedPlaces={savedPlaces}
           persistence={savedPlacesPersistence}
@@ -819,34 +1052,47 @@ function App() {
       <div
         className={`engine-metrics${cinematic || overlay !== null ? ' is-hidden' : ''}`}
         role="region"
-        aria-label="Render pipeline metrics"
+        aria-label={t('renderMetrics.region')}
         aria-hidden={cinematic || overlay !== null}
       >
-        <span title="Procedural stars in the current render graph">
-          <Sparkles size={13} /> {telemetry.starCount > 0 ? `${Math.round(telemetry.starCount / 1000)}K` : '—'} stars
+        <span title={t('renderMetrics.starsTitle')}>
+          <Sparkles size={13} /> {telemetry.starCount > 0
+            ? t('renderMetrics.stars', {
+                count: Math.round(telemetry.starCount / 1000).toLocaleString(
+                  resolvedLocale.intlLocale,
+                ),
+              })
+            : t('renderMetrics.pending')}
         </span>
-        <span title="Draw calls in the last rendered frame">
-          <Layers3 size={13} /> {telemetry.drawCalls} draws
+        <span title={t('renderMetrics.drawsTitle')}>
+          <Layers3 size={13} /> {t('renderMetrics.draws', {
+            count: telemetry.drawCalls.toLocaleString(resolvedLocale.intlLocale),
+          })}
         </span>
-        <span title="Active renderer backend">
-          <Cpu size={13} /> {capabilities?.computeStarfield ? 'GPU compute' : 'CPU fallback'}
+        <span title={t('renderMetrics.backendTitle')}>
+          <Cpu size={13} /> {capabilities?.computeStarfield
+            ? t('renderMetrics.gpuCompute')
+            : t('renderMetrics.cpuFallback')}
         </span>
       </div>
 
-      {capabilities === null && !engineError ? (
+      {capabilities === null && !engineFailed ? (
         <div className="engine-loader" role="status" aria-live="polite">
           <LoaderCircle size={16} />
-          Compiling universe pipelines
+          {t('engine.loading')}
         </div>
       ) : null}
 
-      {engineError ? (
+      {engineFailed ? (
         <section className="engine-error" role="alert">
           <AlertTriangle size={22} />
           <div>
-            <strong>Renderer initialization failed</strong>
-            <p>{engineError}</p>
-            <small>Try a current Chrome or Edge build with hardware acceleration enabled.</small>
+            <strong>{t('engine.errorTitle')}</strong>
+            <p>{t('engine.errorDetail')}</p>
+            <small>{t('engine.errorAdvice')}</small>
+            <button type="button" onClick={() => window.location.reload()}>
+              {t('engine.retry')}
+            </button>
           </div>
         </section>
       ) : null}

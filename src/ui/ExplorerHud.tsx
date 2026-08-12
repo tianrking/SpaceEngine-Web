@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent, KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Aperture,
   ArrowDownToLine,
@@ -32,6 +33,8 @@ import {
   Zap,
   type LucideIcon,
 } from 'lucide-react'
+import { LOCALE_OPTIONS, isAppLocale, localeOption } from '../i18n/locale'
+import { setAppLocale } from '../i18n/i18n'
 import './ExplorerHud.css'
 
 export type WebGpuStatus =
@@ -243,61 +246,37 @@ export interface ExplorerHudProps
   onTourStepChange?: (step: number) => void
 }
 
-const GPU_STATUS: Record<
-  WebGpuStatus,
-  { label: string; detail: string }
-> = {
-  active: { label: 'WebGPU active', detail: 'Native compute' },
-  initializing: { label: 'GPU starting', detail: 'Preparing pipeline' },
-  fallback: { label: 'WebGL fallback', detail: 'Compatibility mode' },
-  unavailable: { label: 'GPU unavailable', detail: 'Rendering paused' },
-}
-
-const QUALITY_LABELS: Record<QualityPreset, string> = {
-  performance: 'Performance',
-  balanced: 'Balanced',
-  ultra: 'Ultra',
-}
+const QUALITY_PRESETS: QualityPreset[] = ['performance', 'balanced', 'ultra']
 
 const TIME_SCALE_STEPS = [0.25, 0.5, 1, 10, 100, 1_000, 10_000]
 
 const NAVIGATION_ITEMS: Array<{
   tool: NavigationTool
-  label: string
   icon: LucideIcon
   separator?: boolean
 }> = [
-  { tool: 'home', label: 'Observation deck', icon: Home },
-  { tool: 'explore', label: 'Explore', icon: Telescope },
-  { tool: 'search', label: 'Search', icon: Search, separator: true },
-  { tool: 'locations', label: 'Star map', icon: Map },
-  { tool: 'bookmarks', label: 'Saved places', icon: Bookmark },
-  { tool: 'settings', label: 'Settings', icon: Settings2, separator: true },
+  { tool: 'home', icon: Home },
+  { tool: 'explore', icon: Telescope },
+  { tool: 'search', icon: Search, separator: true },
+  { tool: 'locations', icon: Map },
+  { tool: 'bookmarks', icon: Bookmark },
+  { tool: 'settings', icon: Settings2, separator: true },
 ]
 
 const TOUR_STEPS = [
   {
-    eyebrow: '01 · Navigate',
-    title: 'Move without boundaries',
-    description:
-      'Select a target, focus its orbit, then accelerate smoothly from planetary scale to interstellar space.',
+    key: 'navigate',
     icon: Compass,
   },
   {
-    eyebrow: '02 · Inspect',
-    title: 'Read the universe',
-    description:
-      'Every selected body exposes physical properties, live coordinates and procedural classification in one place.',
+    key: 'inspect',
     icon: Database,
   },
   {
-    eyebrow: '03 · Capture',
-    title: 'Compose the impossible',
-    description:
-      'Use cinematic mode to clear visual noise and frame eclipses, rings, atmospheres and deep-space vistas.',
+    key: 'capture',
     icon: Aperture,
   },
-]
+] as const
 
 function joinClassNames(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(' ')
@@ -333,50 +312,55 @@ function canRestoreFocus(element: HTMLElement | null) {
   return style.display !== 'none' && style.visibility !== 'hidden'
 }
 
-function formatSpeed(speed: number) {
+function formatSpeed(speed: number, intlLocale: string) {
   if (!Number.isFinite(speed)) return '—'
 
   const absoluteSpeed = Math.abs(speed)
   const speedOfLight = 299_792_458
 
   if (absoluteSpeed >= speedOfLight * 0.01) {
-    return `${(absoluteSpeed / speedOfLight).toLocaleString(undefined, {
+    return `${(absoluteSpeed / speedOfLight).toLocaleString(intlLocale, {
       maximumFractionDigits: 2,
     })} c`
   }
 
   if (absoluteSpeed >= 1_000) {
-    return `${(absoluteSpeed / 1_000).toLocaleString(undefined, {
+    return `${(absoluteSpeed / 1_000).toLocaleString(intlLocale, {
       maximumFractionDigits: absoluteSpeed < 100_000 ? 1 : 0,
     })} km/s`
   }
 
-  return `${absoluteSpeed.toLocaleString(undefined, {
+  return `${absoluteSpeed.toLocaleString(intlLocale, {
     maximumFractionDigits: 0,
   })} m/s`
 }
 
-function formatTimeScale(timeScale: number) {
+function formatTimeScale(timeScale: number, intlLocale: string) {
   if (!Number.isFinite(timeScale)) return '1×'
   if (timeScale === 0) return '0×'
   if (timeScale < 1) {
-    return `${timeScale.toFixed(2).replace(/\.?0+$/, '')}×`
+    return `${new Intl.NumberFormat(intlLocale, {
+      maximumFractionDigits: 2,
+    }).format(timeScale)}×`
   }
-  return `${timeScale.toLocaleString()}×`
+  return `${timeScale.toLocaleString(intlLocale)}×`
 }
 
-function formatFps(fps: number) {
-  return Number.isFinite(fps) ? Math.max(0, Math.round(fps)) : '—'
+function formatFps(fps: number, intlLocale: string) {
+  return Number.isFinite(fps)
+    ? Math.max(0, Math.round(fps)).toLocaleString(intlLocale)
+    : '—'
 }
 
-function formatSimulationTime(simulationTime: Date | string) {
+function formatSimulationTime(
+  simulationTime: Date | string,
+  formatter: Intl.DateTimeFormat,
+  unavailable: string,
+) {
   if (typeof simulationTime === 'string') return simulationTime
-  if (Number.isNaN(simulationTime.getTime())) return 'Time unavailable'
+  if (Number.isNaN(simulationTime.getTime())) return unavailable
 
-  return simulationTime
-    .toISOString()
-    .replace('T', ' · ')
-    .replace(/\.\d{3}Z$/, ' UTC')
+  return `${formatter.format(simulationTime)} UTC`
 }
 
 function adjacentTimeScale(current: number, direction: -1 | 1) {
@@ -399,7 +383,12 @@ export function TopStatusBar({
   onQualityChange,
   onToggleCinematic,
 }: TopStatusBarProps) {
-  const gpuStatus = GPU_STATUS[webGpuStatus]
+  const { t, i18n } = useTranslation('hud')
+  const intlLocale = localeOption(i18n.resolvedLanguage).intlLocale
+  const gpuStatus = {
+    label: t(`status.gpu.${webGpuStatus}Label`),
+    detail: t(`status.gpu.${webGpuStatus}Detail`),
+  }
 
   const handleQualityChange = (event: ChangeEvent<HTMLSelectElement>) => {
     onQualityChange?.(event.target.value as QualityPreset)
@@ -409,7 +398,7 @@ export function TopStatusBar({
     <div
       className="se-topbar"
       role="region"
-      aria-label="Simulation status"
+      aria-label={t('status.region')}
       tabIndex={-1}
     >
       <div className="se-brand">
@@ -417,8 +406,8 @@ export function TopStatusBar({
           <Orbit size={21} strokeWidth={1.6} />
         </span>
         <span className="se-brand__copy">
-          <strong>Astral Surveyor</strong>
-          <small>Universe observatory</small>
+          <strong>{t('brand.name')}</strong>
+          <small>{t('brand.tagline')}</small>
         </span>
       </div>
 
@@ -436,28 +425,28 @@ export function TopStatusBar({
           <span aria-hidden="true">{gpuStatus.label}</span>
         </div>
 
-        <div className="se-readout" title="Rendered frames per second">
+        <div className="se-readout" title={t('status.fpsTitle')}>
           <span>FPS</span>
-          <strong>{formatFps(fps)}</strong>
+          <strong>{formatFps(fps, intlLocale)}</strong>
         </div>
 
-        <div className="se-readout se-readout--speed" title="Camera velocity">
+        <div className="se-readout se-readout--speed" title={t('status.cameraVelocity')}>
           <Gauge size={15} aria-hidden="true" />
-          <strong>{formatSpeed(speed)}</strong>
+          <strong>{formatSpeed(speed, intlLocale)}</strong>
         </div>
 
-        <label className="se-quality" title="Rendering quality">
+        <label className="se-quality" title={t('status.renderingQuality')}>
           <CircleGauge size={15} aria-hidden="true" />
-          <span className="se-sr-only">Rendering quality</span>
+          <span className="se-sr-only">{t('status.renderingQuality')}</span>
           <select
             value={quality}
             onChange={handleQualityChange}
             disabled={!onQualityChange}
-            aria-label="Rendering quality"
+            aria-label={t('status.renderingQuality')}
           >
-            {(Object.keys(QUALITY_LABELS) as QualityPreset[]).map((preset) => (
+            {QUALITY_PRESETS.map((preset) => (
               <option key={preset} value={preset}>
-                {QUALITY_LABELS[preset]}
+                {t(`status.quality.${preset}`)}
               </option>
             ))}
           </select>
@@ -469,11 +458,13 @@ export function TopStatusBar({
             cinematic && 'is-active',
           )}
           type="button"
-          aria-label={`${cinematic ? 'Disable' : 'Enable'} cinematic mode`}
+          aria-label={t(
+            cinematic ? 'status.cinematicDisable' : 'status.cinematicEnable',
+          )}
           aria-pressed={cinematic}
           onClick={onToggleCinematic}
           disabled={!onToggleCinematic}
-          title="Cinematic mode"
+          title={t('status.cinematicTitle')}
         >
           <Aperture size={18} />
         </button>
@@ -486,9 +477,13 @@ export function NavigationRail({
   activeTool = 'explore',
   onToolChange,
 }: NavigationRailProps) {
+  const { t } = useTranslation('hud')
+
   return (
-    <nav className="se-nav-rail" aria-label="Universe navigation">
-      {NAVIGATION_ITEMS.map(({ tool, label, icon: Icon, separator }) => (
+    <nav className="se-nav-rail" aria-label={t('navigation.region')}>
+      {NAVIGATION_ITEMS.map(({ tool, icon: Icon, separator }) => {
+        const label = t(`navigation.${tool}`)
+        return (
         <button
           className={joinClassNames(
             'se-nav-button',
@@ -497,6 +492,7 @@ export function NavigationRail({
           )}
           key={tool}
           type="button"
+          data-navigation-tool={tool}
           aria-label={label}
           aria-current={tool === activeTool ? 'page' : undefined}
           onClick={() => onToolChange?.(tool)}
@@ -506,34 +502,33 @@ export function NavigationRail({
           <Icon size={19} strokeWidth={1.7} />
           <span>{label}</span>
         </button>
-      ))}
+        )
+      })}
     </nav>
   )
 }
 
 function EmptyInspector() {
+  const { t } = useTranslation('hud')
+
   return (
     <div className="se-inspector-empty">
       <span className="se-inspector-empty__reticle" aria-hidden="true">
         <Crosshair size={29} strokeWidth={1.2} />
       </span>
       <div>
-        <strong>No target selected</strong>
-        <p>Choose a world, star or deep-space object to inspect it.</p>
+        <strong>{t('inspector.emptyTitle')}</strong>
+        <p>{t('inspector.emptyDescription')}</p>
       </div>
-      <div className="se-key-hint" aria-label="Keyboard shortcut: slash">
+      <div className="se-key-hint" aria-label={t('inspector.searchShortcut')}>
         <kbd>/</kbd>
-        <span>Open universal search</span>
+        <span>{t('inspector.openSearch')}</span>
       </div>
     </div>
   )
 }
 
-const INSPECTOR_TABS: Array<{ id: InspectorTab; label: string }> = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'physics', label: 'Physics' },
-  { id: 'orbit', label: 'Orbit' },
-]
+const INSPECTOR_TABS: InspectorTab[] = ['overview', 'physics', 'orbit']
 
 interface InspectorMetricGridProps {
   metrics: CelestialMetric[]
@@ -573,6 +568,8 @@ function InspectorMetricSection({
   section,
   headingId,
 }: InspectorMetricSectionProps) {
+  const { i18n } = useTranslation('hud')
+  const intlLocale = localeOption(i18n.resolvedLanguage).intlLocale
   if (section.metrics.length === 0 && !section.summary) return null
 
   return (
@@ -583,7 +580,10 @@ function InspectorMetricSection({
         </span>
         {section.metrics.length > 0 && (
           <span aria-hidden="true">
-            {section.metrics.length.toString().padStart(2, '0')}
+            {section.metrics.length.toLocaleString(intlLocale, {
+              minimumIntegerDigits: 2,
+              useGrouping: false,
+            })}
           </span>
         )}
       </div>
@@ -623,6 +623,8 @@ function InspectorOverview({
   sections,
   idBase,
 }: InspectorOverviewProps) {
+  const { t, i18n } = useTranslation('hud')
+  const intlLocale = localeOption(i18n.resolvedLanguage).intlLocale
   const atmosphere = object.atmosphere
   const habitability = object.habitability
   const provenance = object.provenance
@@ -640,12 +642,12 @@ function InspectorOverview({
           aria-labelledby={
             object.classification ? `${idBase}-classification` : undefined
           }
-          aria-label={object.classification ? undefined : 'Object status'}
+          aria-label={object.classification ? undefined : t('inspector.objectStatus')}
         >
           {object.classification && (
             <div>
               <span className="se-section-label" id={`${idBase}-classification`}>
-                Classification
+                {t('inspector.classification')}
               </span>
               <strong>{object.classification.label}</strong>
               {object.classification.detail && (
@@ -666,7 +668,7 @@ function InspectorOverview({
         >
           <div className="se-science-section__heading">
             <span className="se-section-label" id={`${idBase}-quick-facts`}>
-              Quick facts
+              {t('inspector.quickFacts')}
             </span>
           </div>
           <InspectorMetricGrid metrics={quickFacts} compact />
@@ -688,7 +690,7 @@ function InspectorOverview({
         >
           <div className="se-science-section__heading">
             <span className="se-section-label" id={`${idBase}-atmosphere`}>
-              Atmosphere
+              {t('inspector.atmosphere')}
             </span>
             {atmosphere.pressure && <span>{atmosphere.pressure}</span>}
           </div>
@@ -696,7 +698,10 @@ function InspectorOverview({
             <p className="se-science-section__summary">{atmosphere.summary}</p>
           )}
           {atmosphere.composition && atmosphere.composition.length > 0 && (
-            <ul className="se-atmosphere__composition" aria-label="Atmospheric composition">
+            <ul
+              className="se-atmosphere__composition"
+              aria-label={t('inspector.atmosphereComposition')}
+            >
               {atmosphere.composition.map((component, index) => (
                 <li key={`${component.species}-${component.amount ?? index}`}>
                   <span>{component.species}</span>
@@ -715,7 +720,7 @@ function InspectorOverview({
         >
           <div className="se-habitability__heading">
             <span className="se-section-label" id={`${idBase}-habitability`}>
-              Habitability
+              {t('inspector.habitability')}
             </span>
             <span
               className={joinClassNames(
@@ -732,9 +737,13 @@ function InspectorOverview({
                 min="0"
                 max="100"
                 value={habitabilityScore}
-                aria-label={`Habitability score ${habitabilityScore} out of 100`}
+                aria-label={t('inspector.habitabilityScore', {
+                  score: habitabilityScore.toLocaleString(intlLocale),
+                })}
               />
-              <strong>{Math.round(habitabilityScore)} / 100</strong>
+              <strong>
+                {Math.round(habitabilityScore).toLocaleString(intlLocale)} / 100
+              </strong>
             </div>
           )}
           {habitability.summary && (
@@ -758,7 +767,7 @@ function InspectorOverview({
           <Database size={15} strokeWidth={1.5} aria-hidden="true" />
           <div>
             <span className="se-section-label" id={`${idBase}-provenance`}>
-              Data provenance
+              {t('inspector.provenance')}
             </span>
             <strong>{provenance.source}</strong>
             {(provenance.method || provenance.confidence) && (
@@ -785,10 +794,6 @@ interface CameraContextBarProps {
   onSystemOverview?: () => void
 }
 
-function cameraModeLabel(mode: BodyCenteredViewMode): string {
-  return mode === 'orbit' ? 'Orbit tracking' : 'Close approach'
-}
-
 function CameraContextBar({
   cameraView,
   cameraFrameMode,
@@ -797,6 +802,10 @@ function CameraContextBar({
   onReturnToPreviousView,
   onSystemOverview,
 }: CameraContextBarProps) {
+  const { t, i18n } = useTranslation('hud')
+  const intlLocale = localeOption(i18n.resolvedLanguage).intlLocale
+  const cameraModeLabel = (mode: BodyCenteredViewMode) =>
+    t(mode === 'orbit' ? 'camera.orbitTracking' : 'camera.closeApproach')
   const closeApproachAvailable =
     cameraView?.closeApproachAvailable !== false
   const transitioning = cameraView
@@ -804,27 +813,32 @@ function CameraContextBar({
     : cameraFrameTransitioning
   const freeFlight = !cameraView && cameraFrameMode === 'free'
   const previousViewLabel =
-    cameraView?.previousViewLabel?.trim() || 'previous view'
+    cameraView?.previousViewLabel?.trim() || t('camera.previousViewFallback')
   const centeredDesignation = cameraView?.centeredObject.designation?.trim()
   const cameraModeDetail = cameraView
     ? transitioning
-      ? `Preparing ${cameraModeLabel(cameraView.mode).toLocaleLowerCase()}`
+      ? t('camera.preparingMode', {
+          mode: cameraModeLabel(cameraView.mode).toLocaleLowerCase(intlLocale),
+        })
       : cameraModeLabel(cameraView.mode)
     : freeFlight
-      ? 'Body tracking unlocked'
-      : 'System frame · Body tracking unlocked'
+      ? t('camera.bodyTrackingUnlocked')
+      : t('camera.systemUnlocked')
 
   const cameraAnnouncement = cameraView
     ? transitioning
-      ? `Centering on ${cameraView.centeredObject.name}`
-      : `Centered on ${cameraView.centeredObject.name}, ${cameraModeLabel(cameraView.mode)}`
+      ? t('camera.centerOn', { name: cameraView.centeredObject.name })
+      : t('camera.centeredAnnouncement', {
+          name: cameraView.centeredObject.name,
+          mode: cameraModeLabel(cameraView.mode),
+        })
     : freeFlight
       ? transitioning
-        ? 'Returning to free-flight view'
-        : 'Free flight'
+        ? t('camera.returnFree')
+        : t('camera.freeFlight')
       : transitioning
-        ? 'Returning to system overview'
-        : 'System overview'
+        ? t('camera.returnSystem')
+        : t('camera.systemOverview')
 
   return (
     <>
@@ -843,10 +857,10 @@ function CameraContextBar({
         )}
         aria-label={
           cameraView
-            ? 'Body-centered camera controls'
+            ? t('camera.bodyControls')
             : freeFlight
-              ? 'Free-flight camera controls'
-              : 'System camera controls'
+              ? t('camera.freeControls')
+              : t('camera.systemControls')
         }
         aria-busy={transitioning || undefined}
       >
@@ -859,19 +873,23 @@ function CameraContextBar({
             <Maximize2 size={18} strokeWidth={1.6} aria-hidden="true" />
           )}
           <p>
-            <span>Camera reference</span>
+            <span>{t('camera.reference')}</span>
             <strong>
               {cameraView
                 ? transitioning
-                  ? `Centering on ${cameraView.centeredObject.name}…`
-                  : `Centered on ${cameraView.centeredObject.name}`
+                  ? t('camera.centerOnEllipsis', {
+                      name: cameraView.centeredObject.name,
+                    })
+                  : t('camera.centeredOn', {
+                      name: cameraView.centeredObject.name,
+                    })
                 : transitioning
                   ? freeFlight
-                    ? 'Returning to free-flight view…'
-                    : 'Returning to system overview…'
+                    ? t('camera.returnFreeEllipsis')
+                    : t('camera.returnSystemEllipsis')
                   : freeFlight
-                    ? 'Free flight'
-                    : 'System overview'}
+                    ? t('camera.freeFlight')
+                    : t('camera.systemOverview')}
             </strong>
             <small>
               {[centeredDesignation, cameraModeDetail]
@@ -885,7 +903,9 @@ function CameraContextBar({
           <div
             className="se-camera-mode-switch"
             role="group"
-            aria-label={`View mode for ${cameraView.centeredObject.name}`}
+            aria-label={t('camera.viewModeFor', {
+              name: cameraView.centeredObject.name,
+            })}
             key="modes"
           >
             <button
@@ -899,12 +919,12 @@ function CameraContextBar({
               }
               title={
                 cameraView.mode === 'orbit'
-                  ? 'Current view: orbit tracking'
-                  : 'Track from orbit (G)'
+                  ? t('camera.currentOrbit')
+                  : t('camera.trackOrbit')
               }
             >
               <Orbit size={15} aria-hidden="true" />
-              <span>Orbit</span>
+              <span>{t('camera.orbit')}</span>
               <kbd aria-hidden="true">G</kbd>
             </button>
             <button
@@ -919,14 +939,14 @@ function CameraContextBar({
               }
               title={
                 cameraView.mode === 'close-approach'
-                  ? 'Current view: close approach'
+                  ? t('camera.currentClose')
                   : closeApproachAvailable
-                    ? 'Move to close approach (Shift+G)'
-                    : 'Close approach is unavailable for this body'
+                    ? t('camera.moveClose')
+                    : t('camera.closeUnavailable')
               }
             >
               <ArrowDownToLine size={15} aria-hidden="true" />
-              <span>Close approach</span>
+              <span>{t('camera.closeApproach')}</span>
               <kbd aria-hidden="true">⇧G</kbd>
             </button>
           </div>
@@ -938,11 +958,11 @@ function CameraContextBar({
             type="button"
             onClick={onReturnToPreviousView}
             disabled={transitioning || !onReturnToPreviousView}
-            aria-label={`Return to ${previousViewLabel}`}
-            title={`Return to ${previousViewLabel} (Backspace)`}
+            aria-label={t('camera.returnTo', { view: previousViewLabel })}
+            title={t('camera.returnToTitle', { view: previousViewLabel })}
           >
             <Undo2 size={15} aria-hidden="true" />
-            <span>Previous view</span>
+            <span>{t('camera.previousView')}</span>
           </button>
           <button
             type="button"
@@ -954,12 +974,12 @@ function CameraContextBar({
             }
             title={
               !cameraView && !freeFlight
-                ? 'Current view: system overview'
-                : 'Return to system overview (0)'
+                ? t('camera.currentSystem')
+                : t('camera.returnSystemTitle')
             }
           >
             <Maximize2 size={15} aria-hidden="true" />
-            <span>System overview</span>
+            <span>{t('camera.systemOverview')}</span>
           </button>
         </div>
       </section>
@@ -982,6 +1002,7 @@ export function ObjectInspector({
   onSystemOverview,
   onClear,
 }: ObjectInspectorProps) {
+  const { t } = useTranslation('hud')
   const contentId = useId()
   const tabIdBase = useId()
   const [activeTab, setActiveTab] = useState<InspectorTab>('overview')
@@ -1009,7 +1030,7 @@ export function ObjectInspector({
     if (nextIndex === null) return
     event.preventDefault()
     const nextTab = INSPECTOR_TABS[nextIndex]
-    setActiveTab(nextTab.id)
+    setActiveTab(nextTab)
     event.currentTarget.parentElement
       ?.querySelectorAll<HTMLButtonElement>('[role="tab"]')
       .item(nextIndex)
@@ -1020,7 +1041,7 @@ export function ObjectInspector({
     ? (selectedObject.quickFacts ??
       [
         ...(selectedObject.distance
-          ? [{ label: 'Distance', value: selectedObject.distance }]
+          ? [{ label: t('inspector.distance'), value: selectedObject.distance }]
           : []),
         ...(selectedObject.metrics ?? []),
       ].slice(0, 4))
@@ -1033,7 +1054,7 @@ export function ObjectInspector({
           ? [
               {
                 id: 'legacy-physical-profile',
-                title: 'Physical profile',
+                title: t('inspector.physicalProfile'),
                 tab: 'physics' as const,
                 metrics: selectedObject.metrics,
               },
@@ -1049,16 +1070,16 @@ export function ObjectInspector({
   const observedPosition: CelestialMetric[] = selectedObject
     ? [
         ...(selectedObject.distance
-          ? [{ label: 'Distance', value: selectedObject.distance }]
+          ? [{ label: t('inspector.distance'), value: selectedObject.distance }]
           : []),
         ...(selectedObject.coordinates
           ? [
               {
-                label: 'Right ascension',
+                label: t('inspector.rightAscension'),
                 value: selectedObject.coordinates.rightAscension,
               },
               {
-                label: 'Declination',
+                label: t('inspector.declination'),
                 value: selectedObject.coordinates.declination,
               },
             ]
@@ -1130,12 +1151,12 @@ export function ObjectInspector({
   return (
     <aside
       className={joinClassNames('se-inspector', !open && 'is-collapsed')}
-      aria-label="Selected object inspector"
+      aria-label={t('inspector.region')}
     >
       <button
         className="se-inspector__collapse"
         type="button"
-        aria-label={open ? 'Collapse object inspector' : 'Open object inspector'}
+        aria-label={t(open ? 'inspector.collapse' : 'inspector.open')}
         aria-expanded={open}
         aria-controls={contentId}
         onClick={onToggle}
@@ -1148,17 +1169,19 @@ export function ObjectInspector({
         <div className="se-inspector__content" id={contentId}>
           <div className="se-panel-heading">
             <div>
-              <span className="se-panel-heading__eyebrow">Object analysis</span>
-              <strong>Live telemetry</strong>
+              <span className="se-panel-heading__eyebrow">
+                {t('inspector.eyebrow')}
+              </span>
+              <strong>{t('inspector.telemetry')}</strong>
             </div>
             {selectedObject && (
               <button
                 className="se-quiet-button"
                 type="button"
-                aria-label="Clear selected object"
+                aria-label={t('inspector.clear')}
                 onClick={onClear}
                 disabled={!onClear}
-                title="Clear selection"
+                title={t('inspector.clearTitle')}
               >
                 <X size={16} />
               </button>
@@ -1193,14 +1216,16 @@ export function ObjectInspector({
                 {cameraAware && (
                   <div
                     className="se-object-view-states"
-                    aria-label="Selection and camera state"
+                    aria-label={t('inspector.stateLabel')}
                   >
                     <span className="is-selected">
-                      <Crosshair size={11} aria-hidden="true" /> Selected
+                      <Crosshair size={11} aria-hidden="true" />{' '}
+                      {t('inspector.selected')}
                     </span>
                     {selectedIsCentered && (
                       <span className="is-centered">
-                        <LocateFixed size={11} aria-hidden="true" /> Centered
+                        <LocateFixed size={11} aria-hidden="true" />{' '}
+                        {t('inspector.centered')}
                       </span>
                     )}
                     {cameraView &&
@@ -1208,15 +1233,20 @@ export function ObjectInspector({
                       !cameraTransitioning && (
                         <span
                           className="is-centered"
-                          title={`Camera centered on ${cameraView.centeredObject.name}`}
+                          title={t('inspector.cameraCenteredTitle', {
+                            name: cameraView.centeredObject.name,
+                          })}
                         >
                           <LocateFixed size={11} aria-hidden="true" />
-                          Centered: {cameraView.centeredObject.name}
+                          {t('inspector.centeredOn', {
+                            name: cameraView.centeredObject.name,
+                          })}
                         </span>
                       )}
                     {cameraTargetsSelection && cameraTransitioning && (
                       <span className="is-transitioning">
-                        <Crosshair size={11} aria-hidden="true" /> Centering
+                        <Crosshair size={11} aria-hidden="true" />{' '}
+                        {t('inspector.centering')}
                       </span>
                     )}
                     {cameraView &&
@@ -1224,10 +1254,14 @@ export function ObjectInspector({
                       cameraTransitioning && (
                         <span
                           className="is-transitioning"
-                          title={`Camera centering on ${cameraView.centeredObject.name}`}
+                          title={t('inspector.cameraCenteringTitle', {
+                            name: cameraView.centeredObject.name,
+                          })}
                         >
                           <Crosshair size={11} aria-hidden="true" />
-                          Centering: {cameraView.centeredObject.name}
+                          {t('inspector.centeringOn', {
+                            name: cameraView.centeredObject.name,
+                          })}
                         </span>
                       )}
                   </div>
@@ -1238,41 +1272,49 @@ export function ObjectInspector({
                 <>
                   <dl className="se-object-camera-context">
                     <div>
-                      <dt>Selected</dt>
+                      <dt>{t('camera.selected')}</dt>
                       <dd>{selectedObject.name}</dd>
                     </div>
                     <div>
-                      <dt>Camera</dt>
+                      <dt>{t('camera.camera')}</dt>
                       <dd>
                         {cameraView ? (
                           <>
                             {cameraTransitioning
-                              ? `Centering on ${cameraView.centeredObject.name}…`
-                              : `Centered on ${cameraView.centeredObject.name}`}
+                              ? t('camera.centerOnEllipsis', {
+                                  name: cameraView.centeredObject.name,
+                                })
+                              : t('camera.centeredOn', {
+                                  name: cameraView.centeredObject.name,
+                                })}
                             <small>
                               {cameraTransitioning
-                                ? 'Camera transition in progress'
-                                : cameraModeLabel(cameraView.mode)}
+                                ? t('camera.transitionInProgress')
+                                : t(
+                                    cameraView.mode === 'orbit'
+                                      ? 'camera.orbitTracking'
+                                      : 'camera.closeApproach',
+                                  )}
                             </small>
                           </>
                         ) : (
                           <>
                             {cameraTransitioning
                               ? freeFlight
-                                ? 'Returning to free-flight view…'
-                                : 'Returning to system overview…'
+                                ? t('camera.returnFreeEllipsis')
+                                : t('camera.returnSystemEllipsis')
                               : freeFlight
-                                ? 'Free flight'
+                                ? t('camera.freeFlight')
                                 : cameraFrameMode === 'system' ||
                                     systemOverviewTransitioning === false
-                                  ? 'System overview'
-                                  : 'System frame'}
+                                  ? t('camera.systemOverview')
+                                  : t('camera.systemFrame')}
                             <small>
                               {cameraTransitioning
-                                ? 'Camera transition in progress'
+                                ? t('camera.transitionInProgress')
                                 : freeFlight
-                                  ? 'Body tracking unlocked'
-                                  : 'Camera is not locked to a body'}
+                                  ? t('camera.bodyTrackingUnlocked')
+                                  : t('camera.notLocked')}
                             </small>
                           </>
                         )}
@@ -1283,7 +1325,9 @@ export function ObjectInspector({
                   <div
                     className="se-inspector-camera-actions"
                     role="group"
-                    aria-label={`Center camera on ${selectedObject.name}`}
+                    aria-label={t('camera.centerCameraOn', {
+                      name: selectedObject.name,
+                    })}
                     aria-busy={cameraTransitioning || undefined}
                   >
                     <button
@@ -1298,23 +1342,23 @@ export function ObjectInspector({
                         cameraTransitioning ||
                         orbitIsCurrent
                       }
-                      title="Center selected body in orbit view (G)"
+                      title={t('camera.orbitSelectedTitle')}
                     >
                       <Orbit size={16} aria-hidden="true" />
                       <span>
                         <strong>
                           {orbitIsCurrent
-                            ? 'Current view'
+                            ? t('camera.currentView')
                             : orbitIsTransitioning
-                            ? 'Centering…'
-                            : 'Orbit'}
+                              ? `${t('inspector.centering')}…`
+                              : t('camera.orbit')}
                         </strong>
                         <small>
                           {orbitIsCurrent
-                            ? 'Orbit tracking'
+                            ? t('camera.orbitTracking')
                             : orbitIsTransitioning
-                            ? selectedObject.name
-                            : 'Track selected body'}
+                              ? selectedObject.name
+                              : t('camera.trackSelected')}
                         </small>
                       </span>
                       <kbd aria-hidden="true">G</kbd>
@@ -1333,25 +1377,25 @@ export function ObjectInspector({
                       }
                       title={
                         closeApproachAvailable
-                          ? 'Center selected body at close approach (Shift+G)'
-                          : 'Close approach is unavailable for this body'
+                          ? t('camera.closeSelectedTitle')
+                          : t('camera.closeUnavailable')
                       }
                     >
                       <ArrowDownToLine size={16} aria-hidden="true" />
                       <span>
                         <strong>
                           {closeApproachIsCurrent
-                            ? 'Current view'
+                            ? t('camera.currentView')
                             : closeApproachIsTransitioning
-                            ? 'Centering…'
-                            : 'Close approach'}
+                              ? `${t('inspector.centering')}…`
+                              : t('camera.closeApproach')}
                         </strong>
                         <small>
                           {closeApproachIsCurrent
-                            ? 'Close approach'
+                            ? t('camera.closeApproach')
                             : closeApproachIsTransitioning
-                            ? selectedObject.name
-                            : 'Near-body inspection'}
+                              ? selectedObject.name
+                              : t('camera.nearBodyInspection')}
                         </small>
                       </span>
                       <kbd aria-hidden="true">⇧G</kbd>
@@ -1366,25 +1410,29 @@ export function ObjectInspector({
                   disabled={!onFocus}
                 >
                   <LocateFixed size={17} />
-                  Center target
+                  {t('inspector.centerTarget')}
                   <span aria-hidden="true">G</span>
                 </button>
               )}
 
-              <div className="se-inspector-tabs" role="tablist" aria-label="Scientific data views">
+              <div
+                className="se-inspector-tabs"
+                role="tablist"
+                aria-label={t('inspector.tabsLabel')}
+              >
                 {INSPECTOR_TABS.map((tab, index) => (
                   <button
-                    key={tab.id}
-                    id={`${tabIdBase}-${tab.id}-tab`}
+                    key={tab}
+                    id={`${tabIdBase}-${tab}-tab`}
                     type="button"
                     role="tab"
-                    aria-selected={activeTab === tab.id}
-                    aria-controls={`${tabIdBase}-${tab.id}-panel`}
-                    tabIndex={activeTab === tab.id ? 0 : -1}
-                    onClick={() => setActiveTab(tab.id)}
+                    aria-selected={activeTab === tab}
+                    aria-controls={`${tabIdBase}-${tab}-panel`}
+                    tabIndex={activeTab === tab ? 0 : -1}
+                    onClick={() => setActiveTab(tab)}
                     onKeyDown={(event) => handleTabKeyDown(event, index)}
                   >
-                    {tab.label}
+                    {t(`inspector.tabs.${tab}`)}
                   </button>
                 ))}
               </div>
@@ -1423,7 +1471,7 @@ export function ObjectInspector({
                   ))
                 ) : (
                   <InspectorTabEmpty>
-                    No physical measurements are available for this object.
+                    {t('inspector.noPhysics')}
                   </InspectorTabEmpty>
                 )}
               </div>
@@ -1449,7 +1497,7 @@ export function ObjectInspector({
                         className="se-section-label"
                         id={`${tabIdBase}-observed-position`}
                       >
-                        Reference distance
+                        {t('inspector.referenceDistance')}
                       </span>
                     </div>
                     <InspectorMetricGrid metrics={observedPosition} />
@@ -1466,7 +1514,7 @@ export function ObjectInspector({
                   observedPosition.length === 0 &&
                   orbitSections.length === 0 && (
                     <InspectorTabEmpty>
-                      No orbital solution is available for this object.
+                      {t('inspector.noOrbit')}
                     </InspectorTabEmpty>
                   )}
               </div>
@@ -1486,13 +1534,30 @@ export function TimeControls({
   onTimeScaleChange,
   onResetTime,
 }: TimeControlsProps) {
+  const { t, i18n } = useTranslation('hud')
+  const intlLocale = localeOption(i18n.resolvedLanguage).intlLocale
+  const simulationTimeFormatter = useMemo(
+    () => new Intl.DateTimeFormat(intlLocale, {
+      dateStyle: 'medium',
+      timeStyle: 'medium',
+      timeZone: 'UTC',
+    }),
+    [intlLocale],
+  )
+
   return (
-    <section className="se-time-controls" aria-label="Simulation time controls">
+    <section className="se-time-controls" aria-label={t('time.region')}>
       <div className="se-time-controls__date">
         <Clock3 size={15} aria-hidden="true" />
         <div>
-          <span>Simulation time</span>
-          <strong>{formatSimulationTime(simulationTime)}</strong>
+          <span>{t('time.label')}</span>
+          <strong>
+            {formatSimulationTime(
+              simulationTime,
+              simulationTimeFormatter,
+              t('time.unavailable'),
+            )}
+          </strong>
         </div>
       </div>
 
@@ -1500,19 +1565,19 @@ export function TimeControls({
         <button
           className="se-transport-button"
           type="button"
-          aria-label="Decrease time scale"
+          aria-label={t('time.decrease')}
           onClick={() =>
             onTimeScaleChange?.(adjacentTimeScale(timeScale, -1))
           }
           disabled={!onTimeScaleChange}
-          title="Decrease time scale"
+          title={t('time.decrease')}
         >
           <Rewind size={17} />
         </button>
         <button
           className="se-transport-button se-transport-button--primary"
           type="button"
-          aria-label={paused ? 'Resume simulation' : 'Pause simulation'}
+          aria-label={t(paused ? 'time.resume' : 'time.pause')}
           aria-pressed={paused}
           onClick={onTogglePause}
           disabled={!onTogglePause}
@@ -1522,29 +1587,29 @@ export function TimeControls({
         <button
           className="se-transport-button"
           type="button"
-          aria-label="Increase time scale"
+          aria-label={t('time.increase')}
           onClick={() => onTimeScaleChange?.(adjacentTimeScale(timeScale, 1))}
           disabled={!onTimeScaleChange}
-          title="Increase time scale"
+          title={t('time.increase')}
         >
           <FastForward size={17} />
         </button>
       </div>
 
       <div className="se-time-controls__scale">
-        <span>Time scale</span>
+        <span>{t('time.scale')}</span>
         <strong aria-live="polite">
-          {paused ? 'Paused' : formatTimeScale(timeScale)}
+          {paused ? t('time.paused') : formatTimeScale(timeScale, intlLocale)}
         </strong>
       </div>
 
       <button
         className="se-icon-button se-time-controls__reset"
         type="button"
-        aria-label="Reset simulation time"
+        aria-label={t('time.reset')}
         onClick={onResetTime}
         disabled={!onResetTime}
-        title="Return to real time"
+        title={t('time.realTime')}
       >
         <Clock3 size={17} />
       </button>
@@ -1562,12 +1627,15 @@ function WelcomePanel({
   WelcomeOverlayProps,
   'onClose' | 'onBeginExploring' | 'onOpenQuickTour'
 > & { titleId: string; descriptionId: string }) {
+  const { t } = useTranslation('hud')
+
   return (
     <div className="se-welcome-card">
+      <OverlayLocaleSelect />
       <button
         className="se-overlay-close"
         type="button"
-        aria-label="Close welcome screen"
+        aria-label={t('welcome.close')}
         onClick={onClose}
         disabled={!onClose}
       >
@@ -1578,36 +1646,36 @@ function WelcomePanel({
         <Orbit size={42} strokeWidth={1.15} />
         <span />
       </div>
-      <div className="se-welcome-card__eyebrow">
-        WebGPU universe simulator
-      </div>
-      <h1 id={titleId}>Every horizon is reachable.</h1>
+      <div className="se-welcome-card__eyebrow">{t('welcome.eyebrow')}</div>
+      <h1 id={titleId}>{t('welcome.title')}</h1>
       <p className="se-welcome-card__lede" id={descriptionId}>
-        Cross astronomical scales, study procedural worlds and move from a
-        system-wide observatory to precise near-body views without breaking
-        the journey.
+        {t('welcome.description')}
       </p>
 
-      <div className="se-capabilities" role="group" aria-label="Core capabilities">
+      <div
+        className="se-capabilities"
+        role="group"
+        aria-label={t('welcome.capabilities')}
+      >
         <div>
           <Maximize2 size={17} aria-hidden="true" />
           <span>
-            <strong>Seamless navigation</strong>
-            System to close approach
+            <strong>{t('welcome.navigationTitle')}</strong>
+            {t('welcome.navigationDetail')}
           </span>
         </div>
         <div>
           <Sparkles size={17} aria-hidden="true" />
           <span>
-            <strong>Model-rich worlds</strong>
-            Physics + procedural detail
+            <strong>{t('welcome.worldsTitle')}</strong>
+            {t('welcome.worldsDetail')}
           </span>
         </div>
         <div>
           <Zap size={17} aria-hidden="true" />
           <span>
-            <strong>GPU native</strong>
-            Compute driven
+            <strong>{t('welcome.gpuTitle')}</strong>
+            {t('welcome.gpuDetail')}
           </span>
         </div>
       </div>
@@ -1619,7 +1687,7 @@ function WelcomePanel({
           onClick={onBeginExploring}
           disabled={!onBeginExploring}
         >
-          Begin exploration
+          {t('welcome.begin')}
           <ChevronRight size={18} />
         </button>
         <button
@@ -1629,12 +1697,12 @@ function WelcomePanel({
           disabled={!onOpenQuickTour}
         >
           <HelpCircle size={17} />
-          Take the 30-second tour
+          {t('welcome.tour')}
         </button>
       </div>
 
       <small className="se-welcome-card__note">
-        Mouse + keyboard recommended · Touch controls supported
+        {t('welcome.note')}
       </small>
     </div>
   )
@@ -1651,9 +1719,13 @@ function QuickTourPanel({
   WelcomeOverlayProps,
   'tourStep' | 'onClose' | 'onBeginExploring' | 'onTourStepChange'
 > & { titleId: string; descriptionId: string }) {
+  const { t, i18n } = useTranslation('hud')
   const normalizedStep = Number.isFinite(tourStep) ? Math.trunc(tourStep) : 0
   const safeStep = Math.min(Math.max(0, normalizedStep), TOUR_STEPS.length - 1)
   const current = TOUR_STEPS[safeStep]
+  const currentEyebrow = t(`tour.steps.${current.key}Eyebrow`)
+  const currentTitle = t(`tour.steps.${current.key}Title`)
+  const currentDescription = t(`tour.steps.${current.key}Description`)
   const CurrentIcon = current.icon
   const isLastStep = safeStep === TOUR_STEPS.length - 1
 
@@ -1667,29 +1739,36 @@ function QuickTourPanel({
 
       <div className="se-tour-card__content">
         <div className="se-tour-card__topline">
-          <span>Field guide</span>
-          <button
-            className="se-quiet-button"
-            type="button"
-            aria-label="Close quick tour"
-            onClick={onClose}
-            disabled={!onClose}
-          >
-            <X size={17} />
-          </button>
+          <span>{t('tour.fieldGuide')}</span>
+          <div className="se-tour-card__topline-actions">
+            <OverlayLocaleSelect />
+            <button
+              className="se-quiet-button"
+              type="button"
+              aria-label={t('tour.close')}
+              onClick={onClose}
+              disabled={!onClose}
+            >
+              <X size={17} />
+            </button>
+          </div>
         </div>
 
-        <div className="se-tour-card__step">{current.eyebrow}</div>
-        <h2 id={titleId}>{current.title}</h2>
-        <p id={descriptionId}>{current.description}</p>
+        <div className="se-tour-card__step">{currentEyebrow}</div>
+        <h2 id={titleId}>{currentTitle}</h2>
+        <p id={descriptionId}>{currentDescription}</p>
 
-        <div className="se-tour-progress" aria-label="Tour progress">
+        <div className="se-tour-progress" aria-label={t('tour.progress')}>
           {TOUR_STEPS.map((step, index) => (
             <button
               className={joinClassNames(index === safeStep && 'is-active')}
-              key={step.eyebrow}
+              key={step.key}
               type="button"
-              aria-label={`Go to tour step ${index + 1}`}
+              aria-label={t('tour.goToStep', {
+                step: (index + 1).toLocaleString(
+                  localeOption(i18n.resolvedLanguage).intlLocale,
+                ),
+              })}
               aria-current={index === safeStep ? 'step' : undefined}
               onClick={() => onTourStepChange?.(index)}
               disabled={!onTourStepChange}
@@ -1705,7 +1784,7 @@ function QuickTourPanel({
             disabled={safeStep === 0 || !onTourStepChange}
           >
             <ChevronLeft size={17} />
-            Back
+            {t('tour.back')}
           </button>
           {isLastStep ? (
             <button
@@ -1714,7 +1793,7 @@ function QuickTourPanel({
               onClick={onBeginExploring}
               disabled={!onBeginExploring}
             >
-              Enter universe
+              {t('tour.enter')}
               <ChevronRight size={17} />
             </button>
           ) : (
@@ -1724,13 +1803,41 @@ function QuickTourPanel({
               onClick={() => onTourStepChange?.(safeStep + 1)}
               disabled={!onTourStepChange}
             >
-              Next
+              {t('tour.next')}
               <ChevronRight size={17} />
             </button>
           )}
         </div>
       </div>
     </div>
+  )
+}
+
+function OverlayLocaleSelect() {
+  const { t, i18n } = useTranslation('hud')
+  const locale = localeOption(i18n.resolvedLanguage).code
+
+  const handleLocaleChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    const nextLocale = event.currentTarget.value
+    if (isAppLocale(nextLocale)) void setAppLocale(nextLocale)
+  }
+
+  return (
+    <label className="se-overlay-locale" title={t('locale.label')}>
+      <Globe2 size={14} aria-hidden="true" />
+      <span className="se-sr-only">{t('locale.label')}</span>
+      <select
+        value={locale}
+        onChange={handleLocaleChange}
+        aria-label={t('locale.label')}
+      >
+        {LOCALE_OPTIONS.map((option) => (
+          <option key={option.code} value={option.code} lang={option.htmlLang}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </label>
   )
 }
 

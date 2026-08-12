@@ -395,6 +395,30 @@
   font-size: 9px;
 }
 
+.engine-error button {
+  min-height: 36px;
+  margin-top: 10px;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 136, 123, 0.42);
+  border-radius: 7px;
+  color: #ffe7e3;
+  background: rgba(255, 136, 123, 0.12);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.engine-error button:hover {
+  background: rgba(255, 136, 123, 0.2);
+}
+
+.engine-error button:focus-visible {
+  outline: 2px solid #ff9c90;
+  outline-offset: 2px;
+}
+
 @media (max-width: 1180px) {
   .system-navigator {
     width: 218px;
@@ -2477,6 +2501,48 @@
   border-top: 1px solid var(--tool-line);
 }
 
+.product-language-settings {
+  display: grid;
+  gap: 7px;
+  padding: 11px;
+  background:
+    linear-gradient(135deg, rgba(123, 232, 237, 0.075), transparent 72%),
+    rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(123, 232, 237, 0.18);
+  border-radius: 7px;
+}
+
+.product-language-settings > label {
+  color: var(--tool-text);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.product-language-settings > select {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 34px 0 11px;
+  color: var(--tool-text);
+  font: inherit;
+  font-size: 11px;
+  background: rgba(4, 13, 20, 0.86);
+  border: 1px solid rgba(157, 201, 218, 0.24);
+  border-radius: 5px;
+  color-scheme: dark;
+  cursor: pointer;
+}
+
+.product-language-settings > select:focus-visible {
+  outline: 2px solid var(--tool-cyan);
+  outline-offset: 2px;
+}
+
+.product-language-settings > small {
+  color: var(--tool-faint);
+  font-size: 9px;
+  line-height: 1.45;
+}
+
 .product-calibration-intro {
   margin: 5px 0 10px;
   color: var(--tool-faint);
@@ -2882,6 +2948,10 @@
   .product-settings,
   .product-locations {
     padding: 10px;
+  }
+
+  .product-language-settings > select {
+    min-height: 44px;
   }
 
   .product-target-row__select {

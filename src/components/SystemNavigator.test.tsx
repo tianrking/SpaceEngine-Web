@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NavigationTarget } from '../engine/types'
+import { i18n, setAppLocale, SUPPORTED_LOCALES } from '../i18n'
+import { toolsResources } from '../i18n/namespaces/tools'
 import { SystemNavigator } from './SystemNavigator'
 
 const TARGETS: readonly NavigationTarget[] = [
@@ -23,6 +25,16 @@ const TARGETS: readonly NavigationTarget[] = [
     color: '#ff8e81',
   },
 ]
+
+beforeAll(() => {
+  for (const locale of SUPPORTED_LOCALES) {
+    i18n.addResourceBundle(locale, 'tools', toolsResources[locale], true, true)
+  }
+})
+
+beforeEach(async () => {
+  await setAppLocale('en')
+})
 
 afterEach(cleanup)
 
@@ -136,4 +148,32 @@ describe('SystemNavigator camera state', () => {
       })
     }
   })
+
+  it.each([
+    ['en', 'Asteria system browser', 'Centered on', 'Orbit active'],
+    ['es', 'Explorador del sistema Asteria', 'Centrado en', 'Órbita activa'],
+    ['zh-TW', 'Asteria 系統瀏覽器', '中心為', '軌道視角使用中'],
+    ['fr', 'Navigateur du système Asteria', 'Centré sur', 'Orbite active'],
+  ] as const)(
+    'renders representative navigator copy in %s',
+    async (locale, browserLabel, centeredLabel, actionLabel) => {
+      await setAppLocale(locale)
+      render(
+        <SystemNavigator
+          targets={TARGETS}
+          selectedId="alpha"
+          centeredId="alpha"
+          centeredViewMode="orbit"
+          onSelect={vi.fn()}
+          onFocus={vi.fn()}
+        />,
+      )
+
+      expect(
+        screen.getByRole('complementary', { name: browserLabel }),
+      ).toBeTruthy()
+      expect(screen.getByText(centeredLabel)).toBeTruthy()
+      expect(screen.getByRole('button', { name: actionLabel })).toBeTruthy()
+    },
+  )
 })

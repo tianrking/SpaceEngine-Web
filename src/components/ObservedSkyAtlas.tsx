@@ -9,10 +9,12 @@ import {
   type PointerEvent,
 } from 'react'
 import { Crosshair, Database, Orbit, SearchX, Sparkles } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import type {
   ProgressiveHostSkyIndex,
   ProgressiveHostSkyTuple,
 } from '../data/progressiveExoplanetCatalog'
+import { localeOption } from '../i18n'
 
 const HOST = 0
 const RA_DEG = 1
@@ -64,32 +66,26 @@ function pointAlpha(distancePc: number | null): number {
   return clamp(0.94 - Math.log10(distancePc + 1) * 0.18, 0.34, 0.9)
 }
 
-function displayDistance(value: number | null): string {
-  if (value === null) return 'Not reported'
-  return `${value.toLocaleString('en-US', { maximumFractionDigits: 1 })} pc`
+function displayDistance(value: number | null, intlLocale: string, notReported: string): string {
+  if (value === null) return notReported
+  return `${value.toLocaleString(intlLocale, { maximumFractionDigits: 1 })} pc`
 }
 
-function displayRightAscension(value: number | null): string {
-  if (value === null) return 'Not reported'
+function displayRightAscension(value: number | null, notReported: string): string {
+  if (value === null) return notReported
   const totalHours = value / 15
   const hours = Math.floor(totalHours)
   const minutes = Math.floor((totalHours - hours) * 60)
   return `${String(hours).padStart(2, '0')}h ${String(minutes).padStart(2, '0')}m`
 }
 
-function displayDeclination(value: number | null): string {
-  if (value === null) return 'Not reported'
+function displayDeclination(value: number | null, notReported: string): string {
+  if (value === null) return notReported
   const sign = value < 0 ? '−' : '+'
   const absolute = Math.abs(value)
   const degrees = Math.floor(absolute)
   const minutes = Math.floor((absolute - degrees) * 60)
   return `${sign}${String(degrees).padStart(2, '0')}° ${String(minutes).padStart(2, '0')}′`
-}
-
-function sourceLabel(source: ObservedSkyAtlasProps['source']): string {
-  if (source === 'memory') return 'Worker memory'
-  if (source === 'offline-storage') return 'Offline storage'
-  return 'Verified network asset'
 }
 
 function nearestPoint(
@@ -117,6 +113,9 @@ export const ObservedSkyAtlas = memo(function ObservedSkyAtlas({
   source,
   onOpenHost,
 }: ObservedSkyAtlasProps) {
+  const { t, i18n } = useTranslation('nasa')
+  const intlLocale = localeOption(i18n.resolvedLanguage).intlLocale
+  const notReported = t('common.notReported')
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const pointerFrame = useRef<number | null>(null)
   const [size, setSize] = useState({ width: 0, height: 0 })
@@ -241,8 +240,8 @@ export const ObservedSkyAtlas = memo(function ObservedSkyAtlas({
     }
 
     context.fillStyle = 'rgba(173, 221, 220, .58)'
-    context.fillText('ICRS · RA increases ←', 8, size.height - 17)
-  }, [hoveredHost, points, selected, size.height, size.width])
+    context.fillText(t('atlas.axisHint'), 8, size.height - 17)
+  }, [hoveredHost, points, selected, size.height, size.width, t])
 
   useEffect(
     () => () => {
@@ -300,12 +299,22 @@ export const ObservedSkyAtlas = memo(function ObservedSkyAtlas({
     <section className="observed-sky-atlas" aria-labelledby="observed-sky-title">
       <header>
         <div>
-          <span><Sparkles size={12} aria-hidden="true" /> Observed host sky</span>
-          <h3 id="observed-sky-title">ICRS discovery atlas</h3>
+          <span><Sparkles size={12} aria-hidden="true" /> {t('atlas.eyebrow')}</span>
+          <h3 id="observed-sky-title">{t('atlas.title')}</h3>
         </div>
         <div className="observed-sky-atlas__runtime">
-          <span>{records.length.toLocaleString()} / {index.records.length.toLocaleString()} hosts</span>
-          <span>{loadMs.toFixed(1)} ms · {sourceLabel(source)}</span>
+          <span>{t('atlas.hosts', {
+            visible: records.length.toLocaleString(intlLocale),
+            total: index.records.length.toLocaleString(intlLocale),
+          })}</span>
+          <span>{t('atlas.runtime', {
+            ms: loadMs.toLocaleString(intlLocale, { maximumFractionDigits: 1 }),
+            source: t(source === 'memory'
+              ? 'atlas.sourceMemory'
+              : source === 'offline-storage'
+                ? 'atlas.sourceOffline'
+                : 'atlas.sourceNetwork'),
+          })}</span>
         </div>
       </header>
 
@@ -317,7 +326,9 @@ export const ObservedSkyAtlas = memo(function ObservedSkyAtlas({
               tabIndex={0}
               role="img"
               aria-describedby="observed-sky-instructions"
-              aria-label={`Interactive ICRS map of ${records.length.toLocaleString()} NASA exoplanet host systems`}
+              aria-label={t('atlas.canvasLabel', {
+                count: records.length.toLocaleString(intlLocale),
+              })}
               onPointerMove={handlePointerMove}
               onPointerLeave={() => setHoveredHost(null)}
               onClick={(event) => {
@@ -329,32 +340,37 @@ export const ObservedSkyAtlas = memo(function ObservedSkyAtlas({
             {hoveredHost ? <span className="observed-sky-atlas__hover">{hoveredHost}</span> : null}
           </div>
           <p id="observed-sky-instructions" className="observed-sky-atlas__instructions">
-            Select a point, or focus the map and use arrow keys. Press Enter to open the host’s
-            verified planet records. Point size encodes known planets; colour follows reported
-            spectral class when available. This is a discovery map of confirmed planet hosts,
-            not a statistically complete census of nearby stars.
+            {t('atlas.instructions')}
           </p>
 
           {selected ? (
             <article className="observed-sky-selection" aria-live="polite">
               <div className="observed-sky-selection__heading">
-                <span><Crosshair size={12} aria-hidden="true" /> Observed host</span>
+                <span><Crosshair size={12} aria-hidden="true" /> {t('atlas.observedHost')}</span>
                 <strong>{selected[HOST]}</strong>
                 <small>
-                  {selected[SPECTRAL_TYPE] ?? 'Spectral type not consistently reported'}
-                  {' · '}{selected[PLANET_COUNT]} confirmed planet{selected[PLANET_COUNT] === 1 ? '' : 's'}
+                  {selected[SPECTRAL_TYPE] ?? t('atlas.spectralMissing')}
+                  {' · '}{t(
+                    selected[PLANET_COUNT] === 1
+                      ? 'atlas.planetCount_one'
+                      : 'atlas.planetCount_other',
+                    { count: selected[PLANET_COUNT] },
+                  )}
                 </small>
               </div>
               <dl>
-                <div><dt>Right ascension</dt><dd>{displayRightAscension(selected[RA_DEG])}</dd></div>
-                <div><dt>Declination</dt><dd>{displayDeclination(selected[DEC_DEG])}</dd></div>
-                <div><dt>Distance</dt><dd>{displayDistance(selected[DISTANCE_PC])}</dd></div>
+                <div><dt>{t('atlas.rightAscension')}</dt><dd>{displayRightAscension(selected[RA_DEG], notReported)}</dd></div>
+                <div><dt>{t('atlas.declination')}</dt><dd>{displayDeclination(selected[DEC_DEG], notReported)}</dd></div>
+                <div><dt>{t('atlas.distance')}</dt><dd>{displayDistance(selected[DISTANCE_PC], intlLocale, notReported)}</dd></div>
                 <div>
                   <dt>Gaia G</dt>
-                  <dd>{selected[GAIA_MAGNITUDE]?.toFixed(2) ?? 'Not reported'}</dd>
+                  <dd>{selected[GAIA_MAGNITUDE]?.toLocaleString(intlLocale, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  }) ?? notReported}</dd>
                 </div>
-                <div><dt>System stars</dt><dd>{selected[STAR_COUNT] ?? 'Not reported'}</dd></div>
-                <div><dt>Coordinate frame</dt><dd>ICRS</dd></div>
+                <div><dt>{t('atlas.systemStars')}</dt><dd>{selected[STAR_COUNT]?.toLocaleString(intlLocale) ?? notReported}</dd></div>
+                <div><dt>{t('atlas.coordinateFrame')}</dt><dd>ICRS</dd></div>
               </dl>
               {selected[GAIA_DR3] ? (
                 <p className="observed-sky-selection__identity">
@@ -363,12 +379,11 @@ export const ObservedSkyAtlas = memo(function ObservedSkyAtlas({
               ) : null}
               {selected[CONFLICT_FIELDS] ? (
                 <p className="observed-sky-selection__quality">
-                  Composite rows disagree on {selected[CONFLICT_FIELDS]}; the conflicting summary
-                  field is intentionally omitted.
+                  {t('atlas.conflict', { fields: selected[CONFLICT_FIELDS] })}
                 </p>
               ) : null}
               <button type="button" onClick={() => onOpenHost(selected[HOST])}>
-                <Orbit size={13} aria-hidden="true" /> Open verified system records
+                <Orbit size={13} aria-hidden="true" /> {t('atlas.open')}
               </button>
             </article>
           ) : null}
@@ -376,8 +391,8 @@ export const ObservedSkyAtlas = memo(function ObservedSkyAtlas({
       ) : (
         <div className="observed-sky-atlas__empty" role="status">
           <SearchX size={18} aria-hidden="true" />
-          <strong>No observed host matches this search</strong>
-          <p>Clear or shorten the host name to restore the atlas.</p>
+          <strong>{t('atlas.empty')}</strong>
+          <p>{t('atlas.emptyHint')}</p>
         </div>
       )}
     </section>

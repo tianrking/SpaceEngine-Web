@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { i18n } from '../i18n/i18n'
 import {
   ExplorerHud,
   ObjectInspector,
@@ -46,6 +47,10 @@ const BASE_HUD_PROPS: Pick<
   quality: 'balanced',
   cinematic: false,
 }
+
+beforeEach(async () => {
+  await i18n.changeLanguage('en')
+})
 
 afterEach(() => {
   cleanup()

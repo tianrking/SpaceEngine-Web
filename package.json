@@ -5,18 +5,22 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build && node scripts/generate-service-worker.mjs",
+    "build": "npm run i18n:generate && tsc -b && vite build && node scripts/generate-service-worker.mjs",
     "lint": "oxlint",
     "test": "vitest run --exclude src/data/progressiveCatalogScale.test.ts",
-    "check": "npm run lint && npm run test && npm run catalog:benchmark && npm run build",
+    "check": "npm run lint && npm run test && npm run catalog:benchmark && npm run i18n:check && npm run build",
+    "i18n:check": "node scripts/generate-i18n-packs.mjs --check",
+    "i18n:generate": "node scripts/generate-i18n-packs.mjs",
     "catalog:refresh": "node scripts/refresh-progressive-exoplanet-catalog.mjs",
     "catalog:benchmark": "vitest run src/data/progressiveCatalogScale.test.ts --reporter=verbose --maxWorkers=1",
     "preview": "vite preview"
   },
   "dependencies": {
+    "i18next": "^26.3.6",
     "lucide-react": "^1.31.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "react-i18next": "^17.0.11",
     "simplex-noise": "^4.0.3",
     "three": "^0.185.1",
     "zustand": "^5.0.14"

@@ -1,0 +1,889 @@
+{
+  "version": 1,
+  "locale": "fr",
+  "resources": {
+    "app": {
+      "meta": {
+        "title": "Astral Surveyor · Univers WebGPU",
+        "description": "Explorez un système stellaire procédural WebGPU et un catalogue de recherche d’exoplanètes de la NASA fondé sur des sources.",
+        "imageAlt": "Astral Surveyor explorant le monde à anneaux Orison"
+      },
+      "engine": {
+        "viewportLabel": "Vue interactive de l’univers procédural",
+        "loading": "Compilation des pipelines de l’univers",
+        "errorTitle": "Échec de l’initialisation du moteur de rendu",
+        "errorDetail": "Le moteur de rendu de l’univers n’a pas pu démarrer sur cet appareil.",
+        "retry": "Recharger l’application",
+        "errorAdvice": "Essayez une version récente de Chrome ou Edge avec l’accélération matérielle activée."
+      },
+      "units": {
+        "notAvailable": "Indisponible",
+        "notModeled": "Non modélisé",
+        "systemBarycenter": "Barycentre du système",
+        "fromParent": "{{distance}} depuis {{parent}}",
+        "fromAsteria": "{{distance}} UA depuis Asteria",
+        "retrogradeHours": "h rétrogrades",
+        "days": "jours"
+      },
+      "metrics": {
+        "mass": "Masse",
+        "meanRadius": "Rayon moyen",
+        "meanDensity": "Densité moyenne",
+        "referenceGravity": "Gravité de référence",
+        "earthGravity": "Gravité terrestre",
+        "escapeVelocity": "Vitesse de libération",
+        "meanTemperature": "Température moyenne",
+        "equilibriumTemperature": "Température d’équilibre",
+        "greenhouseOffset": "Écart dû à l’effet de serre",
+        "bondAlbedo": "Albédo de Bond",
+        "referencePressure": "Pression de référence",
+        "internalHeatFlux": "Flux thermique interne",
+        "rotationPeriod": "Période de rotation",
+        "axialTilt": "Obliquité",
+        "semiMajorAxis": "Demi-grand axe",
+        "eccentricity": "Excentricité",
+        "inclination": "Inclinaison",
+        "orbitalPeriod": "Période orbitale",
+        "periapsis": "Périapside",
+        "apoapsis": "Apoapside",
+        "meanOrbitalSpeed": "Vitesse orbitale moyenne",
+        "stellarFlux": "Flux stellaire",
+        "siderealRotation": "Rotation sidérale",
+        "radius": "Rayon",
+        "temperature": "Température",
+        "gravity": "Gravité"
+      },
+      "sections": {
+        "physicalModel": "Modèle physique",
+        "climateModel": "Modèle climatique",
+        "rotationalState": "État de rotation",
+        "orbitalSolution": "Solution orbitale",
+        "orbitalSolutionSummary": "Solution képlérienne déterministe à deux corps évaluée au temps de simulation.",
+        "climateSummary": "La température et la pression sont des entrées du scénario ; l’équilibre radiatif et le flux sont dérivés.",
+        "physicsSummary": "Les valeurs de référence utilisent des entrées SI et des constantes astronomiques nominales documentées.",
+        "rotationSummary": "La rotation sidérale et l’obliquité sont des entrées déterministes du catalogue.",
+        "stellarEnvironment": "Environnement stellaire",
+        "stellarSummary": "Valeurs photosphériques de référence pour l’étoile primaire synthétique.",
+        "bulkProperties": "Propriétés globales",
+        "keplerianSolution": "Solution képlérienne",
+        "twoBodyEpoch": "Éléments osculateurs à deux corps à l’époque de simulation."
+      },
+      "body": {
+        "syntheticSource": "Modèle Asteria déterministe d’Astral Surveyor",
+        "syntheticMethod": "Scénario éditorial · physique dérivée par équations",
+        "syntheticConfidence": "Synthétique",
+        "modelReference": "modèle {{version}}{{seedPart}}",
+        "seedReference": " · graine {{seed}}",
+        "syntheticDescription": "Données éducatives synthétiques générées pour cette simulation ; ce ne sont pas des observations astronomiques.",
+        "nasaAlignedClass": "Classe alignée sur la NASA · catalogue fictif Asteria",
+        "parentFallback": "corps parent",
+        "naturalSatelliteOf": "Satellite naturel de {{parent}}",
+        "previousCameraFrame": "cadre de caméra précédent",
+        "syntheticPrimary": "Étoile primaire synthétique de classe G",
+        "syntheticStatus": "Modèle synthétique",
+        "orbitSummary": "Orbite képlérienne déterministe autour de {{parent}} ; les distances visuelles sont compressées logarithmiquement.",
+        "stellarPlasma": "Plasma stellaire hydrogène-hélium",
+        "noAtmosphere": "Aucune atmosphère persistante",
+        "class": {
+          "star": "Étoile de la séquence principale {{spectralType}}",
+          "lava": "Monde de lave",
+          "terrestrial": "Monde tellurique",
+          "ocean": "Monde océanique",
+          "superEarth": "Super-Terre",
+          "neptunian": "Monde neptunien",
+          "gasGiant": "Géante gazeuse",
+          "iceGiant": "Géante de glace",
+          "dwarf": "Planète naine",
+          "rockyMoon": "Lune rocheuse",
+          "icyMoon": "Lune glacée",
+          "oceanicMoon": "Lune océanique",
+          "volcanicMoon": "Lune volcanique"
+        }
+      },
+      "habitability": {
+        "notApplicable": {
+          "label": "Sans objet",
+          "summary": "Le filtrage d’habitabilité de surface ne s’applique pas à une photosphère stellaire."
+        },
+        "insufficientData": {
+          "label": "Données insuffisantes",
+          "summary": "Le modèle déterministe ne contient pas assez de données environnementales pour ce filtrage."
+        },
+        "nonSurfaceWorld": {
+          "label": "Monde sans surface",
+          "summary": "Ce monde géant ne possède aucune surface solide conventionnellement accessible."
+        },
+        "outsideHz": {
+          "label": "Hors de la ZH conservatrice",
+          "summary": "Son environnement stellaire modélisé se situe hors de la zone conservatrice d’eau liquide."
+        },
+        "withinHz": {
+          "label": "Orbite en zone habitable",
+          "summary": "L’orbite passe un filtre conservateur de flux ; cela ne prouve ni habitabilité ni vie."
+        },
+        "temperateCandidate": {
+          "label": "Candidat tempéré",
+          "summary": "Les valeurs synthétiques de température, pression et flux stellaire passent un premier filtre conservateur."
+        }
+      },
+      "renderMetrics": {
+        "region": "Métriques du rendu",
+        "starsTitle": "Étoiles procédurales du graphe de rendu actuel",
+        "drawsTitle": "Appels de dessin de la dernière image",
+        "backendTitle": "Moteur de rendu actif",
+        "stars": "{{count}} k étoiles",
+        "pending": "—",
+        "draws": "{{count}} appels",
+        "gpuCompute": "Calcul GPU",
+        "cpuFallback": "Repli CPU"
+      }
+    },
+    "hud": {
+      "brand": {
+        "name": "Astral Surveyor",
+        "tagline": "Observatoire de l’univers"
+      },
+      "locale": {
+        "label": "Langue"
+      },
+      "status": {
+        "region": "État de la simulation",
+        "fpsTitle": "Images rendues par seconde",
+        "cameraVelocity": "Vitesse de la caméra",
+        "renderingQuality": "Qualité du rendu",
+        "cinematicEnable": "Activer le mode cinématique",
+        "cinematicDisable": "Désactiver le mode cinématique",
+        "cinematicTitle": "Mode cinématique",
+        "gpu": {
+          "activeLabel": "WebGPU actif",
+          "activeDetail": "Calcul natif",
+          "initializingLabel": "Démarrage du GPU",
+          "initializingDetail": "Préparation du pipeline",
+          "fallbackLabel": "Repli WebGL",
+          "fallbackDetail": "Mode de compatibilité",
+          "unavailableLabel": "GPU indisponible",
+          "unavailableDetail": "Rendu en pause"
+        },
+        "quality": {
+          "performance": "Performances",
+          "balanced": "Équilibrée",
+          "ultra": "Ultra"
+        }
+      },
+      "navigation": {
+        "region": "Navigation dans l’univers",
+        "home": "Pont d’observation",
+        "explore": "Explorer",
+        "search": "Rechercher",
+        "locations": "Carte stellaire",
+        "bookmarks": "Lieux enregistrés",
+        "settings": "Paramètres"
+      },
+      "inspector": {
+        "region": "Inspecteur de l’objet sélectionné",
+        "collapse": "Réduire l’inspecteur d’objets",
+        "open": "Ouvrir l’inspecteur d’objets",
+        "eyebrow": "Analyse de l’objet",
+        "telemetry": "Télémétrie en direct",
+        "clear": "Effacer l’objet sélectionné",
+        "clearTitle": "Effacer la sélection",
+        "emptyTitle": "Aucune cible sélectionnée",
+        "emptyDescription": "Choisissez un monde, une étoile ou un objet du ciel profond à inspecter.",
+        "searchShortcut": "Raccourci clavier : barre oblique",
+        "openSearch": "Ouvrir la recherche universelle",
+        "objectStatus": "État de l’objet",
+        "classification": "Classification",
+        "quickFacts": "Repères",
+        "atmosphere": "Atmosphère",
+        "atmosphereComposition": "Composition atmosphérique",
+        "habitability": "Habitabilité",
+        "habitabilityScore": "Score d’habitabilité : {{score}} sur 100",
+        "provenance": "Provenance des données",
+        "physicalProfile": "Profil physique",
+        "distance": "Distance",
+        "rightAscension": "Ascension droite",
+        "declination": "Déclinaison",
+        "referenceDistance": "Distance de référence",
+        "tabsLabel": "Vues des données scientifiques",
+        "tabs": {
+          "overview": "Aperçu",
+          "physics": "Physique",
+          "orbit": "Orbite"
+        },
+        "noPhysics": "Aucune mesure physique n’est disponible pour cet objet.",
+        "noOrbit": "Aucune solution orbitale n’est disponible pour cet objet.",
+        "centerTarget": "Centrer la cible",
+        "stateLabel": "État de la sélection et de la caméra",
+        "selected": "Sélectionné",
+        "centered": "Centré",
+        "centering": "Centrage",
+        "centeredOn": "Centré : {{name}}",
+        "centeringOn": "Centrage : {{name}}",
+        "cameraCenteredTitle": "Caméra centrée sur {{name}}",
+        "cameraCenteringTitle": "Caméra en cours de centrage sur {{name}}"
+      },
+      "camera": {
+        "reference": "Référentiel caméra",
+        "selected": "Sélectionné",
+        "camera": "Caméra",
+        "orbit": "Orbite",
+        "closeApproach": "Approche rapprochée",
+        "orbitTracking": "Suivi orbital",
+        "previousView": "Vue précédente",
+        "previousViewFallback": "vue précédente",
+        "systemOverview": "Vue d’ensemble du système",
+        "systemFrame": "Référentiel système",
+        "freeFlight": "Vol libre",
+        "bodyTrackingUnlocked": "Suivi des corps déverrouillé",
+        "systemUnlocked": "Référentiel système · Suivi des corps déverrouillé",
+        "transitionInProgress": "Transition de caméra en cours",
+        "notLocked": "La caméra n’est verrouillée sur aucun corps",
+        "preparingMode": "Préparation : {{mode}}",
+        "centerOn": "Centrage sur {{name}}",
+        "centerOnEllipsis": "Centrage sur {{name}}…",
+        "centeredOn": "Centré sur {{name}}",
+        "centeredAnnouncement": "Centré sur {{name}}, {{mode}}",
+        "returnFree": "Retour à la vue en vol libre",
+        "returnFreeEllipsis": "Retour à la vue en vol libre…",
+        "returnSystem": "Retour à la vue d’ensemble du système",
+        "returnSystemEllipsis": "Retour à la vue d’ensemble du système…",
+        "bodyControls": "Commandes de caméra centrée sur un corps",
+        "freeControls": "Commandes de caméra en vol libre",
+        "systemControls": "Commandes de caméra système",
+        "viewModeFor": "Mode de vue pour {{name}}",
+        "currentOrbit": "Vue actuelle : suivi orbital",
+        "trackOrbit": "Suivre depuis l’orbite (G)",
+        "currentClose": "Vue actuelle : approche rapprochée",
+        "moveClose": "Passer en approche rapprochée (Maj+G)",
+        "closeUnavailable": "L’approche rapprochée est indisponible pour ce corps",
+        "returnTo": "Revenir à {{view}}",
+        "returnToTitle": "Revenir à {{view}} (Retour arrière)",
+        "currentSystem": "Vue actuelle : vue d’ensemble du système",
+        "returnSystemTitle": "Revenir à la vue d’ensemble du système (0)",
+        "centerCameraOn": "Centrer la caméra sur {{name}}",
+        "orbitSelectedTitle": "Centrer le corps sélectionné en vue orbitale (G)",
+        "closeSelectedTitle": "Centrer le corps sélectionné en approche rapprochée (Maj+G)",
+        "currentView": "Vue actuelle",
+        "trackSelected": "Suivre le corps sélectionné",
+        "nearBodyInspection": "Inspection rapprochée"
+      },
+      "time": {
+        "region": "Commandes du temps de simulation",
+        "label": "Temps de simulation",
+        "unavailable": "Temps indisponible",
+        "decrease": "Réduire l’échelle de temps",
+        "increase": "Augmenter l’échelle de temps",
+        "resume": "Reprendre la simulation",
+        "pause": "Mettre la simulation en pause",
+        "scale": "Échelle de temps",
+        "paused": "En pause",
+        "reset": "Réinitialiser le temps de simulation",
+        "realTime": "Revenir au temps réel"
+      },
+      "welcome": {
+        "close": "Fermer l’écran d’accueil",
+        "eyebrow": "Simulateur d’univers WebGPU",
+        "title": "Chaque horizon est à portée.",
+        "description": "Traversez les échelles astronomiques, étudiez des mondes procéduraux et passez d’un observatoire global à des vues rapprochées précises sans rompre le voyage.",
+        "capabilities": "Fonctionnalités principales",
+        "navigationTitle": "Navigation fluide",
+        "navigationDetail": "Du système à l’approche rapprochée",
+        "worldsTitle": "Mondes richement modélisés",
+        "worldsDetail": "Physique + détails procéduraux",
+        "gpuTitle": "GPU natif",
+        "gpuDetail": "Piloté par le calcul",
+        "begin": "Commencer l’exploration",
+        "tour": "Visite guidée de 30 secondes",
+        "note": "Souris + clavier recommandés · Commandes tactiles prises en charge"
+      },
+      "tour": {
+        "fieldGuide": "Guide de terrain",
+        "close": "Fermer la visite rapide",
+        "progress": "Progression de la visite",
+        "goToStep": "Aller à l’étape {{step}} de la visite",
+        "back": "Retour",
+        "enter": "Entrer dans l’univers",
+        "next": "Suivant",
+        "steps": {
+          "navigateEyebrow": "01 · Naviguer",
+          "navigateTitle": "Déplacez-vous sans limites",
+          "navigateDescription": "Sélectionnez une cible, cadrez son orbite, puis accélérez progressivement de l’échelle planétaire à l’espace interstellaire.",
+          "inspectEyebrow": "02 · Inspecter",
+          "inspectTitle": "Lisez l’univers",
+          "inspectDescription": "Chaque corps sélectionné présente ses propriétés physiques, ses coordonnées en direct et sa classification procédurale au même endroit.",
+          "captureEyebrow": "03 · Capturer",
+          "captureTitle": "Composez l’impossible",
+          "captureDescription": "Utilisez le mode cinématique pour réduire le bruit visuel et cadrer éclipses, anneaux, atmosphères et paysages du ciel profond."
+        }
+      }
+    },
+    "nasa": {
+      "common": {
+        "notReported": "Non renseigné",
+        "source": "Source",
+        "openSourceFor": "Ouvrir la référence source de {{label}}",
+        "retryDetail": "Réessayer le détail",
+        "yesFlagged": "Signalé",
+        "no": "Non"
+      },
+      "filters": {
+        "nearby": "Proches",
+        "nearbyQualifier": "< 25 pc",
+        "earthSize": "Taille terrestre",
+        "earthSizeQualifier": "≤ 1,8 R⊕",
+        "temperate": "Tempérées",
+        "temperateQualifier": "180–320 K",
+        "recent": "Récentes",
+        "recentQualifier": "≥ 2020"
+      },
+      "sorts": {
+        "name": "Nom",
+        "distance": "Plus proches",
+        "discovery": "Plus récentes"
+      },
+      "detail": {
+        "verifiedHash": "Empreinte du contenu vérifiée",
+        "memoryCache": "Cache mémoire",
+        "offlineStorage": "Stockage hors ligne",
+        "network": "Réseau",
+        "positionIdentity": "Position et identité",
+        "planet": "Planète",
+        "orbitTransit": "Orbite et transit",
+        "climateObserving": "Climat et valeur observationnelle",
+        "hostStar": "Étoile hôte",
+        "discoverySystem": "Découverte et système",
+        "distance": "Distance",
+        "rightAscension": "Ascension droite",
+        "declination": "Déclinaison",
+        "referenceFrame": "Repère de référence",
+        "radius": "Rayon",
+        "mass": "Masse",
+        "density": "Densité",
+        "massBasis": "Origine de la masse",
+        "controversialFlag": "Indicateur controversé",
+        "period": "Période",
+        "semiMajorAxis": "Demi-grand axe",
+        "eccentricity": "Excentricité",
+        "inclination": "Inclinaison",
+        "transitDuration": "Durée du transit",
+        "transitDepth": "Profondeur du transit",
+        "rvAmplitude": "Amplitude RV",
+        "equilibriumTemperature": "Temp. d’équilibre",
+        "insolation": "Insolation",
+        "transmissionMetric": "Métrique de transmission",
+        "emissionMetric": "Métrique d’émission",
+        "transmissionSpectra": "Spectres de transmission",
+        "emissionSpectra": "Spectres d’émission",
+        "jwstObservations": "Observations JWST",
+        "spectralType": "Type spectral",
+        "effectiveTemperature": "Temp. effective",
+        "age": "Âge",
+        "metallicity": "Métallicité",
+        "luminosity": "Luminosité",
+        "gaiaMagnitude": "Magnitude Gaia",
+        "year": "Année",
+        "method": "Méthode",
+        "facility": "Installation",
+        "instrument": "Instrument",
+        "telescope": "Télescope",
+        "knownPlanets": "Planètes connues",
+        "systemStars": "Étoiles du système",
+        "discoveryPaper": "Article de découverte",
+        "integrityTitle": "Intégrité et provenance des données",
+        "release": "version {{revision}}",
+        "retrievedNotice": "Récupéré le {{date}}. Cette observation est consultable, mais ne constitue pas encore un système rendu dans lequel naviguer.",
+        "reproducibleQuery": "Requête source reproductible",
+        "columnDefinitions": "Définition des colonnes",
+        "dataCredits": "Crédits des données",
+        "compositePolicy": "Les champs composites peuvent provenir de sources bibliographiques différentes et sont signalés comme composites d’archive.",
+        "nullPolicy": "Les cellules source absentes ou non finies restent nulles ; aucune valeur scientifique n’est imputée."
+      },
+      "offline": {
+        "region": "Pack du catalogue hors ligne",
+        "fullReady": "Pack de recherche complet disponible",
+        "verifiedCore": "Exécution depuis le noyau hors ligne vérifié",
+        "coreCached": "Noyau de recherche en cache",
+        "optional": "Stockage du navigateur facultatif",
+        "installedSummary": "{{cached}}/{{total}} détails + atlas céleste · {{bytes}}",
+        "availableSummary": "{{cached}}/{{total}} détails · atlas {{atlas}}",
+        "cached": "en cache",
+        "onDemand": "à la demande",
+        "unavailable": "IndexedDB indisponible",
+        "progress": "Progression de l’installation du pack hors ligne",
+        "verifyingAtlas": "Vérification de l’index céleste des hôtes observés",
+        "verifyingDetail": "Vérification du détail {{completed}}/{{total}}",
+        "removing": "Suppression du pack…",
+        "remove": "Supprimer le pack de recherche hors ligne",
+        "installing": "Installation du pack vérifié…",
+        "install": "Installer le pack hors ligne complet",
+        "explanation": "L’application et le noyau de recherche sont mis en cache après la première utilisation. Le pack facultatif conserve dans ce navigateur l’atlas et chaque détail scientifique ; une installation interrompue ne remplace jamais la dernière version complète."
+      },
+      "load": {
+        "announcement": "Chargement du catalogue progressif de la NASA",
+        "verifyingIndex": "Vérification de l’index complet des archives",
+        "workerIndex": "Chargement d’un index de recherche adressé par contenu dans un Worker dédié.",
+        "unavailable": "Archives indisponibles",
+        "retry": "Réessayer le chargement vérifié",
+        "fallbackError": "Le catalogue progressif n’a pas pu terminer la requête.",
+        "preparingCanvas": "Préparation du canevas céleste optimisé pour le GPU",
+        "skyUnavailable": "Ciel observé indisponible",
+        "retryAtlas": "Réessayer l’atlas vérifié",
+        "loadingCoordinates": "Chargement de 4 749 coordonnées d’hôtes observés",
+        "decodingCoordinates": "L’index ICRS adressé par contenu est décodé hors du thread principal.",
+        "fetchingDetail": "Récupération et vérification d’un bloc de détails scientifiques…"
+      },
+      "release": {
+        "region": "État de la version du catalogue",
+        "hashesVerified": "Empreintes des ressources vérifiées",
+        "timings": "{{prepare}} ms pour l’index · prêt en {{ready}} ms",
+        "snapshot": "Instantané du {{date}}",
+        "planets": "{{count}} planètes confirmées",
+        "inventory": "{{hosts}} systèmes hôtes · {{chunks}} blocs de détails immuables · version {{revision}}",
+        "budget": "La recherche reste dans le Worker ; les détails scientifiques ne sont chargés qu’à l’ouverture d’un enregistrement."
+      },
+      "search": {
+        "viewGroup": "Vue du catalogue NASA",
+        "recordsView": "Dossiers de recherche",
+        "skyView": "Ciel observé",
+        "skyLabel": "Filtrer les systèmes hôtes observés par la NASA",
+        "recordsLabel": "Rechercher dans l’intégralité de NASA Exoplanet Archive",
+        "skyPlaceholder": "Nom du système hôte…",
+        "recordsPlaceholder": "Planète, hôte, type spectral, méthode…",
+        "clear": "Effacer la recherche des archives NASA",
+        "filtersGroup": "Filtres des archives NASA",
+        "sort": "Trier",
+        "sortLabel": "Trier les résultats des archives NASA",
+        "searching": "Recherche dans l’index vérifié…",
+        "resultStatus": "Archives NASA complètes · {{shown}} résultats sur {{total}} · {{ms}} ms",
+        "updating": " · Actualisation…",
+        "resultsLabel": "Résultats des archives NASA",
+        "observed": "Observé",
+        "composite": "Composite des archives",
+        "hostSystem": "Système hôte {{host}}",
+        "loadMore": "Charger {{count}} de plus",
+        "allShown": "Les {{count}} enregistrements correspondants sont affichés",
+        "empty": "Aucun enregistrement correspondant",
+        "emptyHint": "Retirez un filtre ou recherchez une planète, un hôte, une méthode ou une installation."
+      },
+      "atlas": {
+        "eyebrow": "Ciel des hôtes observés",
+        "title": "Atlas des découvertes ICRS",
+        "hosts": "{{visible}} / {{total}} hôtes",
+        "runtime": "{{ms}} ms · {{source}}",
+        "sourceMemory": "Mémoire du Worker",
+        "sourceOffline": "Stockage hors ligne",
+        "sourceNetwork": "Ressource réseau vérifiée",
+        "canvasLabel": "Carte ICRS interactive de {{count}} systèmes hôtes d’exoplanètes NASA",
+        "axisHint": "ICRS · RA augmente ←",
+        "instructions": "Sélectionnez un point, ou placez le focus sur la carte et utilisez les flèches. Appuyez sur Entrée pour ouvrir les enregistrements planétaires vérifiés de l’hôte. La taille indique le nombre de planètes connues ; la couleur suit la classe spectrale renseignée. Il s’agit d’une carte de découvertes, pas d’un recensement statistiquement complet des étoiles proches.",
+        "observedHost": "Hôte observé",
+        "spectralMissing": "Type spectral non renseigné de façon cohérente",
+        "planetCount_one": "{{count}} planète confirmée",
+        "planetCount_other": "{{count}} planètes confirmées",
+        "rightAscension": "Ascension droite",
+        "declination": "Déclinaison",
+        "distance": "Distance",
+        "systemStars": "Étoiles du système",
+        "coordinateFrame": "Repère de coordonnées",
+        "conflict": "Les lignes composites divergent sur {{fields}} ; le champ récapitulatif en conflit est volontairement omis.",
+        "open": "Ouvrir les enregistrements vérifiés du système",
+        "empty": "Aucun hôte observé ne correspond à cette recherche",
+        "emptyHint": "Effacez ou raccourcissez le nom de l’hôte pour restaurer l’atlas."
+      }
+    },
+    "tools": {
+      "panel": {
+        "search": {
+          "eyebrow": "Index universel",
+          "title": "Rechercher"
+        },
+        "locations": {
+          "eyebrow": "Asteria · AE-0001",
+          "title": "Carte stellaire"
+        },
+        "bookmarks": {
+          "eyebrow": "Catalogue local",
+          "title": "Lieux enregistrés"
+        },
+        "settings": {
+          "eyebrow": "Diagnostic en temps réel",
+          "title": "Paramètres"
+        },
+        "close": "Fermer {{title}}"
+      },
+      "common": {
+        "systemOrigin": "Origine du système",
+        "primaryStar": "Étoile principale",
+        "noModel": "Aucun modèle",
+        "centerOrbit": "Centrer sur {{name}} en vue orbitale",
+        "selectBody": "Sélectionner {{name}}, {{role}}",
+        "parentSystem": "Système de {{parent}}",
+        "bodies": "{{count}} corps",
+        "planetsAndMoons": "{{planets}} planètes · {{moons}} lunes",
+        "retrograde": "rétrograde",
+        "days": "jours"
+      },
+      "search": {
+        "sourceLabel": "Source du catalogue",
+        "simulationSource": "Simulation Asteria",
+        "simulationSourceAria": "Simulation Asteria, {{count}} corps",
+        "nasaSource": "Archives de la NASA",
+        "nasaSourceAria": "NASA Exoplanet Archive, {{count}} entrées",
+        "inputLabel": "Rechercher dans le catalogue Asteria",
+        "placeholder": "Nom, désignation, classe…",
+        "clear": "Effacer la recherche",
+        "filterLabel": "Filtres du catalogue",
+        "filters": {
+          "all": "Tous",
+          "planets": "Planètes",
+          "moons": "Lunes",
+          "temperate": "Tempérés"
+        },
+        "indexedStatus": "{{visible}} corps sur {{total}} indexés",
+        "resultsLabel": "Résultats de recherche",
+        "emptyTitle": "Aucune destination correspondante",
+        "emptyHelp": "Essayez un nom de planète, un code de catalogue ou une classe comme « géante gazeuse »."
+      },
+      "locations": {
+        "syntheticSystem": "Système synthétique fondé sur la physique",
+        "mapLabel": "Carte schématique du système Asteria",
+        "physicsDerived": "Dérivé de la physique",
+        "metrics": {
+          "mass": "Masse",
+          "meanRadius": "Rayon moyen",
+          "meanDensity": "Densité moyenne",
+          "gravity": "Gravité",
+          "escapeVelocity": "Vitesse de libération",
+          "meanTemperature": "Température moyenne",
+          "referencePressure": "Pression de référence",
+          "rotation": "Rotation",
+          "orbitalPeriod": "Période orbitale",
+          "eccentricity": "Excentricité"
+        },
+        "factsLabel": "Informations sur {{name}}",
+        "center": "Centrer sur {{name}}",
+        "satellites": "Système de satellites · {{count}}"
+      },
+      "bookmarks": {
+        "storedDevice": "Enregistré sur cet appareil",
+        "memoryOnly": "Mémoire uniquement",
+        "schemaStatus": "Schéma v1 · {{count}}/{{limit}} lieux",
+        "storageAvailable": "Stockage local disponible",
+        "currentBodyLabel": "Corps céleste actuel",
+        "currentTarget": "Cible actuelle",
+        "remove": "Retirer",
+        "savePlace": "Enregistrer le lieu",
+        "selectBeforeSaving": "Sélectionnez un corps avant d’enregistrer un lieu.",
+        "savedDestinations": "Destinations enregistrées",
+        "clearAll": "Tout effacer",
+        "savedAt": "Enregistré le {{date}}",
+        "removeSavedAria": "Retirer {{name}} des lieux enregistrés",
+        "removeTitle": "Retirer {{name}}",
+        "emptyTitle": "Aucun lieu enregistré",
+        "emptyHelp": "Enregistrez le monde actuel pour créer un itinéraire d’observation personnel."
+      },
+      "settings": {
+        "language": {
+          "heading": "Langue",
+          "label": "Langue de l’interface",
+          "help": "Les changements s’appliquent immédiatement et sont enregistrés sur cet appareil."
+        },
+        "science": {
+          "heading": "Modèle scientifique",
+          "catalogue": "Catalogue",
+          "worlds": "Mondes",
+          "internalUnits": "Unités internes",
+          "orbitModel": "Modèle orbital",
+          "keplerian": "Képlérien",
+          "constants": "Constantes",
+          "provenance": "Provenance",
+          "syntheticDerived": "Synthétique + dérivé",
+          "note": "Les hypothèses du catalogue et les mesures dérivées d’équations sont identifiées séparément. Les étiquettes climatiques sont des repères d’exploration, pas des affirmations de biosignatures."
+        },
+        "calibration": {
+          "heading": "Étalonnage de l’affichage",
+          "reset": "Réinitialiser",
+          "intro": "Adaptez le contraste de la scène et la visibilité des guides à cet écran. Les valeurs sont normalisées et peuvent être restaurées sans modifier les données de simulation.",
+          "controls": {
+            "exposure": {
+              "label": "Exposition",
+              "description": "Ajuste la luminance de la scène avant le mappage tonal."
+            },
+            "orbitBrightness": {
+              "label": "Luminosité des orbites",
+              "description": "Équilibre les guides orbitaux avec la scène rendue."
+            },
+            "starfieldBrightness": {
+              "label": "Luminosité du champ stellaire",
+              "description": "Ajuste la luminance des étoiles d’arrière-plan."
+            }
+          }
+        },
+        "runtime": {
+          "heading": "Capacités du moteur de rendu",
+          "backend": "Moteur",
+          "adapter": "Adaptateur",
+          "webgpu": "WebGPU",
+          "computeStars": "Calcul des étoiles",
+          "logDepth": "Profondeur log.",
+          "maxTexture": "Texture maximale",
+          "starting": "Démarrage…",
+          "browserDefault": "Valeur du navigateur",
+          "available": "Disponible",
+          "unavailable": "Indisponible",
+          "checking": "Vérification…",
+          "enabled": "Activé",
+          "disabled": "Désactivé",
+          "cpuFallback": "Repli CPU",
+          "unknown": "Inconnu"
+        },
+        "telemetry": {
+          "heading": "Télémétrie en direct",
+          "frameRate": "Fréquence d’image",
+          "frameTime": "Temps d’image",
+          "drawCalls": "Appels de dessin",
+          "triangles": "Triangles",
+          "starField": "Champ stellaire",
+          "quality": "Qualité",
+          "qualityLevels": {
+            "battery": "Performances",
+            "balanced": "Équilibrée",
+            "ultra": "Ultra"
+          },
+          "pending": "La télémétrie sera disponible après le démarrage du moteur de rendu.",
+          "floatingOrigin": "Origine flottante · {{distance}} km"
+        },
+        "utilities": {
+          "heading": "Utilitaires",
+          "resetTitle": "Réinitialiser la plateforme d’observation",
+          "resetHelp": "Restaure la caméra et la cible par défaut",
+          "tourTitle": "Ouvrir la visite rapide",
+          "tourHelp": "Rejoue l’introduction au vol en trois étapes",
+          "shortcutsTitle": "Guide du clavier",
+          "shortcutsHelp": "Consulte les raccourcis de navigation et d’interface"
+        }
+      },
+      "footer": {
+        "explore": "Explorer",
+        "shortcuts": "Raccourcis"
+      },
+      "shortcuts": {
+        "eyebrow": "Manuel de vol",
+        "title": "Raccourcis clavier",
+        "close": "Fermer les raccourcis clavier",
+        "actions": {
+          "search": "Ouvrir la recherche universelle",
+          "guide": "Afficher ce guide du clavier",
+          "escape": "Fermer un panneau et revenir à Explorer",
+          "center": "Centrer le corps sélectionné en vue orbitale",
+          "approach": "Passer en approche rapprochée si disponible",
+          "previous": "Revenir à la vue caméra précédente",
+          "overview": "Revenir à la vue d’ensemble du système",
+          "fly": "Voler dans le référentiel actuel",
+          "vertical": "Se déplacer verticalement",
+          "pause": "Suspendre ou reprendre le temps de simulation"
+        },
+        "note": "Les champs de texte capturent la saisie : les commandes de vol restent donc inactives lorsque la recherche a le focus."
+      },
+      "navigator": {
+        "browserLabel": "Navigateur du système Asteria",
+        "currentSystem": "Système actuel",
+        "centeredStatus": "Centré sur",
+        "centeringStatus": "Centrage sur",
+        "inTransit": "En transit",
+        "closeApproach": "Approche rapprochée",
+        "orbit": "Orbite",
+        "objectsLabel": "Objets célestes",
+        "targetAria": "{{name}}, {{class}}{{selected}}{{centered}}{{centering}}",
+        "selectedSuffix": ", sélectionné",
+        "centeredSuffix": ", caméra centrée",
+        "centeringSuffix": ", centrage de la caméra en cours",
+        "cameraViews": "Vues caméra pour {{name}}",
+        "centering": "Centrage…",
+        "orbitActive": "Orbite active",
+        "goOrbit": "Aller en orbite",
+        "approachActive": "Approche active",
+        "hints": {
+          "orbit": "faites glisser pour orbiter",
+          "fly": "WASD + Q/E pour voler",
+          "center": "centrer la sélection"
+        }
+      }
+    }
+  },
+  "science": {
+    "asteria": {
+      "description": "Un analogue synthétique de type G1 V servant d’étoile primaire déterministe au système.",
+      "facts": [
+        "Son rayon, sa température et sa luminosité sont mutuellement cohérents à la précision du modèle.",
+        "Asteria est fictive et ne doit pas être présentée comme une étoile observée."
+      ]
+    },
+    "cinder": {
+      "description": "Une planète de lave synthétique riche en fer, sillonnée de bassins volcaniques incandescents.",
+      "facts": [
+        "Son orbite excentrique entraîne une forte variation saisonnière du flux reçu.",
+        "La ténue atmosphère carbonée ne peut pas redistribuer efficacement la chaleur de l’hémisphère diurne.",
+        "Scoria, une petite lune volcanique, reste largement à l’intérieur de la limite de stabilité prograde de Cinder."
+      ]
+    },
+    "cinder-scoria": {
+      "description": "Une lune volcanique synthétique brûlée, aux sombres plaines silicatées.",
+      "facts": [
+        "Une faible flexion de marée entretient des centres volcaniques isolés dans le modèle synthétique."
+      ]
+    },
+    "aurelia": {
+      "description": "Une planète tellurique synthétique et chaude, aux déserts salins sous un ciel ambré dense.",
+      "facts": [
+        "La forte pression de surface stabilise des saumures polaires transitoires.",
+        "Son unique lune est assez massive pour modérer les variations d’obliquité à long terme."
+      ]
+    },
+    "aurelia-cyra": {
+      "description": "Une lune silicatée synthétique en rotation synchrone.",
+      "facts": [
+        "Un vaste bassin sur la face cachée témoigne du bombardement ancien du système."
+      ]
+    },
+    "pelagos": {
+      "description": "Une planète-océan synthétique et tempérée, aux archipels volcaniques et aux plaques actives.",
+      "facts": [
+        "Le modèle climatique place Pelagos dans la zone habitable conservatrice d’Asteria.",
+        "Aucune biosignature n’est revendiquée ; toutes les valeurs environnementales sont générées pour la simulation."
+      ]
+    },
+    "pelagos-tethra": {
+      "description": "Une petite lune intérieure synthétique façonnée par un faible échauffement de marée.",
+      "facts": [
+        "Tethra ouvre un étroit sillon dans le faible tore de poussière de Pelagos."
+      ]
+    },
+    "pelagos-neris": {
+      "description": "Une lune synthétique gainée de glace, avec un océan souterrain modélisé.",
+      "facts": [
+        "Une faible flexion de marée peut maintenir de l’eau liquide sous la croûte de glace.",
+        "Cette eau souterraine est une inférence du modèle, et non une observation ni l’indice d’une vie."
+      ]
+    },
+    "viridia": {
+      "description": "Une super-Terre synthétique et fraîche, aux mers peu profondes et aux continents basaltiques verts.",
+      "facts": [
+        "Viridia se situe dans la moitié externe de la zone habitable conservatrice.",
+        "Sa gravité plus forte produit une atmosphère compacte mais relativement dense."
+      ]
+    },
+    "viridia-luma": {
+      "description": "Une lune synthétique riche en volatils, aux réseaux de rayons jeunes et brillants.",
+      "facts": [
+        "Luma est verrouillée par effet de marée à Viridia."
+      ]
+    },
+    "orison": {
+      "description": "Une géante gazeuse synthétique à bandes, ceinte d’un vaste système d’anneaux de silicates et de glace.",
+      "facts": [
+        "Le rayon, la pression et la température indiqués correspondent au niveau d’un bar, et non à une surface solide.",
+        "Cinq lunes majeures occupent une architecture résonante stable dans ce modèle simplifié."
+      ]
+    },
+    "orison-ember": {
+      "description": "Une lune volcanique synthétique chauffée par résonance, aux plaines riches en soufre.",
+      "facts": [
+        "La température des évents volcaniques localisés dépasse largement la moyenne globale indiquée."
+      ]
+    },
+    "orison-ione": {
+      "description": "Une lune de glace synthétique et brillante, entaillée de jeunes escarpements tectoniques.",
+      "facts": [
+        "Un profond océan interne est thermiquement plausible dans le modèle synthétique."
+      ]
+    },
+    "orison-lyric": {
+      "description": "Une lune de glace synthétique différenciée, dotée de couches de saumure modélisées.",
+      "facts": [
+        "Sa signature de champ induit est simulée, et non mesurée."
+      ]
+    },
+    "orison-kestrel": {
+      "description": "Une lune rocheuse synthétique et sombre, à la surface fortement cratérisée.",
+      "facts": [
+        "Kestrel confine le diffus anneau E externe."
+      ]
+    },
+    "orison-morrow": {
+      "description": "Une lune externe synthétique marquée par un immense bassin d’impact ancien.",
+      "facts": [
+        "Morrow est la lune majeure régulière la plus externe du modèle."
+      ]
+    },
+    "caelora": {
+      "description": "Une planète neptunienne synthétique cyan, tournant presque couchée sous une brume de méthane.",
+      "facts": [
+        "Son obliquité extrême produit des saisons synthétiques longues de plusieurs décennies.",
+        "Les valeurs climatiques indiquées correspondent au niveau atmosphérique d’un bar."
+      ]
+    },
+    "caelora-mistral": {
+      "description": "Une lune bergère synthétique et glacée située au bord des anneaux de Caelora.",
+      "facts": [
+        "Ses résonances maintiennent le bord externe abrupt du système d’anneaux."
+      ]
+    },
+    "caelora-serein": {
+      "description": "Une lune de glace synthétique aux plaines lisses renouvelées.",
+      "facts": [
+        "La faible densité de cratères suggère un resurfaçage cryovolcanique récent dans le modèle."
+      ]
+    },
+    "caelora-pale": {
+      "description": "Une lune capturée synthétique sur une orbite inclinée et faiblement excentrique.",
+      "facts": [
+        "Pale s’est probablement formée ailleurs dans le système généré."
+      ]
+    },
+    "caelora-vanta": {
+      "description": "Une lune irrégulière externe, synthétique et sombre.",
+      "facts": [
+        "L’orbite de Vanta est la plus inclinée parmi les lunes modélisées de Caelora."
+      ]
+    },
+    "erebus": {
+      "description": "Une géante de glace synthétique et compacte, avec une atmosphère d’hydrogène et de méthane d’un indigo profond.",
+      "facts": [
+        "Erebus rayonne une modeste chaleur résiduelle de formation.",
+        "Ses étroits anneaux couleur charbon sont optiquement minces dans le modèle synthétique."
+      ]
+    },
+    "erebus-rime": {
+      "description": "Une lune de glace intérieure, synthétique et brillante.",
+      "facts": [
+        "Rime échange de la poussière avec les étroits anneaux d’Erebus."
+      ]
+    },
+    "erebus-noctis": {
+      "description": "Une lune externe synthétique, sombre et riche en silicates.",
+      "facts": [
+        "Noctis pourrait être un vestige capturé d’un ancien disque de planétésimaux."
+      ]
+    },
+    "nyx": {
+      "description": "Une lointaine planète neptunienne synthétique, à la brume violette et au faible anneau de poussière.",
+      "facts": [
+        "Nyx accomplit une orbite en environ un siècle et demi terrestre.",
+        "L’atmosphère au niveau d’un bar est modélisée avec de l’hydrogène, de l’hélium et du méthane."
+      ]
+    },
+    "nyx-wisp": {
+      "description": "Une petite lune de glace synthétique située près de l’anneau de poussière de Nyx.",
+      "facts": [
+        "Wisp alimente l’anneau en fines particules lors d’impacts de micrométéoroïdes."
+      ]
+    },
+    "nyx-shade": {
+      "description": "Un compagnon externe synthétique surdimensionné, verrouillé en rotation synchrone avec Nyx.",
+      "facts": [
+        "Shade et Nyx orbitent autour d’un barycentre qui reste à l’intérieur de Nyx."
+      ]
+    }
+  }
+}
