@@ -1,6 +1,6 @@
 # Real-catalog expansion roadmap
 
-> - Status: Phase 0 research snapshot implemented; staged production plan proposed
+> - Status: progressive NASA release implemented; Gaia/hierarchy/100k stages proposed
 > - Research verified: 2026-08-11
 > - Scope: expand Astral Surveyor from one deterministic fictional system to a
 >   source-backed, progressively loaded catalogue while preserving the existing
@@ -41,11 +41,13 @@ The current domain is intentionally small and internally consistent:
   `CelestialBodyView` consumed by rendering, search, and the Inspector.
 - [`SCIENCE_MODEL.md`](./SCIENCE_MODEL.md) correctly states that Asteria is a
   fictional deterministic scenario and not an observed exoplanet catalogue.
-- [`src/data/generated/nearby-exoplanets-128.json`](../src/data/generated/nearby-exoplanets-128.json)
-  is the first Phase 0 research snapshot: 128 unique confirmed planets across
-  69 host systems from NASA `pscomppars`, with honest nulls and reproducible
-  query metadata. It is a lazy inspection/search index, not yet a canonical
-  render or navigation catalogue.
+- [`public/catalog/nasa-exoplanets/manifest.json`](../public/catalog/nasa-exoplanets/manifest.json)
+  now publishes all 6,336 confirmed planets returned by NASA `pscomppars` at
+  retrieval time across 4,749 host systems. A compact search index and 17
+  content-addressed detail chunks preserve honest nulls, asymmetric errors,
+  limit flags, references, external IDs, discovery context, and reproducible
+  TAP metadata. The release is inspectable and searchable but is not yet a
+  canonical flyable-system graph.
 
 The catalogue expansion must therefore preserve these invariants:
 
@@ -717,11 +719,12 @@ unchanged.
 
 ### Stage 1 — Curated 100+ real-object core
 
-**Current checkpoint:** the Phase 0 NASA composite snapshot and searchable UI
-prove lazy delivery, schema validation, source visibility, and product value.
-They do **not** satisfy the Stage 1 exit criteria below: field-level references,
-uncertainties, Gaia identities, rights review, and real-system rendering remain
-release gates.
+**Current checkpoint:** the complete progressive NASA composite release and
+Worker-backed UI prove manifest-driven delivery, content-hash validation,
+cancellable detail loading, bounded memory caching, source visibility, and
+sub-50 ms full-index search. They do **not** satisfy every Stage 1 exit criterion:
+reviewed Gaia identity matches, full field-level reference coverage, rights
+approval, offline atomic updates, and real-system rendering remain release gates.
 
 **Goal:** prove source integrity and user value before distributed streaming.
 

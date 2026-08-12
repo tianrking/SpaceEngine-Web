@@ -91,4 +91,34 @@ describe('progressive NASA exoplanet catalogue', () => {
     manifest.searchIndex.path = '/untrusted/index.json'
     expect(() => validateProgressiveManifest(manifest)).toThrow(/release root/)
   })
+
+  it('rejects a search index whose precomputed order is not sorted', async () => {
+    const manifest = validateProgressiveManifest(
+      (await readPublicJson('/catalog/nasa-exoplanets/manifest.json')).value,
+    )
+    const source = (await readPublicJson(manifest.searchIndex.path)).value
+    const index = structuredClone(source) as {
+      orders: { distance: number[] }
+    }
+    const last = index.orders.distance.length - 1
+    const firstPosition = index.orders.distance[0]
+    index.orders.distance[0] = index.orders.distance[last]
+    index.orders.distance[last] = firstPosition
+    expect(() => validateProgressiveSearchIndex(index, manifest)).toThrow(/not sorted/)
+  })
+
+  it('rejects corrupt scientific measurements before they reach the UI', async () => {
+    const manifest = validateProgressiveManifest(
+      (await readPublicJson('/catalog/nasa-exoplanets/manifest.json')).value,
+    )
+    const descriptor = manifest.chunks[0]
+    const source = (await readPublicJson(descriptor.path)).value
+    const chunk = structuredClone(source) as {
+      records: Array<{ measurements: { radiusEarth: { value: number } } }>
+    }
+    chunk.records[0].measurements.radiusEarth.value = Number.NaN
+    expect(() => validateProgressiveDetailChunk(chunk, manifest, descriptor)).toThrow(
+      /radiusEarth.value/,
+    )
+  })
 })

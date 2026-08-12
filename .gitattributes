@@ -1,0 +1,2 @@
+# Content-addressed catalogue assets must retain byte-identical line endings.
+public/catalog/nasa-exoplanets/** -text

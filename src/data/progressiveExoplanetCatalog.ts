@@ -144,6 +144,10 @@ export interface ProgressiveSearchIndex {
   readonly schemaVersion: typeof PROGRESSIVE_EXOPLANET_SCHEMA_VERSION
   readonly catalogRevision: string
   readonly columns: readonly string[]
+  readonly orders: {
+    readonly distance: readonly number[]
+    readonly discovery: readonly number[]
+  }
   readonly records: readonly ProgressiveSummaryTuple[]
 }
 
@@ -171,6 +175,35 @@ const EXPECTED_INDEX_COLUMNS = [
   'chunkId',
 ] as const
 
+const EXPECTED_MEASUREMENT_KEYS = [
+  'distancePc',
+  'parallaxMas',
+  'properMotionMasYr',
+  'radiusEarth',
+  'massEarth',
+  'densityGcm3',
+  'orbitalPeriodDays',
+  'semiMajorAxisAu',
+  'eccentricity',
+  'inclinationDeg',
+  'transitMidpointDays',
+  'transitDurationHours',
+  'transitDepthPercent',
+  'radialVelocityAmplitudeMs',
+  'equilibriumTempK',
+  'insolationEarth',
+  'transmissionMetric',
+  'emissionMetric',
+  'stellarTeffK',
+  'stellarRadiusSolar',
+  'stellarMassSolar',
+  'stellarAgeGyr',
+  'stellarMetallicityDex',
+  'stellarLuminosityLogSolar',
+  'stellarRotationDays',
+  'gaiaMagnitude',
+] as const
+
 function isRecord(value: unknown): value is UnknownRecord {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -191,6 +224,47 @@ function assertNullableFinite(value: unknown, field: string): void {
   if (value !== null && (typeof value !== 'number' || !Number.isFinite(value))) {
     throw new TypeError(`${field} must be finite or null`)
   }
+}
+
+function assertNullableString(value: unknown, field: string): void {
+  if (value !== null && typeof value !== 'string') {
+    throw new TypeError(`${field} must be a string or null`)
+  }
+}
+
+function assertNullableNonNegativeInteger(value: unknown, field: string): void {
+  if (value !== null && (!Number.isInteger(value) || Number(value) < 0)) {
+    throw new TypeError(`${field} must be a non-negative integer or null`)
+  }
+}
+
+function assertHttpUrl(value: unknown, field: string): void {
+  assertNonEmptyString(value, field)
+  let url: URL
+  try {
+    url = new URL(value)
+  } catch {
+    throw new TypeError(`${field} must be an absolute URL`)
+  }
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+    throw new TypeError(`${field} must use HTTP or HTTPS`)
+  }
+}
+
+function assertReference(value: unknown, field: string): void {
+  if (value === null) return
+  if (!isRecord(value)) throw new TypeError(`${field} must be an object or null`)
+  assertNonEmptyString(value.label, `${field}.label`)
+  if (value.url !== null) assertHttpUrl(value.url, `${field}.url`)
+}
+
+function assertMeasurement(value: unknown, field: string): void {
+  if (!isRecord(value)) throw new TypeError(`${field} must be an object`)
+  for (const scalar of ['value', 'errorPlus', 'errorMinus', 'limit'] as const) {
+    assertNullableFinite(value[scalar], `${field}.${scalar}`)
+  }
+  assertNonEmptyString(value.unit, `${field}.unit`)
+  assertReference(value.reference, `${field}.reference`)
 }
 
 function assertAssetDescriptor(value: unknown, field: string): asserts value is CatalogAssetDescriptor {
@@ -251,8 +325,33 @@ export function validateProgressiveManifest(input: unknown): ProgressiveExoplane
   if (input.source.table !== 'pscomppars') {
     throw new TypeError('Manifest source table must be pscomppars')
   }
+  for (const field of ['tapEndpoint', 'requestUrl', 'documentationUrl', 'acknowledgementUrl'] as const) {
+    assertHttpUrl(input.source[field], `source.${field}`)
+  }
+  for (const field of ['query', 'product'] as const) {
+    assertNonEmptyString(input.source[field], `source.${field}`)
+  }
   if (!isRecord(input.provenance) || !isRecord(input.performance)) {
     throw new TypeError('Manifest provenance and performance are required')
+  }
+  for (const field of ['scope', 'nullPolicy', 'compositePolicy', 'sort', 'rightsStatus'] as const) {
+    assertNonEmptyString(input.provenance[field], `provenance.${field}`)
+  }
+  for (const field of ['detailChunkSize', 'chunkCount', 'resultPageSize'] as const) {
+    assertPositiveInteger(input.performance[field], `performance.${field}`)
+  }
+  if (input.performance.chunkCount !== input.chunks.length) {
+    throw new TypeError('performance.chunkCount must match the chunk descriptors')
+  }
+  const releaseRoot = `/catalog/nasa-exoplanets/releases/${input.catalogRevision}/`
+  const descriptors = [input.searchIndex, ...input.chunks]
+  const paths = new Set<string>()
+  for (const descriptor of descriptors) {
+    if (!descriptor.path.startsWith(releaseRoot)) {
+      throw new TypeError('Catalogue asset path must match catalogRevision')
+    }
+    if (paths.has(descriptor.path)) throw new TypeError('Catalogue asset paths must be unique')
+    paths.add(descriptor.path)
   }
   return input as unknown as ProgressiveExoplanetManifest
 }
@@ -298,6 +397,23 @@ export function validateProgressiveSearchIndex(
   if (!Array.isArray(input.records) || input.records.length !== manifest.recordCount) {
     throw new TypeError('Search index record count does not match the manifest')
   }
+  if (!isRecord(input.orders)) throw new TypeError('Search index orders are required')
+  for (const orderName of ['distance', 'discovery'] as const) {
+    const order = input.orders[orderName]
+    if (!Array.isArray(order) || order.length !== manifest.recordCount) {
+      throw new TypeError(`Search index ${orderName} order must cover every record`)
+    }
+    const seen = new Uint8Array(manifest.recordCount)
+    for (const position of order) {
+      if (!Number.isInteger(position) || position < 0 || position >= manifest.recordCount) {
+        throw new TypeError(`Search index ${orderName} order contains an invalid position`)
+      }
+      if (seen[position] === 1) {
+        throw new TypeError(`Search index ${orderName} order contains a duplicate position`)
+      }
+      seen[position] = 1
+    }
+  }
   const ids = new Set<string>()
   input.records.forEach((tuple, index) => {
     assertSummaryTuple(tuple, index, manifest.chunks.length)
@@ -305,6 +421,26 @@ export function validateProgressiveSearchIndex(
     if (ids.has(id)) throw new TypeError(`Duplicate search-index id: ${id}`)
     ids.add(id)
   })
+  for (const [orderName, valueIndex, direction] of [
+    ['distance', 3, 'ascending'],
+    ['discovery', 10, 'descending'],
+  ] as const) {
+    const order = input.orders[orderName] as number[]
+    for (let index = 1; index < order.length; index += 1) {
+      const previousPosition = order[index - 1]
+      const position = order[index]
+      const previous = input.records[previousPosition][valueIndex] as number | null
+      const current = input.records[position][valueIndex] as number | null
+      const invalidNullOrder = previous === null && current !== null
+      const invalidValueOrder =
+        previous !== null &&
+        current !== null &&
+        (direction === 'ascending' ? previous > current : previous < current)
+      if (invalidNullOrder || invalidValueOrder) {
+        throw new TypeError(`Search index ${orderName} order is not sorted`)
+      }
+    }
+  }
   return input as unknown as ProgressiveSearchIndex
 }
 
@@ -330,11 +466,89 @@ export function validateProgressiveDetailChunk(
     assertNonEmptyString(record.id, `records[${index}].id`)
     assertNonEmptyString(record.name, `records[${index}].name`)
     assertNonEmptyString(record.host, `records[${index}].host`)
+    if (!isRecord(record.externalIds)) {
+      throw new TypeError(`records[${index}].externalIds must be an object`)
+    }
+    for (const field of ['gaiaDr3', 'hd', 'hip', 'tic'] as const) {
+      assertNullableString(record.externalIds[field], `records[${index}].externalIds.${field}`)
+    }
+    if (!isRecord(record.coordinates) || record.coordinates.frame !== 'ICRS') {
+      throw new TypeError(`records[${index}].coordinates must use the ICRS frame`)
+    }
+    assertNullableFinite(record.coordinates.raDeg, `records[${index}].coordinates.raDeg`)
+    assertNullableFinite(record.coordinates.decDeg, `records[${index}].coordinates.decDeg`)
+    if (
+      record.coordinates.raDeg !== null &&
+      (Number(record.coordinates.raDeg) < 0 || Number(record.coordinates.raDeg) >= 360)
+    ) {
+      throw new TypeError(`records[${index}].coordinates.raDeg is out of range`)
+    }
+    if (
+      record.coordinates.decDeg !== null &&
+      (Number(record.coordinates.decDeg) < -90 || Number(record.coordinates.decDeg) > 90)
+    ) {
+      throw new TypeError(`records[${index}].coordinates.decDeg is out of range`)
+    }
     if (!isRecord(record.measurements)) {
       throw new TypeError(`records[${index}].measurements must be an object`)
     }
+    for (const key of EXPECTED_MEASUREMENT_KEYS) {
+      assertMeasurement(record.measurements[key], `records[${index}].measurements.${key}`)
+    }
+    if (!isRecord(record.hostStar)) {
+      throw new TypeError(`records[${index}].hostStar must be an object`)
+    }
+    assertNullableString(record.hostStar.spectralType, `records[${index}].hostStar.spectralType`)
+    if (!isRecord(record.system)) {
+      throw new TypeError(`records[${index}].system must be an object`)
+    }
+    for (const field of ['starCount', 'planetCount', 'moonCount'] as const) {
+      assertNullableNonNegativeInteger(record.system[field], `records[${index}].system.${field}`)
+    }
+    if (!isRecord(record.discovery)) {
+      throw new TypeError(`records[${index}].discovery must be an object`)
+    }
+    assertNullableNonNegativeInteger(record.discovery.year, `records[${index}].discovery.year`)
+    for (const field of [
+      'publicationDate',
+      'method',
+      'locale',
+      'facility',
+      'instrument',
+      'telescope',
+    ] as const) {
+      assertNullableString(record.discovery[field], `records[${index}].discovery.${field}`)
+    }
+    assertReference(record.discovery.reference, `records[${index}].discovery.reference`)
+    if (!isRecord(record.observationCounts)) {
+      throw new TypeError(`records[${index}].observationCounts must be an object`)
+    }
+    for (const field of [
+      'transmissionSpectra',
+      'emissionSpectra',
+      'directImagingSpectra',
+      'jwstTransmission',
+      'jwstEmission',
+      'jwstDirectImaging',
+      'jwstPhaseCurve',
+    ] as const) {
+      assertNullableNonNegativeInteger(
+        record.observationCounts[field],
+        `records[${index}].observationCounts.${field}`,
+      )
+    }
+    if (!isRecord(record.flags) || typeof record.flags.controversial !== 'boolean') {
+      throw new TypeError(`records[${index}].flags must contain a controversial boolean`)
+    }
+    assertNullableString(record.flags.massProvenance, `records[${index}].flags.massProvenance`)
     if (ids.has(record.id)) throw new TypeError(`Duplicate chunk id: ${record.id}`)
     ids.add(record.id)
+  }
+  if (
+    (input.records[0] as UnknownRecord).name !== descriptor.firstName ||
+    (input.records.at(-1) as UnknownRecord).name !== descriptor.lastName
+  ) {
+    throw new TypeError('Detail chunk boundaries do not match its descriptor')
   }
   return input as unknown as ProgressiveDetailChunk
 }

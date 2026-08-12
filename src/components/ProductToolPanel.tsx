@@ -2,7 +2,6 @@ import {
   memo,
   useCallback,
   useDeferredValue,
-  useEffect,
   useId,
   useMemo,
   useState,
@@ -10,17 +9,14 @@ import {
   type RefObject,
 } from 'react'
 import {
-  AlertTriangle,
   Archive,
   Bookmark,
   BookmarkCheck,
   Check,
-  ChevronDown,
   ChevronRight,
   CircleGauge,
   Cpu,
   Database,
-  ExternalLink,
   Gauge,
   Keyboard,
   LocateFixed,
@@ -33,11 +29,6 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react'
-import type {
-  ExoplanetCatalog,
-  ExoplanetCatalogMetadata,
-  ExoplanetRecord,
-} from '../data/exoplanetCatalog'
 import {
   DEFAULT_DISPLAY_SETTINGS,
   DISPLAY_SETTING_RANGES,
@@ -49,6 +40,10 @@ import type {
   EngineCapabilities,
 } from '../engine/types'
 import type { SavedPlace, SavedPlacesPersistence } from './useSavedPlaces'
+import {
+  NASA_ARCHIVE_RECORD_COUNT,
+  ProgressiveNasaCatalog,
+} from './ProgressiveNasaCatalog'
 
 export type ProductTool = 'search' | 'locations' | 'bookmarks' | 'settings'
 
@@ -111,16 +106,6 @@ const savedDate = new Intl.DateTimeFormat('en-US', {
   minute: '2-digit',
 })
 
-const snapshotDate = new Intl.DateTimeFormat('en-US', {
-  year: 'numeric',
-  month: 'short',
-  day: 'numeric',
-  hour: '2-digit',
-  minute: '2-digit',
-  timeZone: 'UTC',
-  timeZoneName: 'short',
-})
-
 type CatalogFilter = 'all' | 'planets' | 'moons' | 'temperate'
 
 const CATALOG_FILTERS: ReadonlyArray<{
@@ -134,34 +119,6 @@ const CATALOG_FILTERS: ReadonlyArray<{
 ]
 
 type SearchSource = 'simulation' | 'nasa'
-type NasaCatalogFilter = 'nearby' | 'earth-size' | 'temperate'
-
-const NASA_ARCHIVE_RECORD_COUNT = 128
-const NASA_RESULTS_PAGE_SIZE = 20
-const NOT_REPORTED = 'Not reported'
-
-const NASA_CATALOG_FILTERS: ReadonlyArray<{
-  readonly id: NasaCatalogFilter
-  readonly label: string
-  readonly qualifier: string
-}> = [
-  { id: 'nearby', label: 'Nearby', qualifier: '< 5 pc' },
-  { id: 'earth-size', label: 'Earth-size', qualifier: '≤ 1.8 R⊕' },
-  { id: 'temperate', label: 'Temperate', qualifier: '180–320 K' },
-]
-
-let nasaCatalogRequest: Promise<ExoplanetCatalog> | null = null
-
-function requestNasaCatalog(): Promise<ExoplanetCatalog> {
-  nasaCatalogRequest ??= import('../data/exoplanetCatalog')
-    .then(({ loadNearbyExoplanetCatalog }) => loadNearbyExoplanetCatalog())
-    .catch((error: unknown) => {
-      nasaCatalogRequest = null
-      throw error
-    })
-  return nasaCatalogRequest
-}
-
 type DisplayCalibrationKey = keyof DisplayCalibration
 
 interface DisplayCalibrationControlDefinition {
@@ -291,421 +248,6 @@ interface SearchToolProps {
   onSelect: (id: string) => void
   onFocus: (id: string) => void
 }
-
-function filterNasaRecords(
-  records: readonly ExoplanetRecord[],
-  query: string,
-  activeFilters: ReadonlySet<NasaCatalogFilter>,
-): readonly ExoplanetRecord[] {
-  const needle = query.trim().toLocaleLowerCase()
-  return records.filter((record) => {
-    if (
-      activeFilters.has('nearby') &&
-      record.distancePc >= 5
-    ) {
-      return false
-    }
-    if (
-      activeFilters.has('earth-size') &&
-      (record.radiusEarth === null || record.radiusEarth > 1.8)
-    ) {
-      return false
-    }
-    if (
-      activeFilters.has('temperate') &&
-      (record.equilibriumTempK === null ||
-        record.equilibriumTempK < 180 ||
-        record.equilibriumTempK > 320)
-    ) {
-      return false
-    }
-    if (!needle) return true
-    return [
-      record.name,
-      record.host,
-      record.stellarSpectralType,
-      record.discoveryMethod,
-      record.discoveryFacility,
-    ].some((value) => value?.toLocaleLowerCase().includes(needle))
-  })
-}
-
-function reportedText(value: string | null): string {
-  return value?.trim() || NOT_REPORTED
-}
-
-function reportedNumber(
-  value: number | null,
-  unit = '',
-  maximumFractionDigits = 2,
-  minimumFractionDigits = 0,
-): string {
-  if (value === null || !Number.isFinite(value)) return NOT_REPORTED
-  return `${value.toLocaleString('en-US', {
-    maximumFractionDigits,
-    minimumFractionDigits,
-  })}${unit}`
-}
-
-function catalogLoadError(error: unknown): string {
-  if (error instanceof Error && error.message.trim()) return error.message
-  return 'The local NASA archive snapshot could not be loaded.'
-}
-
-interface NasaRecordDetailProps {
-  record: ExoplanetRecord
-  metadata: ExoplanetCatalogMetadata
-  id: string
-  labelledBy: string
-}
-
-const NasaRecordDetail = memo(function NasaRecordDetail({
-  record,
-  metadata,
-  id,
-  labelledBy,
-}: NasaRecordDetailProps) {
-  const positionMetrics = [
-    ['Distance', reportedNumber(record.distancePc, ' pc', 2)],
-    ['Right ascension', reportedNumber(record.raDeg, '°', 4)],
-    ['Declination', reportedNumber(record.decDeg, '°', 4)],
-  ] as const
-  const physicalMetrics = [
-    ['Radius', reportedNumber(record.radiusEarth, ' R⊕', 2)],
-    ['Mass', reportedNumber(record.massEarth, ' M⊕', 2)],
-    ['Equilibrium temp.', reportedNumber(record.equilibriumTempK, ' K', 0)],
-    ['Insolation', reportedNumber(record.insolationEarth, ' S⊕', 2)],
-  ] as const
-  const orbitMetrics = [
-    ['Period', reportedNumber(record.orbitalPeriodDays, ' d', 2)],
-    ['Semi-major axis', reportedNumber(record.semiMajorAxisAu, ' AU', 4)],
-    ['Eccentricity', reportedNumber(record.eccentricity, '', 3)],
-  ] as const
-  const hostMetrics = [
-    ['Spectral type', reportedText(record.stellarSpectralType)],
-    ['Effective temp.', reportedNumber(record.stellarTeffK, ' K', 0)],
-    ['Stellar radius', reportedNumber(record.stellarRadiusSolar, ' R☉', 2)],
-    ['Stellar mass', reportedNumber(record.stellarMassSolar, ' M☉', 2)],
-    ['System stars', reportedNumber(record.systemStarCount, '', 0)],
-    ['Known planets', reportedNumber(record.systemPlanetCount, '', 0)],
-  ] as const
-  const discoveryMetrics = [
-    ['Year', record.discoveryYear === null ? NOT_REPORTED : String(record.discoveryYear)],
-    ['Method', reportedText(record.discoveryMethod)],
-    ['Facility', reportedText(record.discoveryFacility)],
-  ] as const
-  const groups = [
-    ['Position', positionMetrics],
-    ['Physical', physicalMetrics],
-    ['Orbit', orbitMetrics],
-    ['Host star', hostMetrics],
-    ['Discovery', discoveryMetrics],
-  ] as const
-
-  return (
-    <div
-      id={id}
-      className="product-nasa-detail"
-      role="region"
-      aria-labelledby={labelledBy}
-    >
-      {groups.map(([title, metrics]) => (
-        <section key={title} className="product-nasa-detail__group">
-          <h3>{title}</h3>
-          <dl>
-            {metrics.map(([label, value]) => (
-              <div key={label}>
-                <dt>{label}</dt>
-                <dd className={value === NOT_REPORTED ? 'is-missing' : undefined}>
-                  {value}
-                </dd>
-              </div>
-            ))}
-          </dl>
-        </section>
-      ))}
-
-      <section className="product-nasa-provenance" aria-labelledby={`${id}-provenance`}>
-        <h3 id={`${id}-provenance`}>Provenance</h3>
-        <p>
-          <strong>{metadata.source.provider}</strong>
-          {' · '}
-          {metadata.source.table}
-        </p>
-        <p>{metadata.provenance.catalogueScope}</p>
-        <p>
-          Snapshot retrieved{' '}
-          <time dateTime={metadata.retrievedAt}>
-            {snapshotDate.format(new Date(metadata.retrievedAt))}
-          </time>
-          .
-        </p>
-        <p>{metadata.provenance.numericConversion}</p>
-        <p>{metadata.provenance.nullPolicy}</p>
-        <div className="product-nasa-provenance__links">
-          <a href={metadata.source.requestUrl} target="_blank" rel="noreferrer">
-            Source query <ExternalLink size={12} aria-hidden="true" />
-          </a>
-          <a href={metadata.source.documentationUrl} target="_blank" rel="noreferrer">
-            Archive documentation <ExternalLink size={12} aria-hidden="true" />
-          </a>
-        </div>
-      </section>
-    </div>
-  )
-})
-
-interface NasaArchiveSearchProps {
-  searchInputRef: RefObject<HTMLInputElement | null>
-}
-
-type NasaCatalogLoadState =
-  | { readonly status: 'loading' }
-  | { readonly status: 'error'; readonly message: string }
-  | { readonly status: 'ready'; readonly catalog: ExoplanetCatalog }
-
-const NasaArchiveSearch = memo(function NasaArchiveSearch({
-  searchInputRef,
-}: NasaArchiveSearchProps) {
-  const inputId = useId()
-  const resultId = useId()
-  const [loadState, setLoadState] = useState<NasaCatalogLoadState>({
-    status: 'loading',
-  })
-  const [retryToken, setRetryToken] = useState(0)
-  const [query, setQuery] = useState('')
-  const [activeFilters, setActiveFilters] = useState<Set<NasaCatalogFilter>>(
-    () => new Set(),
-  )
-  const [visibleCount, setVisibleCount] = useState(NASA_RESULTS_PAGE_SIZE)
-  const [expandedRecord, setExpandedRecord] = useState<string | null>(null)
-  const deferredQuery = useDeferredValue(query)
-
-  useEffect(() => {
-    let active = true
-    setLoadState({ status: 'loading' })
-    void requestNasaCatalog().then(
-      (catalog) => {
-        if (active) setLoadState({ status: 'ready', catalog })
-      },
-      (error: unknown) => {
-        if (active) {
-          setLoadState({ status: 'error', message: catalogLoadError(error) })
-        }
-      },
-    )
-    return () => {
-      active = false
-    }
-  }, [retryToken])
-
-  const results = useMemo(() => {
-    if (loadState.status !== 'ready') return []
-    return filterNasaRecords(
-      loadState.catalog.planets,
-      deferredQuery,
-      activeFilters,
-    )
-  }, [activeFilters, deferredQuery, loadState])
-  const visibleResults = results.slice(0, visibleCount)
-
-  const updateQuery = useCallback((value: string) => {
-    setQuery(value)
-    setVisibleCount(NASA_RESULTS_PAGE_SIZE)
-    setExpandedRecord(null)
-  }, [])
-
-  const toggleFilter = useCallback((filter: NasaCatalogFilter) => {
-    setActiveFilters((current) => {
-      const next = new Set(current)
-      if (next.has(filter)) next.delete(filter)
-      else next.add(filter)
-      return next
-    })
-    setVisibleCount(NASA_RESULTS_PAGE_SIZE)
-    setExpandedRecord(null)
-  }, [])
-
-  if (loadState.status === 'loading') {
-    return (
-      <div className="product-nasa-async-state">
-        <p
-          className="product-nasa-async-state__announcement"
-          role="status"
-          aria-live="polite"
-          aria-atomic="true"
-        >
-          Opening the nearby-world archive
-        </p>
-        <div className="product-nasa-load-state" aria-busy="true">
-          <RefreshCcw className="is-spinning" size={20} aria-hidden="true" />
-          <strong>Opening the nearby-world archive</strong>
-          <p>The versioned NASA snapshot is loading on demand.</p>
-        </div>
-      </div>
-    )
-  }
-
-  if (loadState.status === 'error') {
-    return (
-      <div className="product-nasa-load-state is-error" role="alert">
-        <AlertTriangle size={21} aria-hidden="true" />
-        <strong>Archive unavailable</strong>
-        <p>{loadState.message}</p>
-        <button type="button" onClick={() => setRetryToken((token) => token + 1)}>
-          <RefreshCcw size={13} aria-hidden="true" /> Retry
-        </button>
-      </div>
-    )
-  }
-
-  const { catalog } = loadState
-
-  return (
-    <div className="product-nasa-search">
-      <label htmlFor={inputId}>Search the NASA Exoplanet Archive</label>
-      <div className="product-search__field">
-        <Search size={17} aria-hidden="true" />
-        <input
-          ref={searchInputRef}
-          id={inputId}
-          type="search"
-          value={query}
-          placeholder="Planet, host, spectral type, method…"
-          autoComplete="off"
-          spellCheck="false"
-          onChange={(event) => updateQuery(event.target.value)}
-        />
-        {query ? (
-          <button
-            type="button"
-            aria-label="Clear NASA archive search"
-            onClick={() => updateQuery('')}
-          >
-            <X size={15} aria-hidden="true" />
-          </button>
-        ) : (
-          <kbd>/</kbd>
-        )}
-      </div>
-
-      <div
-        className="product-catalog-filters"
-        role="group"
-        aria-label="NASA archive filters"
-      >
-        {NASA_CATALOG_FILTERS.map((filter) => (
-          <button
-            key={filter.id}
-            type="button"
-            aria-pressed={activeFilters.has(filter.id)}
-            aria-label={`${filter.label}, ${filter.qualifier}`}
-            onClick={() => toggleFilter(filter.id)}
-          >
-            {filter.label} <span>{filter.qualifier}</span>
-          </button>
-        ))}
-      </div>
-
-      <p
-        className="product-search__status"
-        role="status"
-        aria-live="polite"
-        aria-atomic="true"
-      >
-        NASA Exoplanet Archive ·{' '}
-        Showing {visibleResults.length} of {results.length} matches
-        {' · '}
-        {catalog.metadata.recordCount} archive records
-      </p>
-
-      {results.length > 0 ? (
-        <>
-          <ul className="product-nasa-list" aria-label="NASA archive results">
-            {visibleResults.map((record) => {
-              const expanded = expandedRecord === record.name
-              const recordId = `${resultId}-${encodeURIComponent(record.name)}`
-              const triggerId = `${recordId}-trigger`
-              const detailId = `${recordId}-detail`
-              return (
-                <li key={record.name} className={expanded ? 'is-expanded' : undefined}>
-                  <article className="product-nasa-record">
-                    <button
-                      id={triggerId}
-                      className="product-nasa-record__toggle"
-                      type="button"
-                      aria-expanded={expanded}
-                      aria-controls={detailId}
-                      onClick={() =>
-                        setExpandedRecord((current) =>
-                          current === record.name ? null : record.name,
-                        )
-                      }
-                    >
-                      <span className="product-nasa-record__topline">
-                        <span className="product-nasa-badge">Observed</span>
-                        <span className="product-nasa-badge is-composite">
-                          Archive composite
-                        </span>
-                      </span>
-                      <span className="product-nasa-record__identity">
-                        <span>
-                          <strong>{record.name}</strong>
-                          <small>{reportedText(record.host)} host system</small>
-                        </span>
-                        <ChevronDown size={16} aria-hidden="true" />
-                      </span>
-                      <span className="product-nasa-record__summary" aria-hidden="true">
-                        <span>{reportedNumber(record.distancePc, ' pc', 1)}</span>
-                        <span>{reportedNumber(record.radiusEarth, ' R⊕', 2)}</span>
-                        <span>{reportedNumber(record.orbitalPeriodDays, ' d', 1)}</span>
-                      </span>
-                    </button>
-                    {expanded ? (
-                      <NasaRecordDetail
-                        id={detailId}
-                        labelledBy={triggerId}
-                        record={record}
-                        metadata={catalog.metadata}
-                      />
-                    ) : null}
-                  </article>
-                </li>
-              )
-            })}
-          </ul>
-          {results.length > NASA_RESULTS_PAGE_SIZE ? (
-            <button
-              className="product-nasa-load-more"
-              type="button"
-              aria-disabled={visibleCount >= results.length}
-              onClick={() => {
-                if (visibleCount >= results.length) return
-                setVisibleCount((count) => count + NASA_RESULTS_PAGE_SIZE)
-              }}
-            >
-              {visibleCount < results.length ? (
-                <>
-                  Load{' '}
-                  {Math.min(NASA_RESULTS_PAGE_SIZE, results.length - visibleCount)} more
-                  <ChevronRight size={14} aria-hidden="true" />
-                </>
-              ) : (
-                <>All {results.length} matching records shown</>
-              )}
-            </button>
-          ) : null}
-        </>
-      ) : (
-        <div className="product-empty-state">
-          <Search size={23} aria-hidden="true" />
-          <strong>No matching archive records</strong>
-          <p>Remove a filter or search by planet, host, method, or facility.</p>
-        </div>
-      )}
-    </div>
-  )
-})
 
 const SearchTool = memo(function SearchTool({
   targets,
@@ -858,7 +400,7 @@ const SearchTool = memo(function SearchTool({
           )}
         </div>
       ) : (
-        <NasaArchiveSearch searchInputRef={searchInputRef} />
+        <ProgressiveNasaCatalog searchInputRef={searchInputRef} />
       )}
     </div>
   )
