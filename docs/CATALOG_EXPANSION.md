@@ -1,6 +1,6 @@
 # Real-catalog expansion roadmap
 
-> - Status: progressive NASA release implemented; Gaia/hierarchy/100k stages proposed
+> - Status: progressive NASA release and synthetic 100k search gate implemented; reviewed Gaia/hierarchy/real-100k stages proposed
 > - Research verified: 2026-08-11
 > - Scope: expand Astral Surveyor from one deterministic fictional system to a
 >   source-backed, progressively loaded catalogue while preserving the existing
@@ -627,6 +627,22 @@ Performance tests must report fixture size, actual vs synthetic fixture status,
 device/browser/backend, cold/warm cache, network profile, and percentiles. A
 synthetic million-row stress fixture is acceptable for engineering tests but
 must never appear in the product as observed data.
+
+Implemented engineering gate (2026-08-12):
+
+- `npm run catalog:benchmark` constructs exactly 100,000 deterministic summary
+  rows whose IDs are prefixed `synthetic-scale-`; the fixture is test-only and
+  cannot enter the manifest, UI, or observed entity counts;
+- the same query function used by the production Worker is measured after its
+  index is ready for exact ID/name/host queries and mixed filter/sort scans;
+- both p95 paths fail CI at 50 ms, and the packed UTF-8 search bytes plus typed
+  offsets/orders fail at 24 MiB;
+- the report prints runtime, platform, warm-cache status, preparation time,
+  heap delta, auxiliary-index size, and p95. Heap delta is observational rather
+  than a gate because garbage-collection timing is nondeterministic;
+- this is an architecture benchmark, not evidence of 100,000 observed stars or
+  browser/mobile acceptance. The checked-in real release remains 6,336 NASA
+  planets across 4,749 hosts.
 
 ## 7. Offline, versioning, and update strategy
 

@@ -10,6 +10,7 @@
     "test": "vitest run",
     "check": "npm run lint && npm run test && npm run build",
     "catalog:refresh": "node scripts/refresh-progressive-exoplanet-catalog.mjs",
+    "catalog:benchmark": "vitest run src/data/progressiveCatalogScale.test.ts --reporter=verbose",
     "preview": "vite preview"
   },
   "dependencies": {

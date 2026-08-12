@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 import {
   validateProgressiveManifest,
   validateProgressiveSearchIndex,
+  type ProgressiveSearchIndex,
 } from './progressiveExoplanetCatalog'
 import {
   prepareProgressiveIndex,
@@ -27,6 +28,37 @@ async function loadRealIndex() {
 }
 
 describe('progressive catalogue worker search', () => {
+  it('preserves case-insensitive Unicode-normalized substring semantics in the packed index', () => {
+    const index: ProgressiveSearchIndex = {
+      schemaVersion: '2.0.0',
+      catalogRevision: 'unicode-search-test',
+      columns: [],
+      orders: { distance: [0], discovery: [0] },
+      records: [[
+        'unicode-1',
+        'Étoile β b',
+        'Étoile β',
+        10,
+        1,
+        1,
+        260,
+        'G2 V',
+        'Transit',
+        'Observatoire test',
+        2025,
+        0,
+      ]],
+    }
+    const result = queryProgressiveIndex(prepareProgressiveIndex(index), {
+      query: 'E\u0301TOILE Β',
+      filters: [],
+      sort: 'name',
+      limit: 20,
+    })
+    expect(result.totalMatches).toBe(1)
+    expect(result.results[0]?.id).toBe('unicode-1')
+  })
+
   it('searches the complete real index by planet, host, method and facility', async () => {
     const { prepared } = await loadRealIndex()
     for (const query of ['Proxima Cen b', 'Proxima Cen', 'Transit', 'Kepler']) {

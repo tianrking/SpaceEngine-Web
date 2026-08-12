@@ -49,7 +49,7 @@ This project is an original clean-room implementation. It is not a port, fork, o
 | GPU programs | Three.js Shading Language (TSL) | WebGPU compute initialization for the spiral starfield and backend-compatible node materials |
 | Procedural visuals | `simplex-noise`, Canvas textures | Seeded planet albedo, clouds, glows, rings, and small rocky-surface displacement |
 | Astronomical data | NASA Exoplanet Archive TAP release | Versioned composite parameters for 6,336 confirmed exoplanets, a compact search index, a 4,749-host ICRS sky index, and 17 content-addressed scientific-detail chunks |
-| Catalogue runtime | Dedicated Web Worker, Web Crypto, IndexedDB, immutable HTTP assets | Off-main-thread search, SHA-256/byte-size/schema verification, cancellable detail requests, bounded memory/disk caches, and an optional complete offline pack |
+| Catalogue runtime | Dedicated Web Worker, Web Crypto, IndexedDB, immutable HTTP assets | Off-main-thread packed UTF-8 search, SHA-256/byte-size/schema verification, cancellable detail requests, bounded memory/disk caches, and an optional complete offline pack |
 | Offline shell | Generated Service Worker | Atomically content-versioned application-shell precache and network-first navigation fallback without intercepting catalogue release validation |
 | State boundary | React state plus engine snapshots | Commands flow into `CosmosEngine`; telemetry returns to React every 400 ms rather than every frame |
 | Tooling | Vite 8, Oxlint | Development server, optimized production build, and static analysis |
@@ -72,6 +72,7 @@ WebAssembly is not currently used. The project first establishes correctness in 
 - **Complete exoplanet archive.** Search all 6,336 confirmed planets in the pinned release by planet, host, spectral type, discovery method, or facility; combine Nearby, Earth-size, Temperate, and Recent filters and sort by name, distance, or discovery date.
 - **Observed-host sky atlas.** Explore all 4,749 NASA host systems on an interactive high-DPI ICRS canvas using reported RA/Dec, distance, Gaia identity/magnitude, spectral type, multiplicity, and confirmed-planet count. Its 172 KiB gzip data asset and 3.3 KiB gzip UI chunk load only when requested; pointer and keyboard selection work, and composite-field conflicts remain visible instead of being resolved to a convenient value.
 - **Scientific detail on demand.** The initial catalogue transfer is a compact 175 KiB gzip search index, including precomputed distance and discovery orders. Expanding a result fetches only one 78–153 KiB gzip detail chunk containing measurements, asymmetric errors, limit flags, source references, external IDs, discovery equipment, spectra/JWST counts, and stellar context.
+- **Measured 100k search architecture.** A deterministic, explicitly synthetic 100,000-summary fixture runs in CI. The Worker search core stores normalized text in one UTF-8 byte buffer with typed offsets/orders instead of duplicating 100,000 JavaScript object forests; exact identity/name and mixed-filter p95 are both required to remain below 50 ms, while the auxiliary index must remain below 24 MiB.
 - **Explicit data integrity.** Every immutable asset is checked against manifest byte size and SHA-256 before use. Missing source values remain `null`, composite fields stay labelled, stale detail requests can be cancelled, and only two decoded chunks remain in Worker memory.
 - **Verified offline observatory.** After one successful online load, the generated Service Worker can restore the application shell and the Worker can restore the complete 6,336-planet search core from IndexedDB. An explicit 17-chunk research pack adds all scientific details for offline use; incomplete downloads never become the active complete pack, and the previous release pointer is retained for future recovery tooling.
 - **Working product tools.** Search and filter all 27 bodies, inspect satellite families in the system map, save any destination locally, inspect the scientific/runtime model, and open an accessible keyboard guide.
@@ -172,6 +173,7 @@ http://localhost:5173/?renderer=webgl2
 | `npm run test` | Run the Vitest unit suite once |
 | `npm run check` | Run lint, tests, and the production build in sequence |
 | `npm run catalog:refresh` | Rebuild the complete manifest/index/chunk NASA release from the official TAP endpoint |
+| `npm run catalog:benchmark` | Run the isolated, synthetic 100,000-summary catalogue scale gate and print its environment-labelled measurements |
 
 For deterministic release-layout work without contacting NASA again, run
 `npm run catalog:refresh -- --repack-existing`. This rebuilds the index,
@@ -275,7 +277,10 @@ The unit suite currently verifies:
 - astronomical distance/speed formatting;
 - camera-relative high/low precision splitting and reconstruction;
 - display-setting normalization, persistence, and renderer calibration derivation; and
-- NASA manifest/chunk/host-index hashes, schema, ICRS ranges, provenance, composite conflicts, uniqueness, null preservation, representative records, filters, sorting, and measured full-index search budget.
+- NASA manifest/chunk/host-index hashes, schema, ICRS ranges, provenance, composite conflicts, uniqueness, null preservation, representative records, filters, sorting, and measured full-index search budget; and
+- a clearly labelled synthetic 100,000-summary architecture gate covering exact identity/name search, mixed filters/orderings, and compact auxiliary-index storage.
+
+Benchmark scope, methodology, current reference results, and non-claims are documented in [Performance](docs/PERFORMANCE.md). The 100k fixture validates engineering scale only; it is never exposed as observed catalogue data and does not satisfy the roadmap requirement for 100,000 reviewed real summaries.
 
 GitHub Actions runs `npm ci` followed by `npm run check` for pull requests and pushes to `main`.
 
@@ -326,12 +331,13 @@ The public deployment for this repository is <https://space-engine-web.vercel.ap
 - [x] Add a content-versioned offline shell, verified IndexedDB search-core fallback, and an explicit complete scientific-detail pack
 - [x] Add a lazy, Worker-verified ICRS Canvas atlas for all 4,749 real NASA host coordinates
 - [x] Document the staged 100+ to 100,000-object real-catalog architecture, provenance, rights, caching, and performance gates
+- [x] Add a CI-enforced synthetic 100,000-summary search/memory gate backed by a compact UTF-8/typed-offset Worker index
 - [ ] Add hierarchical coordinate frames and use high/low values in render shaders
 - [ ] Build six-face cube-sphere quadtree terrain with screen-space error, seams, and tile budgets
 - [ ] Add a Worker-backed low-LOD terrain provider for WebGL 2
 - [ ] Implement physically motivated atmospheric scattering and eclipse/ring shadows
 - [ ] Add release-reviewed Gaia/SIMBAD cross-matching and streamed catalogue tiles with per-field provenance
-- [ ] Add GPU device-loss recovery, browser E2E tests, and measurable performance budgets
+- [ ] Add GPU device-loss recovery, automated browser E2E, cross-device GPU budgets, and telemetry-backed regressions
 - [ ] Evaluate Rust/WASM SIMD or threads only for profiled CPU bottlenecks
 
 ## Clean-room, trademark, and license notice

@@ -16,15 +16,11 @@ export interface ProgressiveCatalogQuery {
 }
 
 export interface PreparedProgressiveIndex {
-  readonly byName: readonly PreparedProgressiveRecord[]
-  readonly byDistance: readonly PreparedProgressiveRecord[]
-  readonly byDiscovery: readonly PreparedProgressiveRecord[]
-}
-
-interface PreparedProgressiveRecord {
-  readonly tuple: ProgressiveSummaryTuple
-  readonly searchText: string
-  readonly nameRank: number
+  readonly records: readonly ProgressiveSummaryTuple[]
+  readonly searchBytes: Uint8Array<ArrayBuffer>
+  readonly searchOffsets: Uint32Array<ArrayBuffer>
+  readonly distanceOrder: Uint32Array<ArrayBuffer>
+  readonly discoveryOrder: Uint32Array<ArrayBuffer>
 }
 
 export interface ProgressiveCatalogQueryResult {
@@ -66,20 +62,99 @@ function searchableTuple(tuple: ProgressiveSummaryTuple): string {
   )
 }
 
+const searchTextEncoder = new TextEncoder()
+
+function estimatedSearchCapacity(records: readonly ProgressiveSummaryTuple[]): number {
+  let characters = 0
+  for (const tuple of records) {
+    for (const index of [
+      INDEX.id,
+      INDEX.name,
+      INDEX.host,
+      INDEX.stellarSpectralType,
+      INDEX.discoveryMethod,
+      INDEX.discoveryFacility,
+    ] as const) {
+      const value = tuple[index]
+      if (typeof value === 'string') characters += value.length + 1
+    }
+  }
+  return Math.max(1024, characters)
+}
+
+function growSearchBytes(
+  current: Uint8Array<ArrayBuffer>,
+  minimumCapacity: number,
+): Uint8Array<ArrayBuffer> {
+  const next = new Uint8Array(Math.max(minimumCapacity, Math.ceil(current.length * 1.5)))
+  next.set(current)
+  return next
+}
+
+function encodeSearchText(records: readonly ProgressiveSummaryTuple[]): {
+  readonly bytes: Uint8Array<ArrayBuffer>
+  readonly offsets: Uint32Array<ArrayBuffer>
+} {
+  let bytes: Uint8Array<ArrayBuffer> = new Uint8Array(estimatedSearchCapacity(records))
+  const offsets = new Uint32Array(records.length + 1)
+  let byteOffset = 0
+
+  for (let index = 0; index < records.length; index += 1) {
+    offsets[index] = byteOffset
+    const text = searchableTuple(records[index])
+    let characterOffset = 0
+    while (characterOffset < text.length) {
+      if (byteOffset === bytes.length) bytes = growSearchBytes(bytes, byteOffset + 4)
+      const encoded = searchTextEncoder.encodeInto(
+        text.slice(characterOffset),
+        bytes.subarray(byteOffset),
+      )
+      if (encoded.read === 0) {
+        bytes = growSearchBytes(bytes, byteOffset + Math.max(4, text.length * 3))
+        continue
+      }
+      characterOffset += encoded.read
+      byteOffset += encoded.written
+    }
+  }
+  offsets[records.length] = byteOffset
+  return { bytes: bytes.slice(0, byteOffset), offsets }
+}
+
 export function prepareProgressiveIndex(
   index: ProgressiveSearchIndex,
 ): PreparedProgressiveIndex {
-  const records = [...index.records]
-  const byName = records.map((tuple, nameRank) => ({
-    tuple,
-    searchText: searchableTuple(tuple),
-    nameRank,
-  }))
+  const encodedSearch = encodeSearchText(index.records)
   return {
-    byName,
-    byDistance: index.orders.distance.map((position) => byName[position]),
-    byDiscovery: index.orders.discovery.map((position) => byName[position]),
+    records: index.records,
+    searchBytes: encodedSearch.bytes,
+    searchOffsets: encodedSearch.offsets,
+    distanceOrder: Uint32Array.from(index.orders.distance),
+    discoveryOrder: Uint32Array.from(index.orders.discovery),
   }
+}
+
+function encodedSearchIncludes(
+  prepared: PreparedProgressiveIndex,
+  recordIndex: number,
+  needle: Uint8Array<ArrayBuffer>,
+): boolean {
+  const start = prepared.searchOffsets[recordIndex]
+  const end = prepared.searchOffsets[recordIndex + 1]
+  const lastStart = end - needle.length
+  const firstByte = needle[0]
+  for (let offset = start; offset <= lastStart; offset += 1) {
+    if (prepared.searchBytes[offset] !== firstByte) continue
+    let needleOffset = 1
+    while (
+      needleOffset < needle.length &&
+      prepared.searchBytes[offset + needleOffset] === needle[needleOffset]
+    ) {
+      needleOffset += 1
+    }
+    if (needleOffset === needle.length) return true
+  }
+  return false
 }
 
 function matchesFilters(
@@ -109,20 +184,22 @@ export function queryProgressiveIndex(
   request: ProgressiveCatalogQuery,
 ): ProgressiveCatalogQueryResult {
   const needle = normalizeSearchText(request.query)
+  const encodedNeedle = needle ? searchTextEncoder.encode(needle) : null
   const filters = new Set(request.filters)
   const matches: ProgressiveSummaryTuple[] = []
   let totalMatches = 0
-  const records =
+  const order =
     request.sort === 'distance'
-      ? prepared.byDistance
+      ? prepared.distanceOrder
       : request.sort === 'discovery'
-        ? prepared.byDiscovery
-        : prepared.byName
+        ? prepared.discoveryOrder
+        : null
 
-  for (const record of records) {
-    const { tuple } = record
+  for (let position = 0; position < prepared.records.length; position += 1) {
+    const recordIndex = order?.[position] ?? position
+    const tuple = prepared.records[recordIndex]
     if (!matchesFilters(tuple, filters)) continue
-    if (needle && !record.searchText.includes(needle)) continue
+    if (encodedNeedle && !encodedSearchIncludes(prepared, recordIndex, encodedNeedle)) continue
     totalMatches += 1
     if (matches.length < request.limit) matches.push(tuple)
   }
