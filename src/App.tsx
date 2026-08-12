@@ -18,6 +18,7 @@ import {
 } from './engine/catalog'
 import type { CosmosEngine as CosmosEngineInstance } from './engine/CosmosEngine'
 import type {
+  CameraCenterState,
   CelestialBodyView,
   EngineCapabilities,
   EngineTelemetry,
@@ -25,6 +26,8 @@ import type {
 } from './engine/types'
 import {
   ExplorerHud,
+  type BodyCenteredCameraView,
+  type BodyCenteredViewMode,
   type CelestialMetric,
   type CelestialMetricSection,
   type CelestialStatusTone,
@@ -37,6 +40,13 @@ import {
 import './App.css'
 
 const INITIAL_DATE = new Date(Date.UTC(2187, 2, 20, 14, 32, 0))
+
+const INITIAL_CAMERA_CENTER: CameraCenterState = {
+  mode: 'system',
+  bodyId: null,
+  transitioning: false,
+  canReturn: false,
+}
 
 const INITIAL_TELEMETRY: EngineTelemetry = {
   backend: 'webgl2',
@@ -304,6 +314,7 @@ function toHudObject(body: CelestialBodyView): SelectedCelestialObject {
     name: body.name,
     type: body.bodyClass,
     designation: body.designation,
+    closeApproachAvailable: body.bodyKind !== 'star',
     description: body.description,
     distance: orbitalDistanceDisplay(body),
     orbitSummary: body.orbit
@@ -375,6 +386,7 @@ function App() {
   const searchInputRef = useRef<HTMLInputElement>(null)
   const overlayReturnFocusRef = useRef<HTMLElement | null>(null)
   const [telemetry, setTelemetry] = useState(INITIAL_TELEMETRY)
+  const [cameraCenter, setCameraCenter] = useState(INITIAL_CAMERA_CENTER)
   const [capabilities, setCapabilities] = useState<EngineCapabilities | null>(null)
   const [selectedBody, setSelectedBody] = useState<CelestialBodyView | null>(STAR)
   const [overlay, setOverlay] = useState<ExplorerOverlay>('welcome')
@@ -425,6 +437,12 @@ function App() {
             setInspectorOpen(true)
           }
         },
+        onSelectionCleared: () => {
+          if (active) setSelectedBody(null)
+        },
+        onCameraCenterChange: (nextCameraCenter) => {
+          if (active) setCameraCenter(nextCameraCenter)
+        },
         onError: (error) => {
           if (active) setEngineError(error.message)
         },
@@ -454,6 +472,24 @@ function App() {
     () => (selectedBody ? toHudObject(selectedBody) : null),
     [selectedBody],
   )
+
+  const cameraView = useMemo<BodyCenteredCameraView | null>(() => {
+    if (cameraCenter.bodyId === null || cameraCenter.mode === 'system') return null
+    const centeredBody = BODY_LOOKUP.get(cameraCenter.bodyId)
+    if (!centeredBody) return null
+    return {
+      centeredObject: {
+        id: centeredBody.id,
+        name: centeredBody.name,
+        type: centeredBody.bodyClass,
+        designation: centeredBody.designation,
+      },
+      mode: cameraCenter.mode === 'close' ? 'close-approach' : 'orbit',
+      transitioning: cameraCenter.transitioning,
+      closeApproachAvailable: centeredBody.bodyKind !== 'star',
+      previousViewLabel: 'previous camera frame',
+    }
+  }, [cameraCenter])
 
   const webGpuStatus: WebGpuStatus = engineError
     ? 'unavailable'
@@ -500,9 +536,37 @@ function App() {
     engineRef.current?.select(id)
   }, [])
 
-  const handleFocusTarget = useCallback((id: string, surface = false) => {
-    engineRef.current?.focusOn(id, surface)
+  const handleCenterTarget = useCallback((id: string, mode: BodyCenteredViewMode) => {
+    const shouldRestoreViewportFocus = toProductTool(activeTool) !== null
+    engineRef.current?.centerOnBody(id, mode === 'close-approach' ? 'close' : 'orbit')
     setActiveTool('explore')
+    if (shouldRestoreViewportFocus) {
+      window.requestAnimationFrame(() => {
+        viewportRef.current?.querySelector<HTMLCanvasElement>('canvas')?.focus()
+      })
+    }
+  }, [activeTool])
+
+  const handleFocusTarget = useCallback((id: string, surface = false) => {
+    handleCenterTarget(id, surface ? 'close-approach' : 'orbit')
+  }, [handleCenterTarget])
+
+  const handleCameraViewModeChange = useCallback((mode: BodyCenteredViewMode) => {
+    if (cameraCenter.bodyId) handleCenterTarget(cameraCenter.bodyId, mode)
+  }, [cameraCenter.bodyId, handleCenterTarget])
+
+  const handleReturnToPreviousView = useCallback(() => {
+    engineRef.current?.returnToPreviousView()
+  }, [])
+
+  const handleSystemOverview = useCallback(() => {
+    engineRef.current?.showSystemOverview()
+    setActiveTool('explore')
+  }, [])
+
+  const handleClearSelection = useCallback(() => {
+    setSelectedBody(null)
+    engineRef.current?.clearSelection()
   }, [])
 
   const handleOpenSearch = useCallback(() => {
@@ -515,7 +579,7 @@ function App() {
   const handleToolChange = useCallback((tool: NavigationTool) => {
     setOverlay(null)
     if (tool === 'home') {
-      engineRef.current?.resetView()
+      engineRef.current?.showSystemOverview()
       setActiveTool('explore')
       return
     }
@@ -582,6 +646,10 @@ function App() {
         if (toProductTool(activeTool) !== null) {
           event.preventDefault()
           handleCloseTool()
+          return
+        }
+        if (engineRef.current?.cancelCameraTransition()) {
+          event.preventDefault()
         }
         return
       }
@@ -642,6 +710,10 @@ function App() {
 
       <ExplorerHud
         selectedObject={hudObject}
+        cameraView={cameraView}
+        systemOverviewTransitioning={
+          cameraCenter.mode === 'system' ? cameraCenter.transitioning : undefined
+        }
         webGpuStatus={webGpuStatus}
         fps={telemetry.fps}
         speed={telemetry.cameraSpeed}
@@ -661,7 +733,15 @@ function App() {
         onFocusSelectedObject={() => {
           if (selectedBody) handleFocusTarget(selectedBody.id)
         }}
-        onClearSelectedObject={() => setSelectedBody(null)}
+        onCenterSelectedObject={(mode) => {
+          if (selectedBody) handleCenterTarget(selectedBody.id, mode)
+        }}
+        onCameraViewModeChange={handleCameraViewModeChange}
+        onReturnToPreviousView={
+          cameraCenter.canReturn ? handleReturnToPreviousView : undefined
+        }
+        onSystemOverview={handleSystemOverview}
+        onClearSelectedObject={handleClearSelection}
         onTogglePause={handleTogglePause}
         onTimeScaleChange={handleTimeScaleChange}
         onResetTime={handleResetTime}
@@ -674,6 +754,15 @@ function App() {
       <SystemNavigator
         targets={NAVIGATION_TARGETS}
         selectedId={selectedBody?.id ?? null}
+        centeredId={cameraCenter.bodyId}
+        centeredViewMode={
+          cameraCenter.mode === 'close'
+            ? 'close-approach'
+            : cameraCenter.mode === 'orbit'
+              ? 'orbit'
+              : undefined
+        }
+        centeredTransitioning={cameraCenter.transitioning}
         hidden={cinematic || overlay !== null || activeTool !== 'explore'}
         onSelect={handleSelectTarget}
         onFocus={handleFocusTarget}

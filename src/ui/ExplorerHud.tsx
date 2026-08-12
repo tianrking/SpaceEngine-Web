@@ -1,7 +1,8 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import type { ChangeEvent, KeyboardEvent as ReactKeyboardEvent } from 'react'
 import {
   Aperture,
+  ArrowDownToLine,
   Bookmark,
   ChevronLeft,
   ChevronRight,
@@ -26,6 +27,7 @@ import {
   Settings2,
   Sparkles,
   Telescope,
+  Undo2,
   X,
   Zap,
   type LucideIcon,
@@ -122,6 +124,8 @@ export interface SelectedCelestialObject {
   id: string
   name: string
   type: string
+  /** Set false when near-body camera approaches are invalid for this object. */
+  closeApproachAvailable?: boolean
   designation?: string
   description?: string
   distance?: string
@@ -135,6 +139,22 @@ export interface SelectedCelestialObject {
   atmosphere?: CelestialAtmosphere
   habitability?: CelestialHabitability
   status?: CelestialStatus
+}
+
+export type BodyCenteredViewMode = 'orbit' | 'close-approach'
+
+export interface BodyCenteredCameraView {
+  centeredObject: Pick<
+    SelectedCelestialObject,
+    'id' | 'name' | 'type' | 'designation'
+  >
+  mode: BodyCenteredViewMode
+  /** True while the camera is travelling to the requested reference frame. */
+  transitioning?: boolean
+  /** Set false when a surface/near-body approach is not valid for this body. */
+  closeApproachAvailable?: boolean
+  /** Optional human-readable destination for the return action. */
+  previousViewLabel?: string
 }
 
 export interface TopStatusBarProps {
@@ -155,9 +175,17 @@ export interface NavigationRailProps {
 
 export interface ObjectInspectorProps {
   selectedObject?: SelectedCelestialObject | null
+  /** `undefined` keeps legacy focus UI; `null` means no body camera lock. */
+  cameraView?: BodyCenteredCameraView | null
+  /** Distinguishes an in-flight return to the system frame from its settled state. */
+  systemOverviewTransitioning?: boolean
   open?: boolean
   onToggle?: () => void
   onFocus?: () => void
+  onCenterSelectedObject?: (mode: BodyCenteredViewMode) => void
+  onCameraViewModeChange?: (mode: BodyCenteredViewMode) => void
+  onReturnToPreviousView?: () => void
+  onSystemOverview?: () => void
   onClear?: () => void
 }
 
@@ -185,12 +213,20 @@ export interface ExplorerHudProps
   selectedObject?: SelectedCelestialObject | null
   activeTool?: NavigationTool
   inspectorOpen?: boolean
+  /** `undefined` preserves legacy UI; `null` represents the system/unlocked frame. */
+  cameraView?: BodyCenteredCameraView | null
+  /** Distinguishes an in-flight return to the system frame from its settled state. */
+  systemOverviewTransitioning?: boolean
   overlay?: ExplorerOverlay
   tourStep?: number
   className?: string
   onToolChange?: (tool: NavigationTool) => void
   onInspectorToggle?: () => void
   onFocusSelectedObject?: () => void
+  onCenterSelectedObject?: (mode: BodyCenteredViewMode) => void
+  onCameraViewModeChange?: (mode: BodyCenteredViewMode) => void
+  onReturnToPreviousView?: () => void
+  onSystemOverview?: () => void
   onClearSelectedObject?: () => void
   onOverlayClose?: () => void
   onBeginExploring?: () => void
@@ -731,11 +767,185 @@ function InspectorOverview({
   )
 }
 
+interface CameraContextBarProps {
+  cameraView: BodyCenteredCameraView | null
+  systemOverviewTransitioning?: boolean
+  onCameraViewModeChange?: (mode: BodyCenteredViewMode) => void
+  onReturnToPreviousView?: () => void
+  onSystemOverview?: () => void
+}
+
+function cameraModeLabel(mode: BodyCenteredViewMode): string {
+  return mode === 'orbit' ? 'Orbit tracking' : 'Close approach'
+}
+
+function CameraContextBar({
+  cameraView,
+  systemOverviewTransitioning = false,
+  onCameraViewModeChange,
+  onReturnToPreviousView,
+  onSystemOverview,
+}: CameraContextBarProps) {
+  const closeApproachAvailable =
+    cameraView?.closeApproachAvailable !== false
+  const transitioning = cameraView
+    ? cameraView.transitioning === true
+    : systemOverviewTransitioning
+  const previousViewLabel =
+    cameraView?.previousViewLabel?.trim() || 'previous view'
+  const centeredDesignation = cameraView?.centeredObject.designation?.trim()
+  const cameraModeDetail = cameraView
+    ? transitioning
+      ? `Preparing ${cameraModeLabel(cameraView.mode).toLocaleLowerCase()}`
+      : cameraModeLabel(cameraView.mode)
+    : 'System frame · Body tracking unlocked'
+
+  const cameraAnnouncement = cameraView
+    ? transitioning
+      ? `Centering on ${cameraView.centeredObject.name}`
+      : `Centered on ${cameraView.centeredObject.name}, ${cameraModeLabel(cameraView.mode)}`
+    : transitioning
+      ? 'Returning to system overview'
+      : 'System overview'
+
+  return (
+    <>
+      <span
+        className="se-sr-only"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        {cameraAnnouncement}
+      </span>
+      <section
+        className={joinClassNames(
+          'se-camera-context-bar',
+          !cameraView && 'is-system',
+        )}
+        aria-label={
+          cameraView
+            ? 'Body-centered camera controls'
+            : 'System camera controls'
+        }
+        aria-busy={transitioning || undefined}
+      >
+        <div className="se-camera-context-bar__identity" key="identity">
+          {cameraView ? (
+            <Crosshair size={18} strokeWidth={1.6} aria-hidden="true" />
+          ) : (
+            <Maximize2 size={18} strokeWidth={1.6} aria-hidden="true" />
+          )}
+          <p>
+            <span>Camera reference</span>
+            <strong>
+              {cameraView
+                ? transitioning
+                  ? `Centering on ${cameraView.centeredObject.name}…`
+                  : `Centered on ${cameraView.centeredObject.name}`
+                : transitioning
+                  ? 'Returning to system overview…'
+                  : 'System overview'}
+            </strong>
+            <small>
+              {[centeredDesignation, cameraModeDetail]
+                .filter(Boolean)
+                .join(' · ')}
+            </small>
+          </p>
+        </div>
+
+        {cameraView ? (
+          <div
+            className="se-camera-mode-switch"
+            role="group"
+            aria-label={`View mode for ${cameraView.centeredObject.name}`}
+            key="modes"
+          >
+          <button
+            type="button"
+            aria-pressed={cameraView.mode === 'orbit'}
+            onClick={() => onCameraViewModeChange?.('orbit')}
+            disabled={
+              transitioning ||
+              !onCameraViewModeChange ||
+              cameraView.mode === 'orbit'
+            }
+            title={
+              cameraView.mode === 'orbit'
+                ? 'Current view: orbit tracking'
+                : 'Track from orbit (G)'
+            }
+          >
+            <Orbit size={15} aria-hidden="true" />
+            <span>Orbit</span>
+            <kbd aria-hidden="true">G</kbd>
+          </button>
+          <button
+            type="button"
+            aria-pressed={cameraView.mode === 'close-approach'}
+            onClick={() => onCameraViewModeChange?.('close-approach')}
+            disabled={
+              transitioning ||
+              !onCameraViewModeChange ||
+              !closeApproachAvailable ||
+              cameraView.mode === 'close-approach'
+            }
+            title={
+              cameraView.mode === 'close-approach'
+                ? 'Current view: close approach'
+                : closeApproachAvailable
+                  ? 'Move to close approach (Shift+G)'
+                  : 'Close approach is unavailable for this body'
+            }
+          >
+            <ArrowDownToLine size={15} aria-hidden="true" />
+            <span>Close approach</span>
+            <kbd aria-hidden="true">⇧G</kbd>
+          </button>
+          </div>
+        ) : null}
+
+        <div className="se-camera-context-bar__actions" key="actions">
+          <button
+            data-camera-history-action="true"
+            type="button"
+            onClick={onReturnToPreviousView}
+            disabled={transitioning || !onReturnToPreviousView}
+            aria-label={`Return to ${previousViewLabel}`}
+            title={`Return to ${previousViewLabel} (Backspace)`}
+          >
+            <Undo2 size={15} aria-hidden="true" />
+            <span>Previous view</span>
+          </button>
+          {cameraView ? (
+            <button
+              type="button"
+              onClick={onSystemOverview}
+              disabled={transitioning || !onSystemOverview}
+              title="Return to system overview (0)"
+            >
+              <Maximize2 size={15} aria-hidden="true" />
+              <span>System overview</span>
+            </button>
+          ) : null}
+        </div>
+      </section>
+    </>
+  )
+}
+
 export function ObjectInspector({
   selectedObject,
+  cameraView,
+  systemOverviewTransitioning,
   open = true,
   onToggle,
   onFocus,
+  onCenterSelectedObject,
+  onCameraViewModeChange,
+  onReturnToPreviousView,
+  onSystemOverview,
   onClear,
 }: ObjectInspectorProps) {
   const contentId = useId()
@@ -821,6 +1031,61 @@ export function ObjectInspector({
           : []),
       ]
     : []
+  const cameraAware =
+    cameraView !== undefined ||
+    systemOverviewTransitioning !== undefined ||
+    Boolean(
+      onCenterSelectedObject ||
+        onCameraViewModeChange ||
+        onReturnToPreviousView ||
+        onSystemOverview,
+    )
+  const cameraTargetsSelection = Boolean(
+    selectedObject && cameraView?.centeredObject.id === selectedObject.id,
+  )
+  const cameraTransitioning = cameraView
+    ? cameraView.transitioning === true
+    : systemOverviewTransitioning === true
+  const selectedIsCentered = cameraTargetsSelection && !cameraTransitioning
+  const closeApproachAvailable =
+    selectedObject?.closeApproachAvailable !== false &&
+    (!selectedIsCentered || cameraView?.closeApproachAvailable !== false)
+  const canOrbit = selectedIsCentered
+    ? Boolean(onCameraViewModeChange || onCenterSelectedObject || onFocus)
+    : Boolean(onCenterSelectedObject || onFocus)
+  const canCloseApproach = selectedIsCentered
+    ? Boolean(onCameraViewModeChange || onCenterSelectedObject)
+    : Boolean(onCenterSelectedObject)
+  const orbitIsCurrent =
+    selectedIsCentered && cameraView?.mode === 'orbit'
+  const closeApproachIsCurrent =
+    selectedIsCentered && cameraView?.mode === 'close-approach'
+  const orbitIsTransitioning =
+    cameraTargetsSelection &&
+    cameraTransitioning &&
+    cameraView?.mode === 'orbit'
+  const closeApproachIsTransitioning =
+    cameraTargetsSelection &&
+    cameraTransitioning &&
+    cameraView?.mode === 'close-approach'
+
+  const handleOrbitSelected = () => {
+    if (selectedIsCentered && onCameraViewModeChange) {
+      onCameraViewModeChange('orbit')
+    } else if (onCenterSelectedObject) {
+      onCenterSelectedObject('orbit')
+    } else {
+      onFocus?.()
+    }
+  }
+
+  const handleCloseApproachSelected = () => {
+    if (selectedIsCentered && onCameraViewModeChange) {
+      onCameraViewModeChange('close-approach')
+    } else {
+      onCenterSelectedObject?.('close-approach')
+    }
+  }
 
   return (
     <aside
@@ -885,18 +1150,179 @@ export function ObjectInspector({
                 {selectedObject.designation && (
                   <p>{selectedObject.designation}</p>
                 )}
+                {cameraAware && (
+                  <div
+                    className="se-object-view-states"
+                    aria-label="Selection and camera state"
+                  >
+                    <span className="is-selected">
+                      <Crosshair size={11} aria-hidden="true" /> Selected
+                    </span>
+                    {selectedIsCentered && (
+                      <span className="is-centered">
+                        <LocateFixed size={11} aria-hidden="true" /> Centered
+                      </span>
+                    )}
+                    {cameraView &&
+                      !cameraTargetsSelection &&
+                      !cameraTransitioning && (
+                        <span
+                          className="is-centered"
+                          title={`Camera centered on ${cameraView.centeredObject.name}`}
+                        >
+                          <LocateFixed size={11} aria-hidden="true" />
+                          Centered: {cameraView.centeredObject.name}
+                        </span>
+                      )}
+                    {cameraTargetsSelection && cameraTransitioning && (
+                      <span className="is-transitioning">
+                        <Crosshair size={11} aria-hidden="true" /> Centering
+                      </span>
+                    )}
+                    {cameraView &&
+                      !cameraTargetsSelection &&
+                      cameraTransitioning && (
+                        <span
+                          className="is-transitioning"
+                          title={`Camera centering on ${cameraView.centeredObject.name}`}
+                        >
+                          <Crosshair size={11} aria-hidden="true" />
+                          Centering: {cameraView.centeredObject.name}
+                        </span>
+                      )}
+                  </div>
+                )}
               </div>
 
-              <button
-                className="se-primary-action"
-                type="button"
-                onClick={onFocus}
-                disabled={!onFocus}
-              >
-                <LocateFixed size={17} />
-                Focus target
-                <span aria-hidden="true">F</span>
-              </button>
+              {cameraAware ? (
+                <>
+                  <dl className="se-object-camera-context">
+                    <div>
+                      <dt>Selected</dt>
+                      <dd>{selectedObject.name}</dd>
+                    </div>
+                    <div>
+                      <dt>Camera</dt>
+                      <dd>
+                        {cameraView ? (
+                          <>
+                            {cameraTransitioning
+                              ? `Centering on ${cameraView.centeredObject.name}…`
+                              : `Centered on ${cameraView.centeredObject.name}`}
+                            <small>
+                              {cameraTransitioning
+                                ? 'Camera transition in progress'
+                                : cameraModeLabel(cameraView.mode)}
+                            </small>
+                          </>
+                        ) : (
+                          <>
+                            {systemOverviewTransitioning
+                              ? 'Returning to system overview…'
+                              : systemOverviewTransitioning === false
+                                ? 'System overview'
+                                : 'System frame'}
+                            <small>
+                              {systemOverviewTransitioning
+                                ? 'Camera transition in progress'
+                                : 'Camera is not locked to a body'}
+                            </small>
+                          </>
+                        )}
+                      </dd>
+                    </div>
+                  </dl>
+
+                  <div
+                    className="se-inspector-camera-actions"
+                    role="group"
+                    aria-label={`Center camera on ${selectedObject.name}`}
+                    aria-busy={cameraTransitioning || undefined}
+                  >
+                    <button
+                      data-camera-focus-return="true"
+                      type="button"
+                      aria-pressed={
+                        orbitIsCurrent
+                      }
+                      onClick={handleOrbitSelected}
+                      disabled={
+                        !canOrbit ||
+                        cameraTransitioning ||
+                        orbitIsCurrent
+                      }
+                      title="Center selected body in orbit view (G)"
+                    >
+                      <Orbit size={16} aria-hidden="true" />
+                      <span>
+                        <strong>
+                          {orbitIsCurrent
+                            ? 'Current view'
+                            : orbitIsTransitioning
+                            ? 'Centering…'
+                            : 'Orbit'}
+                        </strong>
+                        <small>
+                          {orbitIsCurrent
+                            ? 'Orbit tracking'
+                            : orbitIsTransitioning
+                            ? selectedObject.name
+                            : 'Track selected body'}
+                        </small>
+                      </span>
+                      <kbd aria-hidden="true">G</kbd>
+                    </button>
+                    <button
+                      type="button"
+                      aria-pressed={
+                        closeApproachIsCurrent
+                      }
+                      onClick={handleCloseApproachSelected}
+                      disabled={
+                        !canCloseApproach ||
+                        !closeApproachAvailable ||
+                        cameraTransitioning ||
+                        closeApproachIsCurrent
+                      }
+                      title={
+                        closeApproachAvailable
+                          ? 'Center selected body at close approach (Shift+G)'
+                          : 'Close approach is unavailable for this body'
+                      }
+                    >
+                      <ArrowDownToLine size={16} aria-hidden="true" />
+                      <span>
+                        <strong>
+                          {closeApproachIsCurrent
+                            ? 'Current view'
+                            : closeApproachIsTransitioning
+                            ? 'Centering…'
+                            : 'Close approach'}
+                        </strong>
+                        <small>
+                          {closeApproachIsCurrent
+                            ? 'Close approach'
+                            : closeApproachIsTransitioning
+                            ? selectedObject.name
+                            : 'Near-body inspection'}
+                        </small>
+                      </span>
+                      <kbd aria-hidden="true">⇧G</kbd>
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <button
+                  className="se-primary-action"
+                  type="button"
+                  onClick={onFocus}
+                  disabled={!onFocus}
+                >
+                  <LocateFixed size={17} />
+                  Center target
+                  <span aria-hidden="true">G</span>
+                </button>
+              )}
 
               <div className="se-inspector-tabs" role="tablist" aria-label="Scientific data views">
                 {INSPECTOR_TABS.map((tab, index) => (
@@ -1383,6 +1809,8 @@ export function WelcomeOverlay({
 
 export function ExplorerHud({
   selectedObject,
+  cameraView,
+  systemOverviewTransitioning,
   webGpuStatus,
   fps,
   speed,
@@ -1401,6 +1829,10 @@ export function ExplorerHud({
   onToolChange,
   onInspectorToggle,
   onFocusSelectedObject,
+  onCenterSelectedObject,
+  onCameraViewModeChange,
+  onReturnToPreviousView,
+  onSystemOverview,
   onClearSelectedObject,
   onTogglePause,
   onTimeScaleChange,
@@ -1410,8 +1842,93 @@ export function ExplorerHud({
   onOpenQuickTour,
   onTourStepChange,
 }: ExplorerHudProps) {
+  const hudRef = useRef<HTMLDivElement>(null)
+  const previousCameraViewRef = useRef(cameraView)
+  const previousSystemOverviewTransitioningRef = useRef(
+    systemOverviewTransitioning,
+  )
+  const cameraFocusReturnRef = useRef<HTMLElement | null>(null)
+  const showCameraContext =
+    cameraView !== undefined &&
+    (cameraView !== null ||
+      systemOverviewTransitioning === true ||
+      Boolean(onReturnToPreviousView))
+
+  const rememberCameraFocusTarget = useCallback(() => {
+    cameraFocusReturnRef.current =
+      hudRef.current?.querySelector<HTMLElement>(
+        '[data-camera-focus-return="true"]',
+      ) ??
+      hudRef.current?.querySelector<HTMLElement>(
+        '.se-nav-button.is-active:not(:disabled)',
+      ) ??
+      null
+  }, [])
+
+  const handleReturnToPreviousView = useCallback(() => {
+    rememberCameraFocusTarget()
+    onReturnToPreviousView?.()
+  }, [onReturnToPreviousView, rememberCameraFocusTarget])
+
+  const handleSystemOverview = useCallback(() => {
+    rememberCameraFocusTarget()
+    onSystemOverview?.()
+  }, [onSystemOverview, rememberCameraFocusTarget])
+
+  useEffect(() => {
+    const previousCameraView = previousCameraViewRef.current
+    const previousSystemOverviewTransitioning =
+      previousSystemOverviewTransitioningRef.current
+    previousCameraViewRef.current = cameraView
+    previousSystemOverviewTransitioningRef.current =
+      systemOverviewTransitioning
+
+    const enteredSettledSystemFrame = Boolean(
+      previousCameraView &&
+        cameraView === null &&
+        systemOverviewTransitioning !== true,
+    )
+    const systemTransitionSettled =
+      cameraView === null &&
+      previousSystemOverviewTransitioning === true &&
+      systemOverviewTransitioning !== true
+    const bodyTransitionSettled = Boolean(
+      cameraView &&
+        previousCameraView?.transitioning &&
+        !cameraView.transitioning,
+    )
+    if (
+      !cameraFocusReturnRef.current ||
+      (!enteredSettledSystemFrame &&
+        !systemTransitionSettled &&
+        !bodyTransitionSettled)
+    ) {
+      return
+    }
+
+    const animationFrame = window.requestAnimationFrame(() => {
+      const focusTarget =
+        hudRef.current?.querySelector<HTMLElement>(
+          '[data-camera-history-action="true"]:not(:disabled)',
+        ) ??
+        hudRef.current?.querySelector<HTMLElement>(
+          '[data-camera-focus-return="true"]:not(:disabled)',
+        ) ??
+        hudRef.current?.querySelector<HTMLElement>(
+          '.se-nav-button.is-active:not(:disabled)',
+        ) ??
+        cameraFocusReturnRef.current
+      cameraFocusReturnRef.current = null
+      if (canRestoreFocus(focusTarget)) {
+        focusTarget?.focus({ preventScroll: true })
+      }
+    })
+    return () => window.cancelAnimationFrame(animationFrame)
+  }, [cameraView, systemOverviewTransitioning])
+
   return (
     <div
+      ref={hudRef}
       className={joinClassNames(
         'se-hud',
         cinematic && 'se-hud--cinematic',
@@ -1434,11 +1951,39 @@ export function ExplorerHud({
 
           <ObjectInspector
             selectedObject={selectedObject}
+            cameraView={cameraView}
+            systemOverviewTransitioning={systemOverviewTransitioning}
             open={inspectorOpen}
             onToggle={onInspectorToggle}
             onFocus={onFocusSelectedObject}
+            onCenterSelectedObject={onCenterSelectedObject}
+            onCameraViewModeChange={onCameraViewModeChange}
+            onReturnToPreviousView={
+              onReturnToPreviousView
+                ? handleReturnToPreviousView
+                : undefined
+            }
+            onSystemOverview={
+              onSystemOverview ? handleSystemOverview : undefined
+            }
             onClear={onClearSelectedObject}
           />
+
+          {showCameraContext && (
+            <CameraContextBar
+              cameraView={cameraView ?? null}
+              systemOverviewTransitioning={systemOverviewTransitioning}
+              onCameraViewModeChange={onCameraViewModeChange}
+              onReturnToPreviousView={
+                onReturnToPreviousView
+                  ? handleReturnToPreviousView
+                  : undefined
+              }
+              onSystemOverview={
+                onSystemOverview ? handleSystemOverview : undefined
+              }
+            />
+          )}
 
           <TimeControls
             simulationTime={simulationTime}

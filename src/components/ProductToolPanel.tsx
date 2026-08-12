@@ -381,8 +381,8 @@ const SearchTool = memo(function SearchTool({
                     <button
                       className="product-target-row__focus"
                       type="button"
-                      aria-label={`Focus ${target.name}`}
-                      title={`Focus ${target.name}`}
+                      aria-label={`Center on ${target.name} in orbit view`}
+                      title={`Center on ${target.name} in orbit view`}
                       onClick={() => onFocus(target.id)}
                     >
                       <LocateFixed size={16} aria-hidden="true" />
@@ -536,7 +536,7 @@ const LocationsTool = memo(function LocationsTool({
             </ul>
           ) : null}
           <button type="button" className="product-primary-action" onClick={() => onFocus(selected.id)}>
-            <LocateFixed size={16} aria-hidden="true" /> Focus {selected.name}
+            <LocateFixed size={16} aria-hidden="true" /> Center on {selected.name}
           </button>
         </article>
       ) : null}
@@ -649,7 +649,12 @@ const BookmarksTool = memo(function BookmarksTool({
           </div>
           {savedTargets.map(({ place, target }) => (
             <article key={target.id}>
-              <button type="button" onClick={() => onFocus(target.id)}>
+              <button
+                type="button"
+                aria-label={`Center on ${target.name} in orbit view`}
+                title={`Center on ${target.name} in orbit view`}
+                onClick={() => onFocus(target.id)}
+              >
                 <span
                   className="product-body-swatch"
                   style={{ '--body-color': target.color } as CSSProperties}

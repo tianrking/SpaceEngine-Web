@@ -8,6 +8,8 @@ export {
 } from './ExplorerHud'
 
 export type {
+  BodyCenteredCameraView,
+  BodyCenteredViewMode,
   CelestialAtmosphere,
   CelestialAtmosphereComponent,
   CelestialClassification,

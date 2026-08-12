@@ -91,6 +91,39 @@
   color: #74e6eb;
 }
 
+.system-navigator__centered-status {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 16px auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 6px 10px;
+  color: #8099a3;
+  background: rgba(255, 142, 129, 0.035);
+  border-bottom: 1px solid rgba(255, 142, 129, 0.13);
+  font: 8px/1 var(--font-mono);
+  letter-spacing: 0.04em;
+}
+
+.system-navigator__centered-status > svg {
+  color: #ff8e81;
+}
+
+.system-navigator__centered-status > strong {
+  overflow: hidden;
+  color: #edf8fa;
+  font-weight: 620;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.system-navigator__centered-status > small {
+  color: #c19a94;
+  font-size: 7px;
+  text-transform: uppercase;
+}
+
 .system-navigator__targets {
   min-height: 0;
   flex: 1;
@@ -137,6 +170,22 @@
   color: #edf8fa;
   background: rgba(116, 230, 235, 0.09);
   border-color: rgba(116, 230, 235, 0.25);
+}
+
+.system-navigator__targets button.is-centered {
+  box-shadow: inset 2px 0 0 #ff8e81;
+}
+
+.system-navigator__targets button.is-centered > svg {
+  color: #ff8e81;
+}
+
+.system-navigator__targets button.is-centering {
+  box-shadow: inset 2px 0 0 #f4c78c;
+}
+
+.system-navigator__targets button.is-centering > svg {
+  color: #f4c78c;
 }
 
 .system-navigator__targets button > svg {
@@ -209,6 +258,17 @@
 .system-navigator__actions button:hover {
   color: #74e6eb;
   border-color: rgba(116, 230, 235, 0.34);
+}
+
+.system-navigator__actions button[aria-pressed='true'] {
+  color: #74e6eb;
+  background: rgba(116, 230, 235, 0.075);
+  border-color: rgba(116, 230, 235, 0.3);
+}
+
+.system-navigator__actions button[aria-pressed='true']:disabled {
+  cursor: default;
+  opacity: 0.78;
 }
 
 .system-navigator__hint {
@@ -356,9 +416,24 @@
   }
 
   .system-navigator__heading,
-  .system-navigator__actions,
+  .system-navigator__centered-status,
   .system-navigator__hint {
     display: none;
+  }
+
+  .system-navigator__actions {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px;
+    border-top: 0;
+    border-left: 1px solid rgba(157, 201, 218, 0.14);
+  }
+
+  .system-navigator__actions button {
+    min-height: 48px;
+    padding-inline: 9px;
   }
 
   .system-navigator__targets {
@@ -399,6 +474,26 @@
 
   .system-navigator__targets button {
     grid-template-columns: 16px 1fr;
+  }
+
+  .system-navigator__actions {
+    padding-inline: 4px;
+  }
+
+  .system-navigator__actions button {
+    width: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0;
+  }
+
+  .system-navigator__actions button > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
   }
 
   .engine-loader {
@@ -2679,7 +2774,9 @@
 
 .shortcut-dialog {
   width: min(470px, calc(100vw - 28px));
-  overflow: hidden;
+  max-height: calc(100dvh - 36px);
+  overflow-x: hidden;
+  overflow-y: auto;
   background: linear-gradient(180deg, #101d29, #071019);
   border: 1px solid var(--tool-line-strong);
   border-radius: 10px;
@@ -2747,6 +2844,10 @@
 }
 
 @media (max-width: 900px) {
+  .system-navigator {
+    flex-direction: row;
+  }
+
   .product-tool-panel {
     z-index: 72;
     top: 88px;
