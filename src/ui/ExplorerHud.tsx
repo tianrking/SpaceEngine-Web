@@ -152,7 +152,7 @@ export interface BodyCenteredCameraView {
   mode: BodyCenteredViewMode
   /** True while the camera is travelling to the requested reference frame. */
   transitioning?: boolean
-  /** Set false when a surface/near-body approach is not valid for this body. */
+  /** Set false when a near-body approach is not valid for this body. */
   closeApproachAvailable?: boolean
   /** Optional human-readable destination for the return action. */
   previousViewLabel?: string
@@ -1583,23 +1583,24 @@ function WelcomePanel({
       </div>
       <h1 id={titleId}>Every horizon is reachable.</h1>
       <p className="se-welcome-card__lede" id={descriptionId}>
-        Cross astronomical scales, study procedural worlds and descend from
-        deep space to the surface without breaking the journey.
+        Cross astronomical scales, study procedural worlds and move from a
+        system-wide observatory to precise near-body views without breaking
+        the journey.
       </p>
 
       <div className="se-capabilities" role="group" aria-label="Core capabilities">
         <div>
           <Maximize2 size={17} aria-hidden="true" />
           <span>
-            <strong>Seamless scale</strong>
-            Orbit to terrain
+            <strong>Seamless navigation</strong>
+            System to close approach
           </span>
         </div>
         <div>
           <Sparkles size={17} aria-hidden="true" />
           <span>
-            <strong>Living worlds</strong>
-            Procedural detail
+            <strong>Model-rich worlds</strong>
+            Physics + procedural detail
           </span>
         </div>
         <div>
