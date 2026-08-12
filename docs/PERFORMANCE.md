@@ -22,7 +22,9 @@ Exoplanet Archive snapshot of 6,336 planets across 4,749 hosts.
 The benchmark calls the same `prepareProgressiveIndex` and
 `queryProgressiveIndex` functions used inside the production Dedicated Worker.
 After seven warm-up queries it records 31 samples for each path and uses the
-nearest-rank 95th percentile.
+nearest-rank 95th percentile. `npm run check` executes this file in a separate
+single-Worker Vitest stage so unrelated parallel unit files cannot consume its
+CPU time; the sample count and 50 ms limit are not relaxed on CI.
 
 | Gate | Current limit | Failure meaning |
 | --- | ---: | --- |

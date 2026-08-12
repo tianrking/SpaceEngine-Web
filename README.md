@@ -170,8 +170,8 @@ http://localhost:5173/?renderer=webgl2
 | `npm run build` | Type-check project references, create the production bundle, and generate its content-versioned Service Worker |
 | `npm run preview` | Serve the existing production bundle locally, normally on port 4173 |
 | `npm run lint` | Run Oxlint across the project |
-| `npm run test` | Run the Vitest unit suite once |
-| `npm run check` | Run lint, tests, and the production build in sequence |
+| `npm run test` | Run the regular Vitest unit suite once; the dedicated 100k scale gate is intentionally isolated |
+| `npm run check` | Run lint, regular tests, the isolated 100k catalogue gate, and the production build in sequence |
 | `npm run catalog:refresh` | Rebuild the complete manifest/index/chunk NASA release from the official TAP endpoint |
 | `npm run catalog:benchmark` | Run the isolated, synthetic 100,000-summary catalogue scale gate and print its environment-labelled measurements |
 
