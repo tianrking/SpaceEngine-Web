@@ -14,7 +14,8 @@ export type CatalogLoadSource = 'network' | 'offline-cache'
 
 export interface CatalogReadyPayload {
   readonly manifest: ProgressiveExoplanetManifest
-  readonly decodeMs: number
+  readonly readyMs: number
+  readonly prepareMs: number
   readonly loadSource: CatalogLoadSource
   readonly offline: CatalogOfflineStatus
 }

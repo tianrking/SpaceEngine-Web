@@ -570,7 +570,8 @@ type CatalogueState =
   | {
       readonly status: 'ready'
       readonly manifest: ProgressiveExoplanetManifest
-      readonly decodeMs: number
+      readonly readyMs: number
+      readonly prepareMs: number
       readonly loadSource: CatalogLoadSource
       readonly offline: CatalogOfflineStatus
     }
@@ -621,8 +622,10 @@ export const ProgressiveNasaCatalog = memo(function ProgressiveNasaCatalog({
     void requestCatalogClient()
       .then((client) => client.initialize())
       .then(
-        ({ manifest, decodeMs, loadSource, offline }) => {
-          if (active) setCatalogue({ status: 'ready', manifest, decodeMs, loadSource, offline })
+        ({ manifest, readyMs, prepareMs, loadSource, offline }) => {
+          if (active) {
+            setCatalogue({ status: 'ready', manifest, readyMs, prepareMs, loadSource, offline })
+          }
         },
         (error: unknown) => {
           if (active) setCatalogue({ status: 'error', message: errorMessage(error) })
@@ -907,7 +910,9 @@ export const ProgressiveNasaCatalog = memo(function ProgressiveNasaCatalog({
       <section className="product-catalog-release" aria-label="Catalogue release status">
         <div className="product-catalog-release__status">
           <span><ShieldCheck size={12} aria-hidden="true" /> Asset hashes verified</span>
-          <span>{catalogue.decodeMs.toFixed(0)} ms worker decode</span>
+          <span>
+            {catalogue.prepareMs.toFixed(0)} ms packed index · {catalogue.readyMs.toFixed(0)} ms ready
+          </span>
           <span>Snapshot {snapshotDate.format(new Date(manifest.retrievedAt))}</span>
         </div>
         <strong>{manifest.recordCount.toLocaleString()} confirmed planets</strong>

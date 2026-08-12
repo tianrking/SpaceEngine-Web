@@ -41,7 +41,8 @@ interface WorkerScope {
 
 interface ReadyCatalog {
   readonly manifest: ProgressiveExoplanetManifest
-  readonly decodeMs: number
+  readonly readyMs: number
+  readonly prepareMs: number
   readonly loadSource: CatalogLoadSource
   readonly offline: CatalogOfflineStatus
 }
@@ -168,12 +169,16 @@ async function initialize(): Promise<ReadyCatalog> {
       }
     }
     manifest = release.manifest
+    const prepareStarted = performance.now()
     preparedIndex = prepareProgressiveIndex(release.index)
+    const prepareMs = performance.now() - prepareStarted
+    const offline = await offlineStatus(release.manifest)
     return {
       manifest: release.manifest,
-      decodeMs: performance.now() - started,
+      readyMs: performance.now() - started,
+      prepareMs,
       loadSource,
-      offline: await offlineStatus(release.manifest),
+      offline,
     }
   })().catch((error: unknown) => {
     initialization = null
