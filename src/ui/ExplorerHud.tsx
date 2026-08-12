@@ -145,7 +145,13 @@ export interface SelectedCelestialObject {
 }
 
 export type BodyCenteredViewMode = 'orbit' | 'close-approach'
-export type CameraFrameMode = 'system' | 'free'
+export type CameraFrameMode =
+  | 'system'
+  | 'free'
+  | 'observed-universe'
+  | 'observed-system'
+
+export type CameraHierarchyNavigationStatus = 'idle' | 'loading' | 'error'
 
 export interface BodyCenteredCameraView {
   centeredObject: Pick<
@@ -183,8 +189,14 @@ export interface ObjectInspectorProps {
   cameraView?: BodyCenteredCameraView | null
   /** Identifies a non-body camera frame when `cameraView` is null. */
   cameraFrameMode?: CameraFrameMode
+  /** Canonical, untranslated host name for an observed-system frame. */
+  cameraFrameName?: string
+  /** Number of catalogue hosts represented by an observed-universe frame. */
+  cameraFrameCount?: number
   /** Distinguishes a non-body frame transition from its settled state. */
   cameraFrameTransitioning?: boolean
+  /** Async parent-frame navigation state, independent from camera motion. */
+  cameraHierarchyNavigationStatus?: CameraHierarchyNavigationStatus
   /** @deprecated Use `cameraFrameMode="system"` and `cameraFrameTransitioning`. */
   systemOverviewTransitioning?: boolean
   open?: boolean
@@ -225,8 +237,14 @@ export interface ExplorerHudProps
   cameraView?: BodyCenteredCameraView | null
   /** Identifies a non-body camera frame when `cameraView` is null. */
   cameraFrameMode?: CameraFrameMode
+  /** Canonical, untranslated host name for an observed-system frame. */
+  cameraFrameName?: string
+  /** Number of catalogue hosts represented by an observed-universe frame. */
+  cameraFrameCount?: number
   /** Distinguishes a non-body frame transition from its settled state. */
   cameraFrameTransitioning?: boolean
+  /** Async parent-frame navigation state, independent from camera motion. */
+  cameraHierarchyNavigationStatus?: CameraHierarchyNavigationStatus
   /** @deprecated Use `cameraFrameMode="system"` and `cameraFrameTransitioning`. */
   systemOverviewTransitioning?: boolean
   overlay?: ExplorerOverlay
@@ -788,7 +806,10 @@ function InspectorOverview({
 interface CameraContextBarProps {
   cameraView: BodyCenteredCameraView | null
   cameraFrameMode: CameraFrameMode
+  cameraFrameName?: string
+  cameraFrameCount?: number
   cameraFrameTransitioning: boolean
+  cameraHierarchyNavigationStatus?: CameraHierarchyNavigationStatus
   onCameraViewModeChange?: (mode: BodyCenteredViewMode) => void
   onReturnToPreviousView?: () => void
   onSystemOverview?: () => void
@@ -797,7 +818,10 @@ interface CameraContextBarProps {
 function CameraContextBar({
   cameraView,
   cameraFrameMode,
+  cameraFrameName,
+  cameraFrameCount,
   cameraFrameTransitioning,
+  cameraHierarchyNavigationStatus = 'idle',
   onCameraViewModeChange,
   onReturnToPreviousView,
   onSystemOverview,
@@ -812,8 +836,54 @@ function CameraContextBar({
     ? cameraView.transitioning === true
     : cameraFrameTransitioning
   const freeFlight = !cameraView && cameraFrameMode === 'free'
-  const previousViewLabel =
-    cameraView?.previousViewLabel?.trim() || t('camera.previousViewFallback')
+  const observedUniverseFrame = cameraFrameMode === 'observed-universe'
+  const observedSystemFrame = cameraFrameMode === 'observed-system'
+  const hierarchyNavigationStatus = observedSystemFrame
+    ? cameraHierarchyNavigationStatus
+    : 'idle'
+  const hierarchyNavigationLoading = hierarchyNavigationStatus === 'loading'
+  const hierarchyNavigationError = hierarchyNavigationStatus === 'error'
+  const controlsBusy = transitioning || hierarchyNavigationLoading
+  const observedSystemName =
+    cameraFrameName?.trim() || t('camera.observedSystemFallback')
+  const formattedFrameCount = useMemo(
+    () =>
+      typeof cameraFrameCount === 'number' &&
+      Number.isFinite(cameraFrameCount) &&
+      cameraFrameCount >= 0
+        ? new Intl.NumberFormat(intlLocale).format(Math.trunc(cameraFrameCount))
+        : undefined,
+    [cameraFrameCount, intlLocale],
+  )
+  const observedUniverseDetail = formattedFrameCount
+    ? t('camera.observedUniverseDetail', { count: formattedFrameCount })
+    : t('camera.observedUniverseDetailNoCount')
+  const observedSystemTitle = t('camera.observedSystem', {
+    name: observedSystemName,
+  })
+  const observedSystemDetail = t('camera.observedSystemDetail')
+  const nonBodyFrameTitle = freeFlight
+    ? t('camera.freeFlight')
+    : observedUniverseFrame
+      ? t('camera.observedUniverse')
+      : observedSystemFrame
+        ? observedSystemTitle
+        : t('camera.systemOverview')
+  const nonBodyTransitionTitle = freeFlight
+    ? t('camera.returnFreeEllipsis')
+    : observedUniverseFrame
+      ? t('camera.resetObservedUniverseEllipsis')
+      : observedSystemFrame
+        ? t('camera.openObservedSystemEllipsis', {
+            name: observedSystemName,
+          })
+        : t('camera.returnSystemEllipsis')
+  const previousViewLabel = observedSystemFrame
+    ? t('camera.observedUniverse')
+    : observedUniverseFrame
+      ? t('camera.asteriaSystem')
+      : cameraView?.previousViewLabel?.trim() ||
+        t('camera.previousViewFallback')
   const centeredDesignation = cameraView?.centeredObject.designation?.trim()
   const cameraModeDetail = cameraView
     ? transitioning
@@ -823,29 +893,108 @@ function CameraContextBar({
       : cameraModeLabel(cameraView.mode)
     : freeFlight
       ? t('camera.bodyTrackingUnlocked')
-      : t('camera.systemUnlocked')
+      : observedUniverseFrame
+        ? observedUniverseDetail
+        : observedSystemFrame
+          ? observedSystemDetail
+          : t('camera.systemUnlocked')
+  const cameraReferenceDetails = cameraView
+    ? [
+        centeredDesignation,
+        observedSystemFrame ? observedSystemTitle : undefined,
+        cameraModeDetail,
+      ]
+    : [cameraModeDetail]
 
-  const cameraAnnouncement = cameraView
-    ? transitioning
-      ? t('camera.centerOn', { name: cameraView.centeredObject.name })
-      : t('camera.centeredAnnouncement', {
-          name: cameraView.centeredObject.name,
-          mode: cameraModeLabel(cameraView.mode),
+  let cameraAnnouncement: string
+  if (hierarchyNavigationLoading) {
+    cameraAnnouncement = t('camera.returningObservedUniverse')
+  } else if (hierarchyNavigationError) {
+    cameraAnnouncement = t('camera.returnObservedUniverseErrorAnnouncement', {
+      name: observedSystemName,
+    })
+  } else if (cameraView) {
+    cameraAnnouncement = transitioning
+      ? observedSystemFrame
+        ? t('camera.centerOnInObservedSystem', {
+            name: cameraView.centeredObject.name,
+            system: observedSystemName,
+          })
+        : t('camera.centerOn', { name: cameraView.centeredObject.name })
+      : observedSystemFrame
+        ? t('camera.centeredInObservedSystemAnnouncement', {
+            name: cameraView.centeredObject.name,
+            mode: cameraModeLabel(cameraView.mode),
+            system: observedSystemName,
+          })
+        : t('camera.centeredAnnouncement', {
+            name: cameraView.centeredObject.name,
+            mode: cameraModeLabel(cameraView.mode),
+          })
+  } else if (freeFlight) {
+    cameraAnnouncement = transitioning
+      ? t('camera.returnFree')
+      : t('camera.freeFlight')
+  } else if (observedUniverseFrame) {
+    cameraAnnouncement = transitioning
+      ? t('camera.resettingObservedUniverse')
+      : t('camera.observedUniverseAnnouncement', {
+          detail: observedUniverseDetail,
         })
-    : freeFlight
-      ? transitioning
-        ? t('camera.returnFree')
-        : t('camera.freeFlight')
-      : transitioning
-        ? t('camera.returnSystem')
-        : t('camera.systemOverview')
+  } else if (observedSystemFrame) {
+    cameraAnnouncement = transitioning
+      ? t('camera.openObservedSystem', { name: observedSystemName })
+      : t('camera.observedSystemAnnouncement', {
+          system: observedSystemTitle,
+          detail: observedSystemDetail,
+        })
+  } else {
+    cameraAnnouncement = transitioning
+      ? t('camera.returnSystem')
+      : t('camera.systemOverview')
+  }
+
+  const overviewActionLabel = observedUniverseFrame
+    ? t('camera.resetObservedUniverse')
+    : t('camera.systemOverview')
+  const overviewActionIsCurrent =
+    !cameraView && !freeFlight && cameraFrameMode === 'system'
+  const overviewActionTitle = observedUniverseFrame
+    ? t('camera.resetObservedUniverseTitle')
+    : observedSystemFrame
+      ? t('camera.resetObservedSystemTitle', { name: observedSystemName })
+      : overviewActionIsCurrent
+        ? t('camera.currentSystem')
+        : t('camera.returnSystemTitle')
+  const cameraReferenceTitle = hierarchyNavigationLoading
+    ? t('camera.returningObservedUniverseEllipsis')
+    : hierarchyNavigationError
+      ? t('camera.returnObservedUniverseError')
+      : cameraView
+        ? transitioning
+          ? t('camera.centerOnEllipsis', {
+              name: cameraView.centeredObject.name,
+            })
+          : t('camera.centeredOn', {
+              name: cameraView.centeredObject.name,
+            })
+        : transitioning
+          ? nonBodyTransitionTitle
+          : nonBodyFrameTitle
+  const cameraReferenceDetail = hierarchyNavigationLoading
+    ? t('camera.returningObservedUniverseDetail')
+    : hierarchyNavigationError
+      ? t('camera.returnObservedUniverseErrorDetail', {
+          name: observedSystemName,
+        })
+      : cameraReferenceDetails.filter(Boolean).join(' · ')
 
   return (
     <>
       <span
         className="se-sr-only"
-        role="status"
-        aria-live="polite"
+        role={hierarchyNavigationError ? 'alert' : 'status'}
+        aria-live={hierarchyNavigationError ? 'assertive' : 'polite'}
         aria-atomic="true"
       >
         {cameraAnnouncement}
@@ -854,48 +1003,40 @@ function CameraContextBar({
         className={joinClassNames(
           'se-camera-context-bar',
           !cameraView && 'is-system',
+          (observedUniverseFrame || observedSystemFrame) && 'is-observed',
+          hierarchyNavigationError && 'is-hierarchy-error',
         )}
         aria-label={
           cameraView
             ? t('camera.bodyControls')
             : freeFlight
               ? t('camera.freeControls')
-              : t('camera.systemControls')
+              : observedUniverseFrame
+                ? t('camera.observedUniverseControls')
+                : observedSystemFrame
+                  ? t('camera.observedSystemControls', {
+                      name: observedSystemName,
+                    })
+                  : t('camera.systemControls')
         }
-        aria-busy={transitioning || undefined}
+        aria-busy={controlsBusy || undefined}
       >
         <div className="se-camera-context-bar__identity" key="identity">
           {cameraView ? (
             <Crosshair size={18} strokeWidth={1.6} aria-hidden="true" />
           ) : freeFlight ? (
             <Compass size={18} strokeWidth={1.6} aria-hidden="true" />
+          ) : observedUniverseFrame ? (
+            <Globe2 size={18} strokeWidth={1.6} aria-hidden="true" />
+          ) : observedSystemFrame ? (
+            <Telescope size={18} strokeWidth={1.6} aria-hidden="true" />
           ) : (
             <Maximize2 size={18} strokeWidth={1.6} aria-hidden="true" />
           )}
           <p>
             <span>{t('camera.reference')}</span>
-            <strong>
-              {cameraView
-                ? transitioning
-                  ? t('camera.centerOnEllipsis', {
-                      name: cameraView.centeredObject.name,
-                    })
-                  : t('camera.centeredOn', {
-                      name: cameraView.centeredObject.name,
-                    })
-                : transitioning
-                  ? freeFlight
-                    ? t('camera.returnFreeEllipsis')
-                    : t('camera.returnSystemEllipsis')
-                  : freeFlight
-                    ? t('camera.freeFlight')
-                    : t('camera.systemOverview')}
-            </strong>
-            <small>
-              {[centeredDesignation, cameraModeDetail]
-                .filter(Boolean)
-                .join(' · ')}
-            </small>
+            <strong>{cameraReferenceTitle}</strong>
+            <small>{cameraReferenceDetail}</small>
           </p>
         </div>
 
@@ -913,7 +1054,7 @@ function CameraContextBar({
               aria-pressed={cameraView.mode === 'orbit'}
               onClick={() => onCameraViewModeChange?.('orbit')}
               disabled={
-                transitioning ||
+                controlsBusy ||
                 !onCameraViewModeChange ||
                 cameraView.mode === 'orbit'
               }
@@ -932,7 +1073,7 @@ function CameraContextBar({
               aria-pressed={cameraView.mode === 'close-approach'}
               onClick={() => onCameraViewModeChange?.('close-approach')}
               disabled={
-                transitioning ||
+                controlsBusy ||
                 !onCameraViewModeChange ||
                 !closeApproachAvailable ||
                 cameraView.mode === 'close-approach'
@@ -957,29 +1098,37 @@ function CameraContextBar({
             data-camera-history-action="true"
             type="button"
             onClick={onReturnToPreviousView}
-            disabled={transitioning || !onReturnToPreviousView}
-            aria-label={t('camera.returnTo', { view: previousViewLabel })}
-            title={t('camera.returnToTitle', { view: previousViewLabel })}
+            disabled={controlsBusy || !onReturnToPreviousView}
+            aria-label={
+              hierarchyNavigationError
+                ? t('camera.retryObservedUniverse')
+                : t('camera.returnTo', { view: previousViewLabel })
+            }
+            title={
+              hierarchyNavigationError
+                ? t('camera.retryObservedUniverseTitle')
+                : t('camera.returnToTitle', { view: previousViewLabel })
+            }
           >
             <Undo2 size={15} aria-hidden="true" />
-            <span>{t('camera.previousView')}</span>
+            <span>
+              {hierarchyNavigationError
+                ? t('camera.retry')
+                : t('camera.previousView')}
+            </span>
           </button>
           <button
             type="button"
             onClick={onSystemOverview}
             disabled={
-              transitioning ||
+              controlsBusy ||
               !onSystemOverview ||
-              (!cameraView && !freeFlight)
+              overviewActionIsCurrent
             }
-            title={
-              !cameraView && !freeFlight
-                ? t('camera.currentSystem')
-                : t('camera.returnSystemTitle')
-            }
+            title={overviewActionTitle}
           >
             <Maximize2 size={15} aria-hidden="true" />
-            <span>{t('camera.systemOverview')}</span>
+            <span>{overviewActionLabel}</span>
           </button>
         </div>
       </section>
@@ -991,7 +1140,10 @@ export function ObjectInspector({
   selectedObject,
   cameraView,
   cameraFrameMode,
+  cameraFrameName,
+  cameraFrameCount,
   cameraFrameTransitioning,
+  cameraHierarchyNavigationStatus = 'idle',
   systemOverviewTransitioning,
   open = true,
   onToggle,
@@ -1002,7 +1154,8 @@ export function ObjectInspector({
   onSystemOverview,
   onClear,
 }: ObjectInspectorProps) {
-  const { t } = useTranslation('hud')
+  const { t, i18n } = useTranslation('hud')
+  const intlLocale = localeOption(i18n.resolvedLanguage).intlLocale
   const contentId = useId()
   const tabIdBase = useId()
   const [activeTab, setActiveTab] = useState<InspectorTab>('overview')
@@ -1090,6 +1243,7 @@ export function ObjectInspector({
     cameraView !== undefined ||
     cameraFrameMode !== undefined ||
     cameraFrameTransitioning !== undefined ||
+    cameraHierarchyNavigationStatus !== 'idle' ||
     systemOverviewTransitioning !== undefined ||
     Boolean(
       onCenterSelectedObject ||
@@ -1107,6 +1261,96 @@ export function ObjectInspector({
     ? cameraView.transitioning === true
     : resolvedFrameTransitioning
   const freeFlight = !cameraView && resolvedCameraFrameMode === 'free'
+  const observedUniverseFrame =
+    resolvedCameraFrameMode === 'observed-universe'
+  const observedSystemFrame = resolvedCameraFrameMode === 'observed-system'
+  const hierarchyNavigationStatus = observedSystemFrame
+    ? cameraHierarchyNavigationStatus
+    : 'idle'
+  const hierarchyNavigationLoading = hierarchyNavigationStatus === 'loading'
+  const hierarchyNavigationError = hierarchyNavigationStatus === 'error'
+  const cameraControlsBusy = cameraTransitioning || hierarchyNavigationLoading
+  const observedSystemName =
+    cameraFrameName?.trim() || t('camera.observedSystemFallback')
+  const formattedFrameCount = useMemo(
+    () =>
+      typeof cameraFrameCount === 'number' &&
+      Number.isFinite(cameraFrameCount) &&
+      cameraFrameCount >= 0
+        ? new Intl.NumberFormat(intlLocale).format(Math.trunc(cameraFrameCount))
+        : undefined,
+    [cameraFrameCount, intlLocale],
+  )
+  const observedUniverseDetail = formattedFrameCount
+    ? t('camera.observedUniverseDetail', { count: formattedFrameCount })
+    : t('camera.observedUniverseDetailNoCount')
+  const observedSystemTitle = t('camera.observedSystem', {
+    name: observedSystemName,
+  })
+  const nonBodyFrameTitle = freeFlight
+    ? t('camera.freeFlight')
+    : observedUniverseFrame
+      ? t('camera.observedUniverse')
+      : observedSystemFrame
+        ? observedSystemTitle
+        : cameraFrameMode === 'system' ||
+            systemOverviewTransitioning === false
+          ? t('camera.systemOverview')
+          : t('camera.systemFrame')
+  const nonBodyTransitionTitle = freeFlight
+    ? t('camera.returnFreeEllipsis')
+    : observedUniverseFrame
+      ? t('camera.resetObservedUniverseEllipsis')
+      : observedSystemFrame
+        ? t('camera.openObservedSystemEllipsis', {
+            name: observedSystemName,
+          })
+        : t('camera.returnSystemEllipsis')
+  const nonBodyFrameDetail = freeFlight
+    ? t('camera.bodyTrackingUnlocked')
+    : observedUniverseFrame
+      ? observedUniverseDetail
+      : observedSystemFrame
+        ? t('camera.observedSystemDetail')
+        : t('camera.notLocked')
+  const centeredCameraDetail = cameraView
+    ? [
+        observedSystemFrame ? observedSystemTitle : undefined,
+        t(
+          cameraView.mode === 'orbit'
+            ? 'camera.orbitTracking'
+            : 'camera.closeApproach',
+        ),
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : ''
+  const inspectorCameraTitle = hierarchyNavigationLoading
+    ? t('camera.returningObservedUniverseEllipsis')
+    : hierarchyNavigationError
+      ? t('camera.returnObservedUniverseError')
+      : cameraView
+        ? cameraTransitioning
+          ? t('camera.centerOnEllipsis', {
+              name: cameraView.centeredObject.name,
+            })
+          : t('camera.centeredOn', {
+              name: cameraView.centeredObject.name,
+            })
+        : cameraTransitioning
+          ? nonBodyTransitionTitle
+          : nonBodyFrameTitle
+  const inspectorCameraDetail = hierarchyNavigationLoading
+    ? t('camera.returningObservedUniverseDetail')
+    : hierarchyNavigationError
+      ? t('camera.returnObservedUniverseErrorDetail', {
+          name: observedSystemName,
+        })
+      : cameraTransitioning
+        ? t('camera.transitionInProgress')
+        : cameraView
+          ? centeredCameraDetail
+          : nonBodyFrameDetail
   const selectedIsCentered = cameraTargetsSelection && !cameraTransitioning
   const closeApproachAvailable =
     selectedObject?.closeApproachAvailable !== false &&
@@ -1278,46 +1522,8 @@ export function ObjectInspector({
                     <div>
                       <dt>{t('camera.camera')}</dt>
                       <dd>
-                        {cameraView ? (
-                          <>
-                            {cameraTransitioning
-                              ? t('camera.centerOnEllipsis', {
-                                  name: cameraView.centeredObject.name,
-                                })
-                              : t('camera.centeredOn', {
-                                  name: cameraView.centeredObject.name,
-                                })}
-                            <small>
-                              {cameraTransitioning
-                                ? t('camera.transitionInProgress')
-                                : t(
-                                    cameraView.mode === 'orbit'
-                                      ? 'camera.orbitTracking'
-                                      : 'camera.closeApproach',
-                                  )}
-                            </small>
-                          </>
-                        ) : (
-                          <>
-                            {cameraTransitioning
-                              ? freeFlight
-                                ? t('camera.returnFreeEllipsis')
-                                : t('camera.returnSystemEllipsis')
-                              : freeFlight
-                                ? t('camera.freeFlight')
-                                : cameraFrameMode === 'system' ||
-                                    systemOverviewTransitioning === false
-                                  ? t('camera.systemOverview')
-                                  : t('camera.systemFrame')}
-                            <small>
-                              {cameraTransitioning
-                                ? t('camera.transitionInProgress')
-                                : freeFlight
-                                  ? t('camera.bodyTrackingUnlocked')
-                                  : t('camera.notLocked')}
-                            </small>
-                          </>
-                        )}
+                        {inspectorCameraTitle}
+                        <small>{inspectorCameraDetail}</small>
                       </dd>
                     </div>
                   </dl>
@@ -1328,7 +1534,7 @@ export function ObjectInspector({
                     aria-label={t('camera.centerCameraOn', {
                       name: selectedObject.name,
                     })}
-                    aria-busy={cameraTransitioning || undefined}
+                    aria-busy={cameraControlsBusy || undefined}
                   >
                     <button
                       data-camera-focus-return="true"
@@ -1339,7 +1545,7 @@ export function ObjectInspector({
                       onClick={handleOrbitSelected}
                       disabled={
                         !canOrbit ||
-                        cameraTransitioning ||
+                        cameraControlsBusy ||
                         orbitIsCurrent
                       }
                       title={t('camera.orbitSelectedTitle')}
@@ -1372,7 +1578,7 @@ export function ObjectInspector({
                       disabled={
                         !canCloseApproach ||
                         !closeApproachAvailable ||
-                        cameraTransitioning ||
+                        cameraControlsBusy ||
                         closeApproachIsCurrent
                       }
                       title={
@@ -1966,7 +2172,10 @@ export function ExplorerHud({
   selectedObject,
   cameraView,
   cameraFrameMode,
+  cameraFrameName,
+  cameraFrameCount,
   cameraFrameTransitioning,
+  cameraHierarchyNavigationStatus = 'idle',
   systemOverviewTransitioning,
   webGpuStatus,
   fps,
@@ -2007,6 +2216,9 @@ export function ExplorerHud({
   const previousCameraFrameTransitioningRef = useRef(
     resolvedCameraFrameTransitioning,
   )
+  const previousCameraHierarchyNavigationStatusRef = useRef(
+    cameraHierarchyNavigationStatus,
+  )
   const cameraFocusReturnRef = useRef<HTMLElement | null>(null)
   const showCameraContext =
     cameraView !== undefined &&
@@ -2040,9 +2252,13 @@ export function ExplorerHud({
     const previousCameraView = previousCameraViewRef.current
     const previousCameraFrameTransitioning =
       previousCameraFrameTransitioningRef.current
+    const previousCameraHierarchyNavigationStatus =
+      previousCameraHierarchyNavigationStatusRef.current
     previousCameraViewRef.current = cameraView
     previousCameraFrameTransitioningRef.current =
       resolvedCameraFrameTransitioning
+    previousCameraHierarchyNavigationStatusRef.current =
+      cameraHierarchyNavigationStatus
 
     const enteredSettledFrame = Boolean(
       previousCameraView &&
@@ -2058,11 +2274,15 @@ export function ExplorerHud({
         previousCameraView?.transitioning &&
         !cameraView.transitioning,
     )
+    const hierarchyRetryAvailable =
+      previousCameraHierarchyNavigationStatus === 'loading' &&
+      cameraHierarchyNavigationStatus === 'error'
     if (
       !cameraFocusReturnRef.current ||
       (!enteredSettledFrame &&
         !frameTransitionSettled &&
-        !bodyTransitionSettled)
+        !bodyTransitionSettled &&
+        !hierarchyRetryAvailable)
     ) {
       return
     }
@@ -2096,7 +2316,11 @@ export function ExplorerHud({
       }
     })
     return () => window.cancelAnimationFrame(animationFrame)
-  }, [cameraView, resolvedCameraFrameTransitioning])
+  }, [
+    cameraHierarchyNavigationStatus,
+    cameraView,
+    resolvedCameraFrameTransitioning,
+  ])
 
   return (
     <div
@@ -2125,7 +2349,10 @@ export function ExplorerHud({
             selectedObject={selectedObject}
             cameraView={cameraView}
             cameraFrameMode={cameraFrameMode}
+            cameraFrameName={cameraFrameName}
+            cameraFrameCount={cameraFrameCount}
             cameraFrameTransitioning={cameraFrameTransitioning}
+            cameraHierarchyNavigationStatus={cameraHierarchyNavigationStatus}
             systemOverviewTransitioning={systemOverviewTransitioning}
             open={inspectorOpen}
             onToggle={onInspectorToggle}
@@ -2147,7 +2374,10 @@ export function ExplorerHud({
             <CameraContextBar
               cameraView={cameraView ?? null}
               cameraFrameMode={resolvedCameraFrameMode}
+              cameraFrameName={cameraFrameName}
+              cameraFrameCount={cameraFrameCount}
               cameraFrameTransitioning={resolvedCameraFrameTransitioning}
+              cameraHierarchyNavigationStatus={cameraHierarchyNavigationStatus}
               onCameraViewModeChange={onCameraViewModeChange}
               onReturnToPreviousView={
                 onReturnToPreviousView

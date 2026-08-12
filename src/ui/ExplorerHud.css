@@ -1445,6 +1445,16 @@
   color: var(--se-cyan);
 }
 
+.se-camera-context-bar.is-observed::before {
+  background: linear-gradient(90deg, var(--se-cyan), #a9a3ff);
+  box-shadow: 0 0 15px rgba(169, 163, 255, 0.48);
+}
+
+.se-camera-context-bar.is-observed .se-camera-context-bar__identity > svg {
+  color: #a9dffb;
+  filter: drop-shadow(0 0 7px rgba(123, 232, 237, 0.28));
+}
+
 .se-camera-context-bar::before {
   content: "";
   position: absolute;
@@ -1466,6 +1476,22 @@
   border-radius: inherit;
   pointer-events: none;
   animation: se-camera-busy 1.2s ease-in-out infinite;
+}
+
+.se-camera-context-bar.is-hierarchy-error {
+  border-color: rgba(255, 142, 129, 0.38);
+  box-shadow:
+    0 18px 54px rgba(0, 0, 0, 0.32),
+    inset 0 1px 0 rgba(255, 142, 129, 0.08);
+}
+
+.se-camera-context-bar.is-hierarchy-error::before {
+  background: var(--se-coral);
+}
+
+.se-camera-context-bar.is-hierarchy-error .se-camera-context-bar__identity strong,
+.se-camera-context-bar.is-hierarchy-error .se-camera-context-bar__actions > button:first-child {
+  color: var(--se-coral);
 }
 
 @keyframes se-camera-busy {

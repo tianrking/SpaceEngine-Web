@@ -3,15 +3,23 @@ import type { ProgressiveHostSkyIndex } from '../data/progressiveExoplanetCatalo
 import type { ObservedSystemBundle } from '../data/progressiveObservedSystem'
 import {
   UNKNOWN_DISTANCE_SHELL_RADIUS,
+  OBSERVED_HOST_BASE_OPACITY,
   buildObservedHostPoints,
   buildObservedSystemRenderModel,
+  clearObservedSelectionState,
   icrsDirection,
+  observedCameraDistance,
   observedDistanceToDisplayRadius,
   observedHostId,
+  observedHostCanOpen,
+  observedHostVisualCalibration,
   observedOrbitVisualRadius,
+  observedNavigationCommand,
+  observedObjectSupportsViewMode,
   observedPlanetId,
   observedPlanetVisualRadius,
   observedStarId,
+  shouldStartObservedCentering,
 } from './observedScene'
 
 describe('observed scene math and identity', () => {
@@ -53,6 +61,17 @@ describe('observed scene math and identity', () => {
     expect(points[1]).toMatchObject({ skyOnly: true, distancePc: null })
     expect(points[1]).toMatchObject({ raDeg: 90, decDeg: 0 })
     expect(points[1].displayDistance).toBe(UNKNOWN_DISTANCE_SHELL_RADIUS)
+    expect(observedHostCanOpen(points[0])).toBe(true)
+    expect(observedHostCanOpen(points[1])).toBe(false)
+  })
+
+  it('maps observed host brightness through the shared starfield control', () => {
+    expect(observedHostVisualCalibration(0)).toEqual({ colorIntensity: 0, opacity: 0 })
+    expect(observedHostVisualCalibration(1)).toEqual({
+      colorIntensity: 1,
+      opacity: OBSERVED_HOST_BASE_OPACITY,
+    })
+    expect(observedHostVisualCalibration(2)).toEqual({ colorIntensity: 2, opacity: 1 })
   })
 
   it('mints stable namespaces that cannot collide with Asteria ids', () => {
@@ -114,5 +133,80 @@ describe('observed scene math and identity', () => {
     })
     expect(model.planets[0].inclinationRadians).toBeCloseTo(12 * Math.PI / 180)
     expect(model.planets[0].phaseRadians).toBeCloseTo(Math.PI)
+  })
+
+  it('routes observed keyboard navigation away from hidden Asteria state', () => {
+    expect(observedNavigationCommand('KeyG', {
+      mode: 'observed-universe', selectedObservedId: 'observed-host:Known',
+    })).toEqual({ type: 'observed-center', id: 'observed-host:Known', mode: 'orbit' })
+    expect(observedNavigationCommand('KeyG', {
+      mode: 'observed-universe', selectedObservedId: 'observed-host:Known', closeRequested: true,
+    })).toEqual({ type: 'ignore' })
+    expect(observedNavigationCommand('KeyG', {
+      mode: 'observed-system', selectedObservedId: 'observed-planet:Known', closeRequested: true,
+    })).toEqual({ type: 'observed-center', id: 'observed-planet:Known', mode: 'close' })
+    expect(observedNavigationCommand('KeyG', {
+      mode: 'observed-system', selectedObservedId: 'observed-star:Known', closeRequested: true,
+    })).toEqual({ type: 'ignore' })
+    expect(observedNavigationCommand('KeyG', {
+      mode: 'observed-universe', selectedObservedId: null,
+    })).toEqual({ type: 'ignore' })
+    expect(observedNavigationCommand('Backspace', {
+      mode: 'observed-system', selectedObservedId: 'observed-star:Known',
+    })).toEqual({ type: 'ignore' })
+    expect(observedNavigationCommand('Digit0', {
+      mode: 'observed-system', selectedObservedId: null,
+    })).toEqual({ type: 'observed-local-overview' })
+    expect(observedNavigationCommand('Backspace', {
+      mode: 'asteria', selectedObservedId: null,
+    })).toEqual({ type: 'asteria-history' })
+    expect(observedNavigationCommand('KeyG', {
+      mode: 'asteria', selectedObservedId: null,
+    })).toEqual({ type: 'asteria-center', mode: 'orbit' })
+    expect(observedObjectSupportsViewMode(
+      'observed-universe', 'observed-host:Known', 'close',
+    )).toBe(false)
+    expect(observedObjectSupportsViewMode(
+      'observed-system', 'observed-star:Known', 'close',
+    )).toBe(false)
+    expect(observedObjectSupportsViewMode(
+      'observed-system', 'observed-planet:Known', 'close',
+    )).toBe(true)
+  })
+
+  it('plans safe observed orbit and close views without restarting an identical view', () => {
+    const close = observedCameraDistance(2, 'close')
+    const orbit = observedCameraDistance(2, 'orbit')
+    expect(close).toBeGreaterThanOrEqual(2 * 1.35)
+    expect(close).toBeLessThan(orbit)
+    expect(orbit).toBe(2 * 4.2)
+    expect(() => observedCameraDistance(0, 'close')).toThrow(/positive/)
+
+    const centered = { centeredObjectId: 'observed-planet:Known', centeredViewMode: 'orbit' } as const
+    expect(shouldStartObservedCentering(centered, 'observed-planet:Known', 'orbit')).toBe(false)
+    expect(shouldStartObservedCentering(centered, 'observed-planet:Known', 'close')).toBe(true)
+    expect(shouldStartObservedCentering(centered, 'observed-star:Known', 'orbit')).toBe(true)
+  })
+
+  it('clears observed selection without conflating it with camera centering', () => {
+    expect(clearObservedSelectionState({
+      mode: 'observed-system',
+      activeHost: 'Known',
+      activeSystemId: 'system-known',
+      selectedObjectId: 'observed-planet:Known%20b',
+      selectedHost: 'Known',
+      centeredObjectId: 'observed-star:system-known',
+      centeredViewMode: 'close',
+      transitioning: true,
+    })).toEqual({
+      mode: 'observed-system',
+      activeHost: 'Known',
+      activeSystemId: 'system-known',
+      selectedObjectId: null,
+      selectedHost: null,
+      centeredObjectId: 'observed-star:system-known',
+      centeredViewMode: 'close',
+      transitioning: true,
+    })
   })
 })

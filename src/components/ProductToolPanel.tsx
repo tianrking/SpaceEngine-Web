@@ -46,7 +46,12 @@ import type { SavedPlace, SavedPlacesPersistence } from './useSavedPlaces'
 import {
   NASA_ARCHIVE_RECORD_COUNT,
   ProgressiveNasaCatalog,
+  type ExploreObservedUniverseHandler,
+  type ObservedNavigationState,
+  type OpenObservedSystemHandler,
 } from './ProgressiveNasaCatalog'
+
+export type { ObservedNavigationState } from './ProgressiveNasaCatalog'
 
 export type ProductTool = 'search' | 'locations' | 'bookmarks' | 'settings'
 
@@ -78,6 +83,9 @@ export interface ProductToolPanelProps {
   searchInputRef: RefObject<HTMLInputElement | null>
   onSelect: (id: string) => void
   onFocus: (id: string) => void
+  onExploreObservedUniverse?: ExploreObservedUniverseHandler
+  onOpenObservedSystem?: OpenObservedSystemHandler
+  observedNavigationState?: ObservedNavigationState
   onSave: (id: string) => void
   onRemove: (id: string) => void
   onClearSaved: () => void
@@ -255,6 +263,9 @@ interface SearchToolProps {
   searchInputRef: RefObject<HTMLInputElement | null>
   onSelect: (id: string) => void
   onFocus: (id: string) => void
+  onExploreObservedUniverse?: ExploreObservedUniverseHandler
+  onOpenObservedSystem?: OpenObservedSystemHandler
+  observedNavigationState?: ObservedNavigationState
 }
 
 const SearchTool = memo(function SearchTool({
@@ -263,6 +274,9 @@ const SearchTool = memo(function SearchTool({
   searchInputRef,
   onSelect,
   onFocus,
+  onExploreObservedUniverse,
+  onOpenObservedSystem,
+  observedNavigationState,
 }: SearchToolProps) {
   const { t, i18n } = useTranslation('tools')
   const intlLocale = localeOption(i18n.resolvedLanguage).intlLocale
@@ -441,7 +455,12 @@ const SearchTool = memo(function SearchTool({
           )}
         </div>
       ) : (
-        <ProgressiveNasaCatalog searchInputRef={searchInputRef} />
+        <ProgressiveNasaCatalog
+          searchInputRef={searchInputRef}
+          onExploreObservedUniverse={onExploreObservedUniverse}
+          onOpenObservedSystem={onOpenObservedSystem}
+          observedNavigationState={observedNavigationState}
+        />
       )}
     </div>
   )
@@ -1102,6 +1121,9 @@ function ProductToolPanelComponent({
   searchInputRef,
   onSelect,
   onFocus,
+  onExploreObservedUniverse,
+  onOpenObservedSystem,
+  observedNavigationState,
   onSave,
   onRemove,
   onClearSaved,
@@ -1143,6 +1165,9 @@ function ProductToolPanelComponent({
             searchInputRef={searchInputRef}
             onSelect={onSelect}
             onFocus={onFocus}
+            onExploreObservedUniverse={onExploreObservedUniverse}
+            onOpenObservedSystem={onOpenObservedSystem}
+            observedNavigationState={observedNavigationState}
           />
         ) : tool === 'locations' ? (
           <LocationsTool

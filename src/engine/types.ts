@@ -6,6 +6,8 @@ export type CameraViewMode = 'free' | 'system' | 'orbit' | 'close'
 
 export type ObservedSceneMode = 'asteria' | 'observed-universe' | 'observed-system'
 
+export type ObservedCenteredViewMode = 'orbit' | 'close'
+
 export interface ObservedSceneState {
   readonly mode: ObservedSceneMode
   readonly activeHost: string | null
@@ -13,6 +15,7 @@ export interface ObservedSceneState {
   readonly selectedObjectId: string | null
   readonly selectedHost: string | null
   readonly centeredObjectId: string | null
+  readonly centeredViewMode: ObservedCenteredViewMode | null
   readonly transitioning: boolean
 }
 
@@ -188,6 +191,7 @@ export interface CosmosEngineEvents {
   onSelectionCleared?: () => void
   onCameraCenterChange?: (state: CameraCenterState) => void
   onObservedSelection?: (selection: ObservedSelection) => void
+  onObservedSelectionCleared?: () => void
   onObservedHostOpen?: (host: string) => void
   onObservedSceneChange?: (state: ObservedSceneState) => void
   onError?: (error: Error) => void

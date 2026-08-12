@@ -8,13 +8,26 @@ import {
   type MouseEvent,
   type PointerEvent,
 } from 'react'
-import { Crosshair, Database, Orbit, SearchX, Sparkles } from 'lucide-react'
+import {
+  Crosshair,
+  Database,
+  LocateFixed,
+  Orbit,
+  Rocket,
+  SearchX,
+  Sparkles,
+} from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type {
   ProgressiveHostSkyIndex,
   ProgressiveHostSkyTuple,
 } from '../data/progressiveExoplanetCatalog'
 import { localeOption } from '../i18n'
+import type {
+  ExploreObservedUniverseHandler,
+  ObservedNavigationState,
+  OpenObservedSystemHandler,
+} from './ProgressiveNasaCatalog'
 
 const HOST = 0
 const RA_DEG = 1
@@ -36,12 +49,28 @@ interface SkyPoint {
   readonly alpha: number
 }
 
-interface ObservedSkyAtlasProps {
+export interface ObservedSkyAtlasProps {
   readonly index: ProgressiveHostSkyIndex
   readonly filterQuery: string
   readonly loadMs: number
   readonly source: 'memory' | 'offline-storage' | 'network'
   readonly onOpenHost: (host: string) => void
+  readonly onExploreObservedUniverse?: ExploreObservedUniverseHandler
+  readonly onOpenObservedSystem?: OpenObservedSystemHandler
+  readonly observedNavigationState?: ObservedNavigationState
+}
+
+const IDLE_NAVIGATION: ObservedNavigationState = { status: 'idle' }
+
+function invokeNavigation<T extends readonly unknown[]>(
+  callback: (...args: T) => void | Promise<void>,
+  ...args: T
+): void {
+  try {
+    void Promise.resolve(callback(...args)).catch(() => undefined)
+  } catch {
+    // The owner reports navigation failures through `observedNavigationState`.
+  }
 }
 
 function clamp(value: number, minimum: number, maximum: number): number {
@@ -112,6 +141,9 @@ export const ObservedSkyAtlas = memo(function ObservedSkyAtlas({
   loadMs,
   source,
   onOpenHost,
+  onExploreObservedUniverse,
+  onOpenObservedSystem,
+  observedNavigationState = IDLE_NAVIGATION,
 }: ObservedSkyAtlasProps) {
   const { t, i18n } = useTranslation('nasa')
   const intlLocale = localeOption(i18n.resolvedLanguage).intlLocale
@@ -138,6 +170,15 @@ export const ObservedSkyAtlas = memo(function ObservedSkyAtlas({
     [records],
   )
   const selected = records.find((record) => record[HOST] === selectedHost) ?? nearestRecord
+  const navigationBusy = observedNavigationState.status === 'loading'
+  const exploringUniverse =
+    navigationBusy && observedNavigationState.target === 'universe'
+  const openingSelectedSystem = Boolean(
+    selected &&
+    navigationBusy &&
+    observedNavigationState.target === 'system' &&
+    observedNavigationState.host === selected[HOST],
+  )
 
   const points = useMemo<readonly SkyPoint[]>(() => {
     if (size.width === 0 || size.height === 0) return []
@@ -318,6 +359,28 @@ export const ObservedSkyAtlas = memo(function ObservedSkyAtlas({
         </div>
       </header>
 
+      {onExploreObservedUniverse ? (
+        <button
+          className="observed-sky-atlas__explore"
+          type="button"
+          aria-disabled={navigationBusy || undefined}
+          aria-busy={exploringUniverse || undefined}
+          onClick={() => {
+            if (!navigationBusy) invokeNavigation(onExploreObservedUniverse, index)
+          }}
+        >
+          {exploringUniverse ? (
+            <Rocket className="is-spinning" size={14} aria-hidden="true" />
+          ) : (
+            <Sparkles size={14} aria-hidden="true" />
+          )}
+          <span>
+            <strong>{t(exploringUniverse ? 'navigation.openingUniverse' : 'navigation.explore3d')}</strong>
+            <small>{t('navigation.explore3dDetail', { count: records.length.toLocaleString(intlLocale) })}</small>
+          </span>
+        </button>
+      ) : null}
+
       {records.length > 0 ? (
         <>
           <div className="observed-sky-atlas__canvas-wrap">
@@ -382,9 +445,59 @@ export const ObservedSkyAtlas = memo(function ObservedSkyAtlas({
                   {t('atlas.conflict', { fields: selected[CONFLICT_FIELDS] })}
                 </p>
               ) : null}
-              <button type="button" onClick={() => onOpenHost(selected[HOST])}>
-                <Orbit size={13} aria-hidden="true" /> {t('atlas.open')}
-              </button>
+              <div className="observed-sky-selection__actions">
+                {onExploreObservedUniverse ? (
+                  <button
+                    type="button"
+                    aria-disabled={navigationBusy || undefined}
+                    aria-busy={
+                      exploringUniverse && observedNavigationState.host === selected[HOST]
+                        ? true
+                        : undefined
+                    }
+                    onClick={() => {
+                      if (!navigationBusy) {
+                        invokeNavigation(onExploreObservedUniverse, index, selected[HOST])
+                      }
+                    }}
+                  >
+                    <LocateFixed size={13} aria-hidden="true" />
+                    {t('navigation.locateSky3d')}
+                  </button>
+                ) : null}
+                {onOpenObservedSystem ? (
+                  <button
+                    className="is-primary"
+                    type="button"
+                    disabled={selected[DISTANCE_PC] === null}
+                    aria-disabled={navigationBusy || undefined}
+                    aria-busy={openingSelectedSystem || undefined}
+                    title={selected[DISTANCE_PC] === null
+                      ? t('navigation.skyOnlyTitle')
+                      : undefined}
+                    onClick={() => {
+                      if (!navigationBusy) {
+                        invokeNavigation(onOpenObservedSystem, selected[HOST])
+                      }
+                    }}
+                  >
+                    <Rocket size={13} aria-hidden="true" />
+                    {t(selected[DISTANCE_PC] === null
+                      ? 'navigation.skyOnly'
+                      : openingSelectedSystem
+                        ? 'navigation.openingSystem'
+                        : 'navigation.flySystem', { host: selected[HOST] })}
+                  </button>
+                ) : null}
+                <button type="button" onClick={() => onOpenHost(selected[HOST])}>
+                  <Orbit size={13} aria-hidden="true" /> {t('atlas.open')}
+                </button>
+              </div>
+              {selected[DISTANCE_PC] === null && onOpenObservedSystem ? (
+                <small className="observed-sky-selection__sky-only">
+                  {t('navigation.distanceRequired')}
+                </small>
+              ) : null}
             </article>
           ) : null}
         </>

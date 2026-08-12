@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { SUPPORTED_LOCALES, type AppLocale } from './locale'
 import { appResources } from './namespaces/app'
@@ -35,6 +36,12 @@ function flattenResource(
   return leaves
 }
 
+function interpolationVariables(value: string): string[] {
+  return [...value.matchAll(/{{\s*([\w.]+)\s*}}/g)]
+    .map((match) => match[1])
+    .toSorted()
+}
+
 describe('internationalization resources', () => {
   it.each(Object.entries(namespaces))(
     '%s has the exact English key set in every locale',
@@ -62,6 +69,26 @@ describe('internationalization resources', () => {
       expect(Object.keys(scienceResources[locale]).sort()).toEqual(
         [...SCIENCE_BODY_IDS].sort(),
       )
+    }
+  })
+
+  it('covers every observed-universe descriptor used by App with matching variables', () => {
+    const appSource = readFileSync(new URL('../App.tsx', import.meta.url), 'utf8')
+    const usedKeys = [...appSource.matchAll(/t\(['"]observed\.([^'"]+)['"]/g)]
+      .map((match) => match[1])
+      .toSorted()
+    const englishKeys = Object.keys(appResources.en.observed).toSorted()
+
+    expect([...new Set(usedKeys)]).toEqual(englishKeys)
+    for (const locale of SUPPORTED_LOCALES) {
+      const resources = appResources[locale].observed
+      expect(Object.keys(resources).toSorted(), locale).toEqual(englishKeys)
+      for (const key of englishKeys) {
+        expect(
+          interpolationVariables(resources[key as keyof typeof resources]),
+          `${locale}:observed.${key}`,
+        ).toEqual(interpolationVariables(appResources.en.observed[key as keyof typeof appResources.en.observed]))
+      }
     }
   })
 })

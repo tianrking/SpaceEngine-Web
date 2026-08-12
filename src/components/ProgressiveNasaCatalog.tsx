@@ -23,6 +23,7 @@ import {
   List,
   MapPinned,
   ExternalLink,
+  LocateFixed,
   RefreshCcw,
   Search,
   ShieldCheck,
@@ -37,6 +38,7 @@ import type {
   CatalogMeasurement,
   ProgressiveExoplanetManifest,
   ProgressiveExoplanetSummary,
+  ProgressiveHostSkyIndex,
 } from '../data/progressiveExoplanetCatalog'
 import type {
   ProgressiveCatalogFilter,
@@ -305,6 +307,8 @@ interface ProgressiveRecordDetailProps {
   labelledBy: string
   detail: CatalogDetailPayload
   manifest: ProgressiveExoplanetManifest
+  onOpenObservedSystem?: (host: string) => void | Promise<void>
+  observedNavigationState?: ObservedNavigationState
 }
 
 const ProgressiveRecordDetail = memo(function ProgressiveRecordDetail({
@@ -312,6 +316,8 @@ const ProgressiveRecordDetail = memo(function ProgressiveRecordDetail({
   labelledBy,
   detail,
   manifest,
+  onOpenObservedSystem,
+  observedNavigationState = IDLE_OBSERVED_NAVIGATION,
 }: ProgressiveRecordDetailProps) {
   const { t, i18n } = useTranslation('nasa')
   const intlLocale = localeOption(i18n.resolvedLanguage).intlLocale
@@ -329,6 +335,12 @@ const ProgressiveRecordDetail = memo(function ProgressiveRecordDetail({
   ].reduce<number>((sum, value) => sum + (value ?? 0), 0)
   const observedCount = (value: number | null): number | null =>
     value === null || value === 0 ? null : value
+  const distanceReported = m.distancePc?.value !== null && m.distancePc?.value !== undefined
+  const navigationBusy = observedNavigationState.status === 'loading'
+  const openingThisSystem =
+    navigationBusy &&
+    observedNavigationState.target === 'system' &&
+    observedNavigationState.host === record.host
 
   return (
     <div id={id} className="product-nasa-detail" role="region" aria-labelledby={labelledBy}>
@@ -343,6 +355,35 @@ const ProgressiveRecordDetail = memo(function ProgressiveRecordDetail({
         <span>·</span>
         {detail.loadMs.toLocaleString(intlLocale, { maximumFractionDigits: 1 })} ms
       </div>
+
+      {onOpenObservedSystem ? (
+        <div className="product-nasa-detail__navigation">
+          <button
+            type="button"
+            disabled={!distanceReported}
+            aria-disabled={navigationBusy || undefined}
+            aria-busy={openingThisSystem || undefined}
+            title={!distanceReported ? t('navigation.skyOnlyTitle') : undefined}
+            onClick={() => {
+              if (!navigationBusy) {
+                invokeObservedNavigation(onOpenObservedSystem, record.host)
+              }
+            }}
+          >
+            {openingThisSystem ? (
+              <RefreshCcw className="is-spinning" size={13} aria-hidden="true" />
+            ) : (
+              <LocateFixed size={13} aria-hidden="true" />
+            )}
+            {t(!distanceReported
+              ? 'navigation.skyOnly'
+              : openingThisSystem
+                ? 'navigation.openingSystem'
+                : 'navigation.openSystem3d', { host: record.host })}
+          </button>
+          {!distanceReported ? <small>{t('navigation.distanceRequired')}</small> : null}
+        </div>
+      ) : null}
 
       <DetailSection title={t('detail.positionIdentity')}>
         <TextRow label={t('detail.distance')} value={displayNumber(m.distancePc?.value ?? null, ' pc', 3, intlLocale, notReported)} />
@@ -441,8 +482,68 @@ const ProgressiveRecordDetail = memo(function ProgressiveRecordDetail({
   )
 })
 
-interface ProgressiveNasaCatalogProps {
+export type ObservedNavigationState =
+  | { readonly status: 'idle' }
+  | {
+      readonly status: 'loading' | 'success' | 'error'
+      readonly target: 'universe' | 'system'
+      readonly host?: string
+    }
+
+export type ExploreObservedUniverseHandler = (
+  index: ProgressiveHostSkyIndex,
+  focusHost?: string,
+) => void | Promise<void>
+
+export type OpenObservedSystemHandler = (host: string) => void | Promise<void>
+
+const IDLE_OBSERVED_NAVIGATION: ObservedNavigationState = { status: 'idle' }
+
+function invokeObservedNavigation<T extends readonly unknown[]>(
+  callback: (...args: T) => void | Promise<void>,
+  ...args: T
+): void {
+  try {
+    void Promise.resolve(callback(...args)).catch(() => undefined)
+  } catch {
+    // The owner reports navigation failures through `observedNavigationState`.
+  }
+}
+
+const ObservedNavigationStatus = memo(function ObservedNavigationStatus({
+  state,
+}: {
+  readonly state: ObservedNavigationState
+}) {
+  const { t } = useTranslation('nasa')
+  if (state.status === 'idle') return null
+  const target = state.target === 'system' && state.host
+    ? t('navigation.systemTarget', { host: state.host })
+    : t('navigation.universeTarget')
+  return (
+    <p
+      className={`product-observed-navigation-status is-${state.status}`}
+      role={state.status === 'error' ? 'alert' : 'status'}
+      aria-live={state.status === 'error' ? 'assertive' : 'polite'}
+      aria-atomic="true"
+    >
+      {state.status === 'loading' ? (
+        <RefreshCcw className="is-spinning" size={12} aria-hidden="true" />
+      ) : state.status === 'error' ? (
+        <AlertTriangle size={12} aria-hidden="true" />
+      ) : (
+        <ShieldCheck size={12} aria-hidden="true" />
+      )}
+      {t(`navigation.${state.status}`, { target })}
+    </p>
+  )
+})
+
+export interface ProgressiveNasaCatalogProps {
   searchInputRef: RefObject<HTMLInputElement | null>
+  onExploreObservedUniverse?: ExploreObservedUniverseHandler
+  onOpenObservedSystem?: OpenObservedSystemHandler
+  observedNavigationState?: ObservedNavigationState
 }
 
 type OfflineOperation =
@@ -593,6 +694,9 @@ type HostSkyState =
 
 export const ProgressiveNasaCatalog = memo(function ProgressiveNasaCatalog({
   searchInputRef,
+  onExploreObservedUniverse,
+  onOpenObservedSystem,
+  observedNavigationState = IDLE_OBSERVED_NAVIGATION,
 }: ProgressiveNasaCatalogProps) {
   const { t, i18n } = useTranslation('nasa')
   const intlLocale = localeOption(i18n.resolvedLanguage).intlLocale
@@ -962,6 +1066,8 @@ export const ProgressiveNasaCatalog = memo(function ProgressiveNasaCatalog({
         </button>
       </div>
 
+      <ObservedNavigationStatus state={observedNavigationState} />
+
       <label htmlFor={inputId}>
         {viewMode === 'sky'
           ? t('search.skyLabel')
@@ -1104,6 +1210,8 @@ export const ProgressiveNasaCatalog = memo(function ProgressiveNasaCatalog({
                         labelledBy={triggerId}
                         detail={detailState.detail}
                         manifest={manifest}
+                        onOpenObservedSystem={onOpenObservedSystem}
+                        observedNavigationState={observedNavigationState}
                       />
                     ) : null}
                   </article>
@@ -1163,6 +1271,9 @@ export const ProgressiveNasaCatalog = memo(function ProgressiveNasaCatalog({
                 ? 'offline-storage'
                 : 'network'}
             onOpenHost={openHostRecords}
+            onExploreObservedUniverse={onExploreObservedUniverse}
+            onOpenObservedSystem={onOpenObservedSystem}
+            observedNavigationState={observedNavigationState}
           />
         </Suspense>
       ) : hostSkyState.status === 'error' ? (

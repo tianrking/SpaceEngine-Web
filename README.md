@@ -6,7 +6,7 @@
   <h1>Astral Surveyor</h1>
 
   <p><strong>A clean-room WebGPU universe explorer built with React, TypeScript, and Three.js.</strong></p>
-  <p>Explore a deterministic procedural system, inspect a source-backed complete exoplanet research archive, tune the visual observatory, and fall back gracefully to WebGL 2 when WebGPU is unavailable.</p>
+  <p>Explore a deterministic procedural system, navigate a source-backed NASA host universe and its on-demand planetary systems, tune the visual observatory, and fall back gracefully to WebGL 2 when WebGPU is unavailable.</p>
 
   <p>
     <a href="https://space-engine-web.vercel.app/"><img alt="Live demo" src="https://img.shields.io/badge/Live%20Demo-Launch-55d6be?style=for-the-badge&logo=vercel&logoColor=white" /></a>
@@ -23,7 +23,7 @@
 
 ## Overview
 
-Astral Surveyor is a browser-based vertical slice for testing the engineering foundations of a large-scale universe explorer. The application renders a deliberately compressed, visual-scale version of the fictional Asteria system and pairs it with a source-backed research catalogue of **6,336 confirmed exoplanets across 4,749 host systems**. It combines a GPU-initialized spiral starfield, eight planets, eighteen parent-relative moons, procedural surfaces, rings, cloud shells, atmospheric presentation, a cinematic scientific HUD, an interactive real-coordinate ICRS host atlas, visual calibration, live renderer telemetry, and an installable verified offline research pack.
+Astral Surveyor is a browser-based vertical slice for testing the engineering foundations of a large-scale universe explorer. The application renders a deliberately compressed, visual-scale version of the fictional Asteria system and pairs it with a source-backed, navigable catalogue of **6,336 confirmed exoplanets across 4,749 host systems**. It combines a GPU-initialized spiral starfield, eight Asteria planets, eighteen parent-relative moons, procedural surfaces, rings, cloud shells, atmospheric presentation, a cinematic scientific HUD, an interactive real-coordinate ICRS atlas, a single-draw 3D observed-host cloud, on-demand observed planetary systems, visual calibration, live renderer telemetry, and an installable verified offline research pack.
 
 The renderer and product UI now consume the same deterministic domain catalogue. That single source owns f64 Kepler mechanics, nested orbital hierarchy, SI inputs, equation-derived physical measurements, astronomical units, seeded procedural properties, provenance, and high/low precision helpers.
 
@@ -51,7 +51,7 @@ This project is an original clean-room implementation. It is not a port, fork, o
 | GPU programs | Three.js Shading Language (TSL) | WebGPU compute initialization for the spiral starfield and backend-compatible node materials |
 | Procedural visuals | `simplex-noise`, Canvas textures | Seeded planet albedo, clouds, glows, rings, and small rocky-surface displacement |
 | Astronomical data | NASA Exoplanet Archive TAP release | Versioned composite parameters for 6,336 confirmed exoplanets, a compact search index, a 4,749-host ICRS sky index, and 17 content-addressed scientific-detail chunks |
-| Catalogue runtime | Dedicated Web Worker, Web Crypto, IndexedDB, immutable HTTP assets | Off-main-thread packed UTF-8 search, SHA-256/byte-size/schema verification, cancellable detail requests, bounded memory/disk caches, and an optional complete offline pack |
+| Catalogue runtime | Dedicated Web Worker, Web Crypto, IndexedDB, immutable HTTP assets | Off-main-thread packed UTF-8 search, SHA-256/byte-size/schema verification, cancellable detail and exact-host system streams, bounded memory/disk caches, and an optional complete offline pack |
 | Offline shell | Generated Service Worker | Content-versioned entry-shell precache, required-English locale precache, network-first navigation, and a persistent on-demand locale cache without intercepting catalogue release validation |
 | State boundary | React state plus engine snapshots | Commands flow into `CosmosEngine`; telemetry returns to React every 400 ms rather than every frame |
 | Tooling | Vite 8, Oxlint | Development server, optimized production build, and static analysis |
@@ -68,7 +68,7 @@ WebAssembly is not currently used. The project first establishes correctness in 
 - **Interactive Asteria system.** Explore one G-class star, eight primary worlds, and eighteen selectable moons spanning lava, desert, ocean, super-Earth, Neptunian, gas-giant, ice-giant, dwarf, volcanic, rocky, icy, and oceanic classes.
 - **Physics-derived catalogue.** Density, reference gravity, escape velocity, orbital period, mean orbital speed, periapsis, apoapsis, stellar flux, and equilibrium temperature are calculated from SI catalogue inputs instead of being independently hand-typed display values.
 - **Hierarchical orbital simulation.** Planets follow deterministic Keplerian ellipses around Asteria; moons follow parent-relative orbits that are transformed into the star-system frame. Simulation time can pause or advance from `0.25x` to `10,000x` through the HUD.
-- **Body-centered camera frames.** Selecting a body and centering the camera are separate operations. Explicit Orbit and Close Approach commands attach the control frame to any rendered star, planet, or moon; the camera and control target follow that body's world-space motion together, including at high simulation time scales, while preserving the user's relative viewing angle.
+- **Body-centered camera frames.** Selecting an Asteria body and centering the camera are separate operations. Orbit supports its rendered star, planets, and moons; Close Approach supports non-stellar bodies. The camera and control target follow that body's world-space motion together, including at high simulation time scales, while preserving the user's relative viewing angle.
 - **Reversible camera navigation.** Up to eight immediately previous views can be restored without assuming the star is at local origin. System overview is a reversible camera destination; the separate reset action clears view history and restores the initial product state.
 - **Explicit free flight.** Cancelling an in-progress camera transition preserves the exact current pose and labels it as Free flight. It neither claims a system overview nor changes the selected body, and the interrupted destination remains available through Previous View.
 - **Precision foundations.** The renderer recenters its floating origin beyond a fixed threshold. Separate, unit-tested high/low helpers are ready for future shader integration.
@@ -76,6 +76,10 @@ WebAssembly is not currently used. The project first establishes correctness in 
 - **Live visual observatory.** Tune tone-mapped exposure, orbital-guide brightness, and starfield brightness without rebuilding the scene or reallocating GPU geometry/material resources; versioned preferences persist locally.
 - **Complete exoplanet archive.** Search all 6,336 confirmed planets in the pinned release by planet, host, spectral type, discovery method, or facility; combine Nearby, Earth-size, Temperate, and Recent filters and sort by name, distance, or discovery date.
 - **Observed-host sky atlas.** Explore all 4,749 NASA host systems on an interactive high-DPI ICRS canvas using reported RA/Dec, distance, Gaia identity/magnitude, spectral type, multiplicity, and confirmed-planet count. Its 172 KiB gzip data asset and 3.3 KiB gzip UI chunk load only when requested; pointer and keyboard selection work, and composite-field conflicts remain visible instead of being resolved to a convenient value.
+- **Navigable observed universe.** The same 4,749-host index renders as one GPU `THREE.Points` cloud. All directions use reported ICRS RA/Dec; 4,722 hosts with a reported distance receive monotonic logarithmic visual spacing and can open an observed system, while 27 distance-null hosts remain explicitly **sky-only** and can be located by direction without pretending that their depth is known.
+- **Observed systems on demand.** Opening a distance-bearing host asks the verified Worker for that exact hostname and only the immutable detail chunks that contain its planets. The pinned release contains up to eight planets in one host system. The resulting star, planets, orbit guides, inspector data, and camera targets replace the current observed scene without reconstructing the renderer.
+- **Honest observed-orbit presentation.** NASA archive-composite values, uncertainties, limits, references, conflicts, and `null` values remain inspectable. Longitude of ascending node, argument of periapsis, and orbital phase are absent from this release and therefore use deterministic, explicitly **illustrative** values for visualization; no generated orientation is presented as an observation.
+- **Observed-object camera frames.** Selection and centering remain separate in both the host universe and an opened system. Hosts, stars, and planets support Orbit centering; observed planets additionally support Close view. Time-dependent observed planets keep moving from reported periods, and a completed centered frame follows the selected object's world-space motion without silently retargeting when another object is inspected.
 - **Scientific detail on demand.** The initial catalogue transfer is a compact 175 KiB gzip search index, including precomputed distance and discovery orders. Expanding a result fetches only one 78–153 KiB gzip detail chunk containing measurements, asymmetric errors, limit flags, source references, external IDs, discovery equipment, spectra/JWST counts, and stellar context.
 - **Measured 100k search architecture.** A deterministic, explicitly synthetic 100,000-summary fixture runs in CI. The Worker search core stores normalized text in one UTF-8 byte buffer with typed offsets/orders instead of duplicating 100,000 JavaScript object forests; exact identity/name and mixed-filter p95 are both required to remain below 50 ms, while the auxiliary index must remain below 24 MiB.
 - **Honest runtime telemetry.** The research panel reports packed-index CPU time separately from end-to-end verified readiness, which also includes network or IndexedDB loading, byte/hash/schema checks, and offline-state inspection.
@@ -90,7 +94,8 @@ WebAssembly is not currently used. The project first establishes correctness in 
 Astral Surveyor keeps two intentionally separate scientific layers:
 
 - The rendered Asteria system is **fictional and deterministic**. Every body exposes provenance so curated scenario assumptions are distinguishable from equation-derived measurements.
-- The Nearby Worlds archive contains **observational catalogue records** retrieved from the NASA Exoplanet Archive `pscomppars` table. These rows can combine preferred values from different literature sources, so the interface labels them **archive composite** and never presents missing values as measured facts.
+- The Nearby Worlds archive and observed 3D scenes consume **observational catalogue records** retrieved from the NASA Exoplanet Archive `pscomppars` table. These rows can combine preferred values from different literature sources, so the interface labels them **archive composite** and never presents missing values as measured facts.
+- The observed renderer is a visual interpretation of that catalogue, not a complete orbital solution. Reported values stay observational; derived ICRS Cartesian positions are labelled derived; deterministic replacements for missing orientation or phase stay illustrative.
 
 - Reference conversions use the [IAU 2015 Resolution B3 nominal constants](https://www.iau.org/common/Uploaded%20files/IAUGA2015-Resolution-B3-recommended-nominal-conversion.pdf).
 - World classes follow the broad terminology used by [NASA Exoplanet Exploration](https://science.nasa.gov/exoplanets/planet-types/).
@@ -107,23 +112,23 @@ The prototype is intentionally narrower than a production astronomical simulator
 
 | Area | What works now | Not implemented yet |
 | --- | --- | --- |
-| Scale | Floating-origin recentering and logarithmic depth in a compressed visual system | Physically scaled travel from planetary terrain to interstellar or galactic distances |
-| Coordinates | f64 domain values, parent-relative moon transforms, body-centered star/planet/moon camera reference frames, tested high/low split utilities, and a verified ICRS RA/Dec atlas for all 4,749 observed NASA hosts | High/low shader integration, epoch propagation/proper-motion covariance, or hierarchical interstellar/galactic navigation frames |
+| Scale | Floating-origin recentering and logarithmic depth in compressed Asteria and observed scenes; the observed-host radius is a monotonic log transform of parsecs | Physically scaled travel from planetary terrain to interstellar or galactic distances |
+| Coordinates | f64 domain values, parent-relative moon transforms, moving-object camera frames, tested high/low split utilities, and verified ICRS directions for all 4,749 NASA hosts; 4,722 use reported distance and 27 remain on a labelled sky-only shell | High/low shader integration, epoch propagation/proper-motion covariance, or hierarchical interstellar/galactic navigation frames |
 | Terrain | Fixed sphere meshes, seeded textures, and small CPU vertex displacement | Cube-sphere quadtree LOD, tile scheduling, geomorphing, collision, walking, or terrain-level landing |
 | Atmosphere | Transparent additive shells and animated cloud presentation | Rayleigh/Mie scattering, precomputed atmosphere LUTs, volumetric clouds, weather, or physically based eclipses |
 | Physics | Equation-derived bulk properties, stellar environment, and elliptic two-body Kepler motion | N-body gravity, perturbations, resonances, tidal evolution, relativistic trajectories, spacecraft dynamics, or aerodynamics |
-| Data | Fictional deterministic Asteria plus a versioned 6,336-planet NASA release with content-addressed detail/host indexes, ICRS coordinates, uncertainties/limits, selected field references, external IDs, conflict flags, and honest nulls | Reviewed Gaia astrometry/cross-matches, SIMBAD aliases, authoritative ephemerides, full per-field reference coverage, observed atmospheres/terrain, or HEALPix spatial tiles |
+| Data | Fictional deterministic Asteria plus a versioned 6,336-planet NASA release with content-addressed detail/host indexes, exact-host verified streaming, ICRS coordinates, uncertainties/limits, selected field references, external IDs, conflict flags, and honest nulls | Release-reviewed Gaia astrometry/cross-matches, SIMBAD aliases, authoritative ephemerides, full per-field reference coverage, observed atmospheres/terrain, or Gaia HEALPix spatial tiles |
 | Universe generation | Seeded catalogue/RNG modules and on-demand procedural visual textures | Persistent sectors, billions of addressable objects, streaming catalogues, or generator-version migrations |
-| Product UI | Inspector, system list, local simulated-body search, Worker-backed full exoplanet research search, interactive observed-host sky atlas, schematic Asteria map, `localStorage` saved places with memory fallback, visual calibration, runtime settings, shortcut guide, quality, cinematic, and time controls | Rendering and travelling through observed host systems, cloud sync, shared locations, user accounts, or server persistence |
+| Product UI | Inspector, system list, local simulated-body search, Worker-backed full exoplanet research search, observed-host atlas, single-draw 3D host universe, distance-aware Locate/Fly actions, on-demand observed systems, selected/centered camera context, schematic Asteria map, saved places, visual calibration, settings, shortcut guide, quality, cinematic, and time controls | Observed terrain/atmospheres, cloud sync, shared locations, user accounts, or server persistence |
 | Platform resilience | Automatic WebGL 2 fallback, an explicit fallback route, a content-versioned entry shell with required-English fallback, persistent cached-locale fallback, verified IndexedDB search-core fallback, and an optional complete scientific-detail pack | Guaranteed offline availability for uncached lazy chunks or non-English locales, GPU device-loss recovery, automatic catalogue rollback UI, cross-browser automated E2E coverage, or formal performance budgets |
 
-The rendered Asteria catalogue is a physically constrained fictional scenario. Its derived values are internally consistent with the documented inputs, but they are not telescope observations. Visual radii and orbital distances are compressed for readability and must not be interpreted as a 1:1 scale model. The separate NASA research index is observational archive data and is not currently rendered as flyable systems. Body-centered navigation applies only to rendered Asteria objects; it does not add observed terrain, observed atmospheres, N-body dynamics, or travel to NASA catalogue systems.
+The rendered Asteria catalogue is a physically constrained fictional scenario. Its derived values are internally consistent with the documented inputs, but they are not telescope observations. The NASA layer is observational archive data rendered through deliberately compressed visual transforms: distance-bearing hosts are navigable and their systems can be opened, but this is not 1:1 interstellar travel. Observed planet sizes and orbit spacing are presentation scales; missing orientation and phase stay labelled illustrative. These scenes do not add observed terrain, observed atmospheres, complete orbital ephemerides, N-body dynamics, or spacecraft flight physics.
 
 ### Selection and camera-center semantics
 
-**Selected** identifies the object shown in the inspector and used by selection commands. **Centered** identifies the reference frame currently followed by the camera. Clicking a body selects it without silently moving the camera; Orbit or Close Approach explicitly makes it the centered body. Clearing selection does not invalidate an already completed centered view, and selecting another body does not retarget the camera until a centering command is issued. Cancelling a transition enters an explicit **Free flight** frame at the current pose; the HUD never presents that unlocked state as a completed system overview.
+**Selected** identifies the object shown in the inspector and used by selection commands. **Centered** identifies the reference frame currently followed by the camera. Clicking an Asteria or observed object selects it without silently moving the camera; Orbit or Close explicitly makes a supported object the centered target. Clearing selection does not invalidate an already completed centered view, and selecting another object does not retarget the camera until a centering command is issued. Cancelling a transition enters an explicit **Free flight** frame at the current pose; the HUD never presents that unlocked state as a completed overview.
 
-While centered on a star, planet, or moon, each simulation tick measures the body's world-center translation and applies the same translation to the camera and `OrbitControls` target. Manual orbit and dolly input therefore changes the relative view without detaching from the moving body. Ringed bodies use their outer ring radius for minimum distance and framing. Floating-origin shifts update the camera anchor in the same frame, and reduced-motion clients complete camera transitions immediately.
+While centered on an Asteria body or a moving observed planet, each simulation tick measures the object's world-center translation and applies the same translation to the camera and `OrbitControls` target. Manual orbit and dolly input therefore changes the relative view without detaching from the moving object. Ringed Asteria bodies use their outer ring radius for minimum distance and framing. Floating-origin shifts update the camera anchor in the same frame, and reduced-motion clients complete camera transitions immediately.
 
 ## Controls
 
@@ -131,12 +136,13 @@ While centered on a star, planet, or moon, each simulation tick measures the bod
 | --- | --- |
 | Left-drag | Orbit around the current control target |
 | Mouse wheel | Dolly toward or away from the target |
-| Click a star, planet, moon, or ring | Select it and open its inspector |
-| Double-click a star, planet, or moon | Fly to its orbital view |
-| `G` | Center the camera on the selected body in Orbit mode |
-| `Shift` + `G` | Center the camera on the selected body in Close Approach mode |
-| `Backspace` | Restore the previous camera view, up to eight levels |
-| `0` | Go to the reversible Asteria system overview |
+| Click an Asteria body or observed host/star/planet | Select it and open its inspector without changing the centered target |
+| Double-click an Asteria body or observed star/planet | Fly to its Orbit view |
+| Double-click an observed host with distance | Verify and stream that exact host system; sky-only hosts remain in the directional universe view |
+| `G` | Center the selected Asteria or observed object in Orbit mode |
+| `Shift` + `G` | Use Close mode for a supported Asteria body or observed planet; observed hosts and stars do not offer Close |
+| `Backspace` | Restore Asteria camera history, up to eight levels; in observed scenes, move up the explicit hierarchy: system → observed universe → Asteria |
+| `0` | Reset the current Asteria, observed-universe, or observed-system camera to its local overview |
 | `/` | Open and focus the Asteria catalogue search |
 | `?` | Open the keyboard shortcut guide |
 | `Esc` | Close the active panel/dialog; during camera travel, cancel the transition without snapping to its destination |
@@ -145,12 +151,16 @@ While centered on a star, planet, or moon, each simulation tick measures the bod
 | `Q` / `E` | Fly down / up |
 | Hold `Shift` | Apply a 4x keyboard-flight boost |
 | `Space` | Pause or resume simulation time |
-| **Go to orbit** | Fly to the selected body |
-| **Close approach** | Move closer to the selected planet or moon; this is not terrain landing |
-| **System overview** | Move to the Asteria overview while retaining the previous view for Back |
-| **Observation deck / reset** | Restore the initial product view and clear camera-view history |
+| **Go to orbit** | Center a supported selected Asteria or observed object |
+| **Close approach** | Move closer to a supported Asteria body or observed planet; this is not terrain landing |
+| **System overview** | Move to the local Asteria/observed overview; from an observed system, return to its host-universe context |
+| **Observation deck / reset** | Restore the initial Asteria product view, clear observed UI state, and clear Asteria camera-view history |
 | Navigation rail | Open Explore, Search, Star map, Saved places, or Settings |
 | Search source switch | Move between 27 rendered Asteria bodies and the progressive 6,336-record NASA research archive |
+| **Explore observed universe in 3D** | Build the single-draw 4,749-host ICRS point cloud from the on-demand verified index |
+| **Locate in 3D sky** | Select and center a host direction; works for both distance-bearing and sky-only records |
+| **Fly to system** | For one of the 4,722 distance-bearing hosts, stream its exact-host records and open the observed star/planet scene |
+| Observed camera context | Return from an opened observed system to the host universe, then from the observed universe to Asteria |
 | Display calibration | Adjust exposure, orbit brightness, or starfield brightness; reset to the balanced observatory defaults |
 | Time transport controls | Pause, resume, change the positive time scale, or reset the epoch |
 | Quality selector | Switch between Performance, Balanced, and Ultra render resolution |
@@ -236,17 +246,22 @@ flowchart LR
   Catalog --> Engine
   Manifest["Versioned manifest<br/>hashes, sizes, provenance"] --> Worker["Dedicated catalogue Worker"]
   Index["Compact search index<br/>6,336 planets"] --> Worker
-  HostSky["On-demand ICRS host index<br/>4,749 real coordinates"] -->|sky view only| Worker
-  Detail["17 immutable detail chunks<br/>errors, limits, references"] -->|selected chunk only| Worker
+  HostSky["On-demand ICRS host index<br/>4,722 distances + 27 sky-only"] --> Worker
+  Detail["17 immutable detail chunks<br/>errors, limits, references"] -->|selected record or exact host| Worker
   Worker <--> IDB["IndexedDB<br/>verified core and optional full pack"]
-  Worker -->|immutable summaries and selected detail| UI
+  Worker -->|immutable summaries, detail, and observed bundles| UI
+  UI -->|verified host index or exact-host system| Engine
   SW["Generated Service Worker<br/>versioned entry shell and persistent locale cache"] --> UI
   Engine --> Renderer["Three.js WebGPURenderer"]
+  Engine --> Observed["Observed scene<br/>one 4,749-host Points draw or on-demand system"]
+  Observed --> Renderer
   Renderer -->|preferred backend| GPU["WebGPU and TSL compute<br/>96K galaxy points"]
   Renderer -->|automatic or forced fallback| GL["WebGL 2 and CPU buffers<br/>24K galaxy points"]
 ```
 
-The Three.js animation loop owns camera motion, hierarchical orbital updates, GPU resources, and per-frame rendering. Its camera-center state records `free`, `system`, `orbit`, or `close`, independently from React's selected object. After orbital transforms update, a completed body-centered view translates the camera and controls target by the centered body's world-space delta before rendering. Camera history stores center-relative offsets, so Previous View remains valid for moving moons and after floating-origin recentering; an interrupted history restore recovers its pending destination instead of dropping it. React receives low-frequency snapshots for presentation, keeping reconciliation out of the render hot path. Display calibration mutates existing renderer uniforms/material properties in place. A Dedicated Worker owns NASA manifest/index validation, search, on-demand host-atlas loading, chunk loading, cancellation, memory/disk eviction, and atomic pack-readiness state; React receives at most the visible 20-result page plus one selected detail record. The host atlas draws 4,749 systems into one lazy-loaded Canvas rather than creating thousands of DOM nodes. IndexedDB stores only verified catalogue assets. The generated Service Worker precaches the entry shell referenced by the built document plus icons/manifests and the required English locale. It retains other successfully requested locale packs in a stable network-first cache, and deliberately leaves both code-split runtime chunks and catalogue release validation to their request-driven owners. The DOM-free simulation domain remains independent from both renderer and observed catalogue.
+The Three.js animation loop owns camera motion, hierarchical orbital updates, GPU resources, and per-frame rendering. Asteria camera-center state and observed-scene state both keep the inspected selection separate from the centered target. After orbital transforms update, a completed centered view translates the camera and controls target by the target's world-space delta before rendering, including for moving observed planets. Camera history stores center-relative Asteria offsets, while explicit observed context actions return from system to host universe to Asteria. React receives low-frequency snapshots for presentation, keeping reconciliation out of the render hot path. Display calibration mutates existing renderer uniforms/material properties in place.
+
+A Dedicated Worker owns NASA manifest/index validation, search, on-demand host-index loading, exact-host chunk streaming, cancellation, memory/disk eviction, and atomic pack-readiness state. React receives only a visible 20-result page, one selected detail, or one exact-host bundle containing at most eight planets in this release. The 2D atlas draws all hosts into one lazy Canvas; the engine builds the 3D universe as one `THREE.Points` cloud, then atomically replaces it with an on-demand system scene when requested. IndexedDB stores only verified catalogue assets. The generated Service Worker precaches the entry shell referenced by the built document plus icons/manifests and the required English locale. It retains other successfully requested locale packs in a stable network-first cache, and deliberately leaves both code-split runtime chunks and catalogue release validation to their request-driven owners. The DOM-free Asteria simulation domain remains separate from the observed catalogue adapter.
 
 For deeper design notes, see [Architecture](docs/ARCHITECTURE.md) and [Research](docs/RESEARCH.md).
 
@@ -289,7 +304,7 @@ For deeper design notes, see [Architecture](docs/ARCHITECTURE.md) and [Research]
 
 `CosmosEngine` constructs Three.js `WebGPURenderer` with antialiasing and a logarithmic depth buffer. At startup, Three.js attempts WebGPU first and uses its WebGL 2 backend when WebGPU cannot be initialized. The app reports the actual backend in the top status bar rather than inferring support from `navigator.gpu` alone.
 
-| Mode | How to activate | Current star budget | Generation path |
+| Mode | How to activate | Background-star budget (observed hosts are a separate draw) | Generation path |
 | --- | --- | --- | --- |
 | WebGPU | Default on a supported secure-context browser | 104,000 total: 96,000 galaxy + 8,000 far stars | TSL compute initializes galaxy position/color storage, plus CPU-seeded far stars |
 | WebGL 2 | Automatic fallback or `?renderer=webgl2` | 32,000 total: 24,000 galaxy + 8,000 far stars | CPU-generated typed arrays rendered through Three.js's WebGL 2 backend |
@@ -328,6 +343,7 @@ The unit suite currently verifies:
 - App-level language isolation: switching locale preserves the exact `CosmosEngine` instance and canvas node, while the NASA catalogue test confirms its client is initialized only once;
 - display-setting normalization, persistence, and renderer calibration derivation; and
 - NASA manifest/chunk/host-index hashes, schema, ICRS ranges, provenance, composite conflicts, uniqueness, null preservation, representative records, filters, sorting, and measured full-index search budget; and
+- exact-host Worker system assembly, unique-chunk streaming/cancellation, observed ICRS/log-distance transforms, sky-only gating, illustrative-orbit evidence, observed selection versus centering, and App-level stale-result protection; and
 - a clearly labelled synthetic 100,000-summary architecture gate covering exact identity/name search, mixed filters/orderings, and compact auxiliary-index storage.
 
 Benchmark scope, methodology, current reference results, and non-claims are documented in [Performance](docs/PERFORMANCE.md). The 100k fixture validates engineering scale only; it is never exposed as observed catalogue data and does not satisfy the roadmap requirement for 100,000 reviewed real summaries.
@@ -339,11 +355,13 @@ Vitest's global i18n setup boots English only, matching the deterministic produc
 Browser behavior still requires a manual two-backend smoke test:
 
 1. Open the default URL and confirm either **WebGPU active** or an honest **WebGL fallback** status.
-2. Select a body without centering it and confirm the inspector changes while the camera reference frame does not.
-3. Center a planet and a moon with Orbit and Close Approach; raise the time scale and confirm the body stays centered while manual drag/dolly retains the relative view.
-4. Exercise Previous View through several bodies, System overview, transition cancellation, reduced-motion mode, and a ringed body without crossing its outer rings.
-5. Repeat the camera checks at `?renderer=webgl2`; confirm **WebGL fallback**, **CPU fallback**, and the reduced `32K` star count.
-6. Check the console for shader, resource, and initialization errors.
+2. Select an Asteria body without centering it and confirm the inspector changes while the camera reference frame does not.
+3. Center an Asteria planet and moon with Orbit and Close Approach; raise the time scale and confirm the body stays centered while manual drag/dolly retains the relative view.
+4. Open the NASA catalogue, enter the 4,749-host 3D universe, select a host without retargeting the camera, then use Locate and confirm the centered-host context is distinct from selection.
+5. Open a distance-bearing observed host, center its star and a planet in Orbit, use Close on the planet, raise time scale, and confirm moving follow. Confirm a sky-only host can be located but cannot open a system, and all illustrative orbital fields are labelled.
+6. Exercise Asteria Previous View, observed system/universe return actions, local overview, transition cancellation, reduced-motion mode, and a ringed body without crossing its outer rings.
+7. Repeat the camera and observed-universe checks at `?renderer=webgl2`; confirm **WebGL fallback**, **CPU fallback**, and the reduced `32K` background-star count while the observed host cloud remains one draw.
+8. Check the console for shader, resource, request-cancellation, and initialization errors.
 
 There is no automated browser E2E or GPU performance test suite yet; Vitest passing is not evidence of cross-device rendering correctness.
 
@@ -385,6 +403,9 @@ The public deployment for this repository is <https://space-engine-web.vercel.ap
 - [x] Move full-catalogue search, verified detail loading, cancellation, and bounded caching into a Dedicated Worker
 - [x] Add a content-versioned offline shell, verified IndexedDB search-core fallback, and an explicit complete scientific-detail pack
 - [x] Add a lazy, Worker-verified ICRS Canvas atlas for all 4,749 real NASA host coordinates
+- [x] Render all 4,749 observed hosts as one selectable 3D GPU point cloud, with 4,722 distance-bearing Fly targets and 27 explicitly sky-only directions
+- [x] Stream and render exact-host observed systems on demand, preserving archive-composite/null/provenance data and labelling deterministic orbit-orientation assumptions as illustrative
+- [x] Add independent observed selection/centering, Orbit/planet Close modes, moving-object follow, and explicit observed-system → observed-universe → Asteria navigation
 - [x] Add English-default product localization with Spanish, Traditional Chinese, and French, including persisted Welcome/Settings controls and synchronized metadata/accessibility text
 - [x] Document the staged 100+ to 100,000-object real-catalog architecture, provenance, rights, caching, and performance gates
 - [x] Add a CI-enforced synthetic 100,000-summary search/memory gate backed by a compact UTF-8/typed-offset Worker index
@@ -392,7 +413,7 @@ The public deployment for this repository is <https://space-engine-web.vercel.ap
 - [ ] Build six-face cube-sphere quadtree terrain with screen-space error, seams, and tile budgets
 - [ ] Add a Worker-backed low-LOD terrain provider for WebGL 2
 - [ ] Implement physically motivated atmospheric scattering and eclipse/ring shadows
-- [ ] Add release-reviewed Gaia/SIMBAD cross-matching and streamed catalogue tiles with per-field provenance
+- [ ] Add release-reviewed Gaia HEALPix spatial tiles, SIMBAD identity cross-matching, and streamed catalogue sectors with per-field provenance
 - [ ] Add GPU device-loss recovery, automated browser E2E, cross-device GPU budgets, and telemetry-backed regressions
 - [ ] Evaluate Rust/WASM SIMD or threads only for profiled CPU bottlenecks
 

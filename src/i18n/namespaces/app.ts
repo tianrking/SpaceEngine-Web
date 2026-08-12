@@ -24,6 +24,61 @@ export const appResources = {
       retrogradeHours: 'h retrograde',
       days: 'days',
     },
+    observed: {
+      archiveComposite: 'Archive composite',
+      assumptionNotice:
+        'Archive values are preserved. Illustrative render assumptions used: {{count}}.',
+      compositeMethod:
+        'Planetary Systems Composite Parameters; deterministic geometry only for missing render fields',
+      confirmedExoplanet: 'Confirmed exoplanet',
+      confirmedHost: 'Confirmed exoplanet host',
+      confirmedPlanets: 'Confirmed planets',
+      coordinateFrame: 'Celestial reference frame',
+      declination: 'Declination',
+      directionOnly: 'Direction only',
+      distance: 'Distance from the Sun',
+      distanceRequired:
+        'No finite distance is reported, so this host remains on a directional sky shell.',
+      effectiveTemperature: 'Effective temperature',
+      exoplanetType: 'Confirmed exoplanet',
+      hostDescription:
+        'Confirmed exoplanet host located from archive sky coordinates and reported distance.',
+      hostMethod: 'Archive host coordinates and composite system counts',
+      hostSkyOnlyDescription:
+        'Confirmed exoplanet host with an ICRS direction but no finite archive distance.',
+      hostStarType: 'Observed host star',
+      hostType: 'Observed planetary system',
+      icrsSummary:
+        'Right ascension and declination use ICRS; a finite distance is required for a 3D location.',
+      illustrativeOrbitSummary:
+        'Illustrative render assumptions: {{count}}. Missing orbital geometry is not treated as observed.',
+      logDistanceNotice:
+        'The reported distance is preserved; render spacing is monotonically log-compressed.',
+      massKilograms: 'Mass',
+      mixedEvidence: 'Archive data + illustrative geometry',
+      nasaSource: 'NASA Exoplanet Archive',
+      noGaiaDesignation: 'No Gaia DR3 designation',
+      nullPreservingSummary:
+        'Missing archive values remain unavailable; no scientific value is fabricated.',
+      observedUniverse: 'observed universe',
+      observedValuesNotice:
+        'Displayed scientific values come from the archive composite; unavailable fields remain null.',
+      orbitEvidenceSummary:
+        'Reported orbital values are preserved. A missing node, periapsis orientation, or phase may be illustrated deterministically and is never presented as observed.',
+      planetDescription:
+        'Planet properties are archive composite values; unavailable fields remain null.',
+      radiusKilometers: 'Radius',
+      rightAscension: 'Right ascension',
+      skyOnly: 'Sky position only',
+      skyOnlyDistance: 'Sky position only',
+      spectralMissing: 'Spectral type unavailable',
+      starDescription:
+        'Host-star properties are archive composite values; unavailable fields remain null.',
+      systemStars: 'System stars',
+      threeDimensional: '3D position',
+      universeOverview: 'observed-universe overview',
+      withinHost: 'In the {{host}} system',
+    },
     metrics: {
       mass: 'Mass',
       meanRadius: 'Mean radius',
@@ -168,6 +223,61 @@ export const appResources = {
       retrogradeHours: 'h retrógradas',
       days: 'días',
     },
+    observed: {
+      archiveComposite: 'Compuesto del archivo',
+      assumptionNotice:
+        'Se conservan los valores del archivo. Supuestos ilustrativos usados para el renderizado: {{count}}.',
+      compositeMethod:
+        'Parámetros compuestos de sistemas planetarios; geometría determinista solo para campos de renderizado ausentes',
+      confirmedExoplanet: 'Exoplaneta confirmado',
+      confirmedHost: 'Estrella anfitriona de exoplanetas confirmados',
+      confirmedPlanets: 'Planetas confirmados',
+      coordinateFrame: 'Sistema de referencia celeste',
+      declination: 'Declinación',
+      directionOnly: 'Solo dirección',
+      distance: 'Distancia al Sol',
+      distanceRequired:
+        'No se publica una distancia finita, por lo que esta estrella permanece en una esfera celeste direccional.',
+      effectiveTemperature: 'Temperatura efectiva',
+      exoplanetType: 'Exoplaneta confirmado',
+      hostDescription:
+        'Estrella anfitriona de exoplanetas confirmados situada mediante coordenadas celestes y distancia publicadas por el archivo.',
+      hostMethod: 'Coordenadas de la estrella y recuentos compuestos del sistema en el archivo',
+      hostSkyOnlyDescription:
+        'Estrella anfitriona de exoplanetas confirmados con dirección ICRS, pero sin distancia finita en el archivo.',
+      hostStarType: 'Estrella anfitriona observada',
+      hostType: 'Sistema planetario observado',
+      icrsSummary:
+        'La ascensión recta y la declinación usan ICRS; se necesita una distancia finita para obtener una posición 3D.',
+      illustrativeOrbitSummary:
+        'Supuestos ilustrativos de renderizado: {{count}}. La geometría orbital ausente no se trata como observada.',
+      logDistanceNotice:
+        'Se conserva la distancia publicada; la separación visual se comprime logarítmicamente de forma monótona.',
+      massKilograms: 'Masa',
+      mixedEvidence: 'Datos del archivo + geometría ilustrativa',
+      nasaSource: 'NASA Exoplanet Archive',
+      noGaiaDesignation: 'Sin designación Gaia DR3',
+      nullPreservingSummary:
+        'Los valores ausentes en el archivo permanecen sin datos; no se inventa ningún valor científico.',
+      observedUniverse: 'universo observado',
+      observedValuesNotice:
+        'Los valores científicos mostrados proceden del compuesto del archivo; los campos no disponibles permanecen nulos.',
+      orbitEvidenceSummary:
+        'Se conservan los valores orbitales publicados. Un nodo, una orientación del periastro o una fase ausentes pueden ilustrarse de forma determinista y nunca se presentan como observaciones.',
+      planetDescription:
+        'Las propiedades del planeta son valores compuestos del archivo; los campos no disponibles permanecen nulos.',
+      radiusKilometers: 'Radio',
+      rightAscension: 'Ascensión recta',
+      skyOnly: 'Solo posición celeste',
+      skyOnlyDistance: 'Solo posición celeste',
+      spectralMissing: 'Tipo espectral no disponible',
+      starDescription:
+        'Las propiedades de la estrella anfitriona son valores compuestos del archivo; los campos no disponibles permanecen nulos.',
+      systemStars: 'Estrellas del sistema',
+      threeDimensional: 'Posición 3D',
+      universeOverview: 'vista general del universo observado',
+      withinHost: 'En el sistema {{host}}',
+    },
     metrics: {
       mass: 'Masa',
       meanRadius: 'Radio medio',
@@ -310,6 +420,49 @@ export const appResources = {
       retrogradeHours: '小時（逆行）',
       days: '天',
     },
+    observed: {
+      archiveComposite: '檔案庫複合值',
+      assumptionNotice: '保留檔案庫數值。採用的示意渲染假設：{{count}} 項。',
+      compositeMethod: '行星系統複合參數；僅在缺少渲染欄位時採用確定性的幾何設定',
+      confirmedExoplanet: '已確認系外行星',
+      confirmedHost: '已確認系外行星宿主',
+      confirmedPlanets: '已確認行星',
+      coordinateFrame: '天球參考座標系',
+      declination: '赤緯',
+      directionOnly: '僅有方向',
+      distance: '距太陽距離',
+      distanceRequired: '檔案庫未提供有限距離，因此此宿主會保留在表示視線方向的天球殼層上。',
+      effectiveTemperature: '有效溫度',
+      exoplanetType: '已確認系外行星',
+      hostDescription: '依據檔案庫的天球座標與已發布距離定位的已確認系外行星宿主。',
+      hostMethod: '檔案庫宿主座標與系統複合計數',
+      hostSkyOnlyDescription: '具有 ICRS 方向、但檔案庫未提供有限距離的已確認系外行星宿主。',
+      hostStarType: '已觀測宿主恆星',
+      hostType: '已觀測行星系統',
+      icrsSummary: '赤經與赤緯採用 ICRS；必須有有限距離才能建立三維位置。',
+      illustrativeOrbitSummary: '示意渲染假設：{{count}} 項。缺失的軌道幾何不視為觀測資料。',
+      logDistanceNotice: '保留已發布距離；渲染間距採用保持順序的單調對數壓縮。',
+      massKilograms: '質量',
+      mixedEvidence: '檔案庫資料＋示意幾何',
+      nasaSource: 'NASA Exoplanet Archive',
+      noGaiaDesignation: '無 Gaia DR3 名稱',
+      nullPreservingSummary: '檔案庫缺失值維持無資料狀態；不會捏造任何科學數值。',
+      observedUniverse: '已觀測宇宙',
+      observedValuesNotice: '顯示的科學數值取自檔案庫複合參數；無資料欄位維持為空值。',
+      orbitEvidenceSummary:
+        '保留已發布的軌道數值。缺失的升交點、近星點方向或相位可能以確定性方式示意，且絕不呈現為觀測結果。',
+      planetDescription: '行星性質取自檔案庫複合參數；無資料欄位維持為空值。',
+      radiusKilometers: '半徑',
+      rightAscension: '赤經',
+      skyOnly: '僅有天球位置',
+      skyOnlyDistance: '僅有天球位置',
+      spectralMissing: '無光譜型資料',
+      starDescription: '宿主恆星性質取自檔案庫複合參數；無資料欄位維持為空值。',
+      systemStars: '系統恆星數',
+      threeDimensional: '三維位置',
+      universeOverview: '已觀測宇宙總覽',
+      withinHost: '位於 {{host}} 系統內',
+    },
     metrics: {
       mass: '質量',
       meanRadius: '平均半徑',
@@ -447,6 +600,61 @@ export const appResources = {
       fromAsteria: '{{distance}} UA depuis Asteria',
       retrogradeHours: 'h rétrogrades',
       days: 'jours',
+    },
+    observed: {
+      archiveComposite: 'Composite des archives',
+      assumptionNotice:
+        'Les valeurs des archives sont conservées. Hypothèses illustratives utilisées pour le rendu : {{count}}.',
+      compositeMethod:
+        'Paramètres composites des systèmes planétaires ; géométrie déterministe uniquement pour les champs de rendu manquants',
+      confirmedExoplanet: 'Exoplanète confirmée',
+      confirmedHost: 'Étoile hôte d’exoplanètes confirmées',
+      confirmedPlanets: 'Planètes confirmées',
+      coordinateFrame: 'Référentiel céleste',
+      declination: 'Déclinaison',
+      directionOnly: 'Direction uniquement',
+      distance: 'Distance au Soleil',
+      distanceRequired:
+        'Aucune distance finie n’est publiée ; cette étoile reste donc sur une sphère céleste directionnelle.',
+      effectiveTemperature: 'Température effective',
+      exoplanetType: 'Exoplanète confirmée',
+      hostDescription:
+        'Étoile hôte d’exoplanètes confirmées, localisée grâce aux coordonnées célestes et à la distance publiées par les archives.',
+      hostMethod: 'Coordonnées de l’étoile et décomptes composites du système dans les archives',
+      hostSkyOnlyDescription:
+        'Étoile hôte d’exoplanètes confirmées avec une direction ICRS, mais sans distance finie dans les archives.',
+      hostStarType: 'Étoile hôte observée',
+      hostType: 'Système planétaire observé',
+      icrsSummary:
+        'L’ascension droite et la déclinaison utilisent l’ICRS ; une distance finie est requise pour une position 3D.',
+      illustrativeOrbitSummary:
+        'Hypothèses illustratives de rendu : {{count}}. La géométrie orbitale manquante n’est pas considérée comme observée.',
+      logDistanceNotice:
+        'La distance publiée est conservée ; l’espacement visuel est compressé logarithmiquement de façon monotone.',
+      massKilograms: 'Masse',
+      mixedEvidence: 'Données des archives + géométrie illustrative',
+      nasaSource: 'NASA Exoplanet Archive',
+      noGaiaDesignation: 'Aucune désignation Gaia DR3',
+      nullPreservingSummary:
+        'Les valeurs absentes des archives restent indisponibles ; aucune valeur scientifique n’est inventée.',
+      observedUniverse: 'univers observé',
+      observedValuesNotice:
+        'Les valeurs scientifiques affichées proviennent du composite des archives ; les champs indisponibles restent nuls.',
+      orbitEvidenceSummary:
+        'Les valeurs orbitales publiées sont conservées. Un nœud, une orientation du périastre ou une phase absents peuvent être illustrés de façon déterministe et ne sont jamais présentés comme des observations.',
+      planetDescription:
+        'Les propriétés de la planète sont des valeurs composites des archives ; les champs indisponibles restent nuls.',
+      radiusKilometers: 'Rayon',
+      rightAscension: 'Ascension droite',
+      skyOnly: 'Position céleste uniquement',
+      skyOnlyDistance: 'Position céleste uniquement',
+      spectralMissing: 'Type spectral indisponible',
+      starDescription:
+        'Les propriétés de l’étoile hôte sont des valeurs composites des archives ; les champs indisponibles restent nuls.',
+      systemStars: 'Étoiles du système',
+      threeDimensional: 'Position 3D',
+      universeOverview: 'vue d’ensemble de l’univers observé',
+      withinHost: 'Dans le système {{host}}',
     },
     metrics: {
       mass: 'Masse',

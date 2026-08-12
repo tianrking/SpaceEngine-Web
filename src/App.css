@@ -1162,6 +1162,42 @@
   color: #a3c5c6;
 }
 
+.observed-sky-atlas__explore {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 11px;
+  color: #e7fffb;
+  text-align: left;
+  background: linear-gradient(105deg, rgba(63, 198, 185, 0.17), rgba(58, 128, 176, 0.08));
+  border: 1px solid rgba(105, 231, 214, 0.32);
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.observed-sky-atlas__explore:hover,
+.observed-sky-atlas__explore:focus-visible {
+  background: linear-gradient(105deg, rgba(63, 198, 185, 0.25), rgba(58, 128, 176, 0.13));
+  border-color: rgba(105, 231, 214, 0.56);
+}
+
+.observed-sky-atlas__explore > span {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.observed-sky-atlas__explore strong {
+  font-size: 10px;
+}
+
+.observed-sky-atlas__explore small {
+  color: #82a7aa;
+  font: 7px/1.35 var(--font-mono);
+}
+
 .observed-sky-atlas__canvas-wrap {
   position: relative;
   min-height: 230px;
@@ -1317,7 +1353,13 @@
   border-left: 2px solid rgba(255, 174, 99, 0.45);
 }
 
-.observed-sky-selection > button {
+.observed-sky-selection__actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+  gap: 6px;
+}
+
+.observed-sky-selection__actions > button {
   min-height: 32px;
   display: inline-flex;
   align-items: center;
@@ -1334,10 +1376,83 @@
   cursor: pointer;
 }
 
-.observed-sky-selection > button:hover,
-.observed-sky-selection > button:focus-visible {
+.observed-sky-selection__actions > button:hover,
+.observed-sky-selection__actions > button:focus-visible {
   background: rgba(72, 194, 179, 0.18);
   border-color: rgba(91, 216, 199, 0.46);
+}
+
+.observed-sky-selection__actions > button.is-primary {
+  color: #fff3e8;
+  background: rgba(255, 156, 96, 0.1);
+  border-color: rgba(255, 174, 99, 0.3);
+}
+
+.observed-sky-selection__actions > button:disabled,
+.observed-sky-selection__actions > button[aria-disabled='true'],
+.observed-sky-atlas__explore[aria-disabled='true'],
+.observed-sky-atlas__explore:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.observed-sky-selection__sky-only {
+  color: #b18d6d;
+  font: 7px/1.4 var(--font-mono);
+}
+
+.product-observed-navigation-status {
+  min-height: 30px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  padding: 7px 9px;
+  color: #9fc8c8;
+  background: rgba(74, 180, 175, 0.06);
+  border-left: 2px solid rgba(105, 231, 214, 0.42);
+  font: 8px/1.4 var(--font-mono);
+}
+
+.product-observed-navigation-status.is-error {
+  color: #e2a497;
+  background: rgba(221, 102, 85, 0.07);
+  border-left-color: rgba(255, 132, 112, 0.55);
+}
+
+.product-nasa-detail__navigation {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 5px;
+}
+
+.product-nasa-detail__navigation > button {
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 8px 10px;
+  color: #e9fffb;
+  background: rgba(72, 194, 179, 0.1);
+  border: 1px solid rgba(91, 216, 199, 0.27);
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.product-nasa-detail__navigation > button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.product-nasa-detail__navigation > button[aria-disabled='true'] {
+  cursor: progress;
+  opacity: 0.62;
+}
+
+.product-nasa-detail__navigation > small {
+  color: #b18d6d;
+  font: 7px/1.4 var(--font-mono);
 }
 
 .observed-sky-atlas__empty {
@@ -3027,6 +3142,10 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .observed-sky-selection__actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .product-orbit-map {
     height: 230px;
     min-height: 230px;
@@ -3080,7 +3199,9 @@
   .product-nasa-load-more,
   .product-nasa-load-state > button,
   .product-offline-pack > button,
-  .observed-sky-selection > button {
+  .observed-sky-selection__actions > button,
+  .observed-sky-atlas__explore,
+  .product-nasa-detail__navigation > button {
     min-height: 44px;
   }
 

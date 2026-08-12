@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { ProgressiveHostSkyIndex } from '../data/progressiveExoplanetCatalog'
 import { i18n, setAppLocale, SUPPORTED_LOCALES } from '../i18n'
@@ -19,6 +19,7 @@ const index: ProgressiveHostSkyIndex = {
   },
   records: [
     ['Kepler-186', 299.0, 43.8, 12.5, 14.62, 'M1 V', 5, 1, 'Gaia DR3 123', null, 'Kepler-186 f'],
+    ['Sky-only host', 12.0, -8.0, null, null, 'G', 1, 1, null, null, 'Sky-only b'],
   ],
 }
 
@@ -64,4 +65,88 @@ describe('observed NASA sky localization', () => {
       cleanup()
     },
   )
+
+  it('routes universe, focused-host, system, and research-record actions separately', async () => {
+    await setAppLocale('en')
+    const onExploreObservedUniverse = vi.fn()
+    const onOpenObservedSystem = vi.fn()
+    const onOpenHost = vi.fn()
+    render(
+      <ObservedSkyAtlas
+        index={index}
+        filterQuery="Kepler"
+        loadMs={1.5}
+        source="memory"
+        onOpenHost={onOpenHost}
+        onExploreObservedUniverse={onExploreObservedUniverse}
+        onOpenObservedSystem={onOpenObservedSystem}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /Explore observed universe in 3D/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'Locate in 3D sky' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Fly to system' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Open verified system records' }))
+
+    expect(onExploreObservedUniverse.mock.calls).toEqual([
+      [index],
+      [index, 'Kepler-186'],
+    ])
+    expect(onOpenObservedSystem).toHaveBeenCalledWith('Kepler-186')
+    expect(onOpenHost).toHaveBeenCalledWith('Kepler-186')
+  })
+
+  it('keeps distance-null hosts explorable in the sky but disables system travel', async () => {
+    await setAppLocale('en')
+    const onExploreObservedUniverse = vi.fn()
+    const onOpenObservedSystem = vi.fn()
+    render(
+      <ObservedSkyAtlas
+        index={index}
+        filterQuery="Sky-only"
+        loadMs={1.5}
+        source="memory"
+        onOpenHost={vi.fn()}
+        onExploreObservedUniverse={onExploreObservedUniverse}
+        onOpenObservedSystem={onOpenObservedSystem}
+      />,
+    )
+
+    const fly = screen.getByRole('button', { name: 'Sky-only' }) as HTMLButtonElement
+    expect(fly.disabled).toBe(true)
+    expect(fly.title).toBe('A measured distance is required to fly to this system.')
+    fireEvent.click(screen.getByRole('button', { name: 'Locate in 3D sky' }))
+    expect(onExploreObservedUniverse).toHaveBeenCalledWith(index, 'Sky-only host')
+    expect(onOpenObservedSystem).not.toHaveBeenCalled()
+  })
+
+  it('preserves the active action node and announces asynchronous navigation state', async () => {
+    await setAppLocale('en')
+    const onExploreObservedUniverse = vi.fn()
+    const baseProps = {
+      index,
+      filterQuery: 'Kepler',
+      loadMs: 1.5,
+      source: 'memory' as const,
+      onOpenHost: vi.fn(),
+      onExploreObservedUniverse,
+    }
+    const view = render(<ObservedSkyAtlas {...baseProps} />)
+    const explore = screen.getByRole('button', {
+      name: /Explore observed universe in 3D/i,
+    }) as HTMLButtonElement
+    explore.focus()
+
+    view.rerender(
+      <ObservedSkyAtlas
+        {...baseProps}
+        observedNavigationState={{ status: 'loading', target: 'universe' }}
+      />,
+    )
+
+    expect(document.activeElement).toBe(explore)
+    expect(explore.disabled).toBe(false)
+    expect(explore.getAttribute('aria-disabled')).toBe('true')
+    expect(explore.getAttribute('aria-busy')).toBe('true')
+  })
 })

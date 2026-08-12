@@ -100,19 +100,66 @@ describe('product tools localization', () => {
     },
   )
 
+  it('keeps observed-universe navigation callbacks optional on the search panel contract', () => {
+    const onExploreObservedUniverse = vi.fn()
+    const onOpenObservedSystem = vi.fn()
+    const props = panelProps()
+    render(
+      <ProductToolPanel
+        {...props}
+        tool="search"
+        onExploreObservedUniverse={onExploreObservedUniverse}
+        onOpenObservedSystem={onOpenObservedSystem}
+        observedNavigationState={{
+          status: 'loading',
+          target: 'system',
+          host: 'Kepler-186',
+        }}
+      />,
+    )
+
+    expect(screen.getByRole('button', { name: /NASA Exoplanet Archive/ })).toBeTruthy()
+  })
+
   it.each([
-    ['en', 'Keyboard shortcuts', 'Pause or resume simulation time'],
-    ['es', 'Atajos de teclado', 'Pausar o reanudar el tiempo de simulación'],
-    ['zh-TW', '鍵盤快捷鍵', '暫停或繼續模擬時間'],
-    ['fr', 'Raccourcis clavier', 'Suspendre ou reprendre le temps de simulation'],
+    [
+      'en',
+      'Keyboard shortcuts',
+      'Pause or resume simulation time',
+      'Return to the parent view or previous camera view',
+      'Reset the current universe or system overview',
+    ],
+    [
+      'es',
+      'Atajos de teclado',
+      'Pausar o reanudar el tiempo de simulación',
+      'Volver a la vista superior o a la vista de cámara anterior',
+      'Restablecer la vista general del universo o sistema actual',
+    ],
+    [
+      'zh-TW',
+      '鍵盤快捷鍵',
+      '暫停或繼續模擬時間',
+      '返回上一層視圖或上一個相機視角',
+      '重設目前宇宙或系統的總覽視角',
+    ],
+    [
+      'fr',
+      'Raccourcis clavier',
+      'Suspendre ou reprendre le temps de simulation',
+      'Revenir à la vue parente ou à la vue caméra précédente',
+      'Réinitialiser la vue d’ensemble de l’univers ou du système actuel',
+    ],
   ] as const)(
     'renders the shortcut guide in %s',
-    async (locale, title, pauseAction) => {
+    async (locale, title, pauseAction, previousAction, overviewAction) => {
       await setAppLocale(locale)
       render(<ShortcutHelpDialog open onClose={vi.fn()} />)
 
       expect(screen.getByRole('dialog', { name: title })).toBeTruthy()
       expect(screen.getByText(pauseAction)).toBeTruthy()
+      expect(screen.getByText(previousAction)).toBeTruthy()
+      expect(screen.getByText(overviewAction)).toBeTruthy()
     },
   )
 })

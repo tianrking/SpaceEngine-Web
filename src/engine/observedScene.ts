@@ -1,5 +1,12 @@
 import type { ProgressiveHostSkyIndex, ProgressiveHostSkyTuple } from '../data/progressiveExoplanetCatalog'
 import type {
+  ObservedCenteredViewMode,
+  ObservedSceneMode,
+  ObservedSceneState,
+  VisualCalibration,
+} from './types'
+import { deriveVisualCalibration } from './displaySettings'
+import type {
   ObservedPlanetBundle,
   ObservedRenderAssumption,
   ObservedSystemBundle,
@@ -71,11 +78,35 @@ export interface ObservedSystemRenderModel {
   readonly planets: readonly ObservedPlanetRenderModel[]
 }
 
+export interface ObservedKeyboardContext {
+  readonly mode: 'asteria' | 'observed-universe' | 'observed-system'
+  readonly selectedObservedId: string | null
+  readonly closeRequested?: boolean
+}
+
+export type ObservedNavigationCommand =
+  | { readonly type: 'asteria-history' }
+  | { readonly type: 'asteria-center'; readonly mode: ObservedCenteredViewMode }
+  | {
+      readonly type: 'observed-center'
+      readonly id: string
+      readonly mode: ObservedCenteredViewMode
+    }
+  | { readonly type: 'observed-local-overview' }
+  | { readonly type: 'ignore' }
+
 export const UNKNOWN_DISTANCE_SHELL_RADIUS = 940
+export const OBSERVED_HOST_BASE_OPACITY = 0.92
 const OBSERVED_DISTANCE_MIN_RADIUS = 72
 const OBSERVED_DISTANCE_LOG_SCALE = 162
 const EARTH_RADIUS_MIN = 0.34
 const EARTH_RADIUS_MAX = 1.72
+const OBSERVED_CLOSE_DISTANCE_FACTOR = 1.7
+const OBSERVED_ORBIT_DISTANCE_FACTOR = 4.2
+
+export function observedHostVisualCalibration(brightness: number): VisualCalibration {
+  return deriveVisualCalibration(brightness, OBSERVED_HOST_BASE_OPACITY)
+}
 
 function assertFinite(value: number, label: string): void {
   if (!Number.isFinite(value)) throw new RangeError(`${label} must be finite`)
@@ -110,6 +141,10 @@ export function observedHostId(host: string): string {
   return `${OBSERVED_HOST_ID_PREFIX}${encodeURIComponent(host)}`
 }
 
+export function observedHostCanOpen(point: Pick<ObservedHostPoint, 'distancePc' | 'skyOnly'>): boolean {
+  return !point.skyOnly && point.distancePc !== null
+}
+
 export function observedStarId(systemId: string): string {
   if (systemId.length === 0) throw new TypeError('Observed system id must not be empty')
   return `${OBSERVED_STAR_ID_PREFIX}${encodeURIComponent(systemId)}`
@@ -118,6 +153,66 @@ export function observedStarId(systemId: string): string {
 export function observedPlanetId(sourceId: string): string {
   if (sourceId.length === 0) throw new TypeError('Observed planet id must not be empty')
   return `${OBSERVED_PLANET_ID_PREFIX}${encodeURIComponent(sourceId)}`
+}
+
+export function observedNavigationCommand(
+  code: string,
+  context: ObservedKeyboardContext,
+): ObservedNavigationCommand {
+  const centeredMode = context.closeRequested ? 'close' : 'orbit'
+  if (context.mode === 'asteria') {
+    if (code === 'Backspace') return { type: 'asteria-history' }
+    if (code === 'KeyG') return { type: 'asteria-center', mode: centeredMode }
+    return { type: 'ignore' }
+  }
+  if (code === 'Backspace') return { type: 'ignore' }
+  if (code === 'Digit0' || code === 'Numpad0') return { type: 'observed-local-overview' }
+  if (code === 'KeyG' && context.selectedObservedId) {
+    if (!observedObjectSupportsViewMode(context.mode, context.selectedObservedId, centeredMode)) {
+      return { type: 'ignore' }
+    }
+    return { type: 'observed-center', id: context.selectedObservedId, mode: centeredMode }
+  }
+  return { type: 'ignore' }
+}
+
+export function observedObjectSupportsViewMode(
+  sceneMode: ObservedSceneMode,
+  objectId: string,
+  viewMode: ObservedCenteredViewMode,
+): boolean {
+  if (sceneMode === 'asteria') return false
+  if (viewMode === 'orbit') return true
+  return sceneMode === 'observed-system' && objectId.startsWith(OBSERVED_PLANET_ID_PREFIX)
+}
+
+export function observedCameraDistance(
+  visualRadius: number,
+  mode: ObservedCenteredViewMode,
+): number {
+  if (!Number.isFinite(visualRadius) || visualRadius <= 0) {
+    throw new RangeError('Observed visual radius must be positive and finite')
+  }
+  return visualRadius * (
+    mode === 'close' ? OBSERVED_CLOSE_DISTANCE_FACTOR : OBSERVED_ORBIT_DISTANCE_FACTOR
+  )
+}
+
+export function shouldStartObservedCentering(
+  state: Pick<ObservedSceneState, 'centeredObjectId' | 'centeredViewMode'>,
+  objectId: string,
+  mode: ObservedCenteredViewMode,
+): boolean {
+  if (objectId.length === 0) throw new TypeError('Observed centered object id must not be empty')
+  return state.centeredObjectId !== objectId || state.centeredViewMode !== mode
+}
+
+export function clearObservedSelectionState(state: ObservedSceneState): ObservedSceneState {
+  return {
+    ...state,
+    selectedObjectId: null,
+    selectedHost: null,
+  }
 }
 
 export function buildObservedHostPoints(index: ProgressiveHostSkyIndex): readonly ObservedHostPoint[] {
