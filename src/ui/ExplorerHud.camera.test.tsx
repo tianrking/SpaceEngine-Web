@@ -155,13 +155,162 @@ describe('body-centered camera HUD', () => {
       name: 'System camera controls',
     })
     expect(cameraControls.hasAttribute('aria-busy')).toBe(false)
-    expect(within(cameraControls).getByText('System overview')).toBeTruthy()
+    expect(
+      within(cameraControls).getByText('System overview', { selector: 'strong' }),
+    ).toBeTruthy()
     const previousView = within(cameraControls).getByRole('button', {
       name: 'Return to previous view',
     })
+    const systemOverview = within(cameraControls).getByRole('button', {
+      name: 'System overview',
+    })
     expect((previousView as HTMLButtonElement).disabled).toBe(false)
+    expect((systemOverview as HTMLButtonElement).disabled).toBe(true)
     fireEvent.click(previousView)
     expect(onReturnToPreviousView).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps free-flight history and system-overview actions available', () => {
+    const onReturnToPreviousView = vi.fn()
+    const onSystemOverview = vi.fn()
+    render(
+      <ExplorerHud
+        {...BASE_HUD_PROPS}
+        selectedObject={SELECTED_ALPHA}
+        cameraView={null}
+        cameraFrameMode="free"
+        cameraFrameTransitioning={false}
+        onCenterSelectedObject={vi.fn()}
+        onReturnToPreviousView={onReturnToPreviousView}
+        onSystemOverview={onSystemOverview}
+      />,
+    )
+
+    const cameraControls = screen.getByRole('region', {
+      name: 'Free-flight camera controls',
+    })
+    expect(
+      within(cameraControls).getByText('Free flight', { selector: 'strong' }),
+    ).toBeTruthy()
+    expect(within(cameraControls).getByText('Body tracking unlocked')).toBeTruthy()
+    expect(screen.getByText('Free flight', { selector: 'dd' })).toBeTruthy()
+
+    const previousView = within(cameraControls).getByRole('button', {
+      name: 'Return to previous view',
+    })
+    const systemOverview = within(cameraControls).getByRole('button', {
+      name: 'System overview',
+    })
+    expect((previousView as HTMLButtonElement).disabled).toBe(false)
+    expect((systemOverview as HTMLButtonElement).disabled).toBe(false)
+    fireEvent.click(previousView)
+    fireEvent.click(systemOverview)
+    expect(onReturnToPreviousView).toHaveBeenCalledTimes(1)
+    expect(onSystemOverview).toHaveBeenCalledTimes(1)
+  })
+
+  it('announces a free-flight restore once and disables its actions in transit', () => {
+    render(
+      <ExplorerHud
+        {...BASE_HUD_PROPS}
+        selectedObject={SELECTED_ALPHA}
+        cameraView={null}
+        cameraFrameMode="free"
+        cameraFrameTransitioning
+        onCenterSelectedObject={vi.fn()}
+        onReturnToPreviousView={vi.fn()}
+        onSystemOverview={vi.fn()}
+      />,
+    )
+
+    const cameraControls = screen.getByRole('region', {
+      name: 'Free-flight camera controls',
+    })
+    expect(cameraControls.getAttribute('aria-busy')).toBe('true')
+    expect(
+      within(cameraControls).getByText('Returning to free-flight view…'),
+    ).toBeTruthy()
+    expect(screen.getByText('Returning to free-flight view…', { selector: 'dd' })).toBeTruthy()
+    expect(
+      screen
+        .getAllByRole('status')
+        .filter((status) =>
+          status.textContent?.includes('Returning to free-flight view'),
+        ),
+    ).toHaveLength(1)
+    for (const button of within(cameraControls).getAllByRole('button')) {
+      expect((button as HTMLButtonElement).disabled).toBe(true)
+    }
+  })
+
+  it('prefers the new frame transition prop and keeps free copy over the legacy alias', () => {
+    render(
+      <ExplorerHud
+        {...BASE_HUD_PROPS}
+        selectedObject={SELECTED_ALPHA}
+        cameraView={null}
+        cameraFrameMode="free"
+        cameraFrameTransitioning={false}
+        systemOverviewTransitioning
+        onSystemOverview={vi.fn()}
+      />,
+    )
+
+    const cameraControls = screen.getByRole('region', {
+      name: 'Free-flight camera controls',
+    })
+    expect(cameraControls.hasAttribute('aria-busy')).toBe(false)
+    expect(
+      within(cameraControls).getByText('Free flight', { selector: 'strong' }),
+    ).toBeTruthy()
+    expect(
+      within(cameraControls).queryByText('Returning to system overview…'),
+    ).toBeNull()
+    expect(
+      (within(cameraControls).getByRole('button', {
+        name: 'System overview',
+      }) as HTMLButtonElement).disabled,
+    ).toBe(false)
+  })
+
+  it('lets a body camera view take precedence over stale frame state', () => {
+    render(
+      <ExplorerHud
+        {...BASE_HUD_PROPS}
+        selectedObject={SELECTED_ALPHA}
+        cameraView={CENTERED_BOREALIS}
+        cameraFrameMode="free"
+        cameraFrameTransitioning
+        onCameraViewModeChange={vi.fn()}
+        onReturnToPreviousView={vi.fn()}
+        onSystemOverview={vi.fn()}
+      />,
+    )
+
+    const cameraControls = screen.getByRole('region', {
+      name: 'Body-centered camera controls',
+    })
+    expect(cameraControls.hasAttribute('aria-busy')).toBe(false)
+    expect(within(cameraControls).getByText('Centered on Borealis')).toBeTruthy()
+    expect(
+      (within(cameraControls).getByRole('button', {
+        name: 'Close approach',
+      }) as HTMLButtonElement).disabled,
+    ).toBe(false)
+    expect(screen.queryByRole('region', { name: 'Free-flight camera controls' })).toBeNull()
+  })
+
+  it('preserves the legacy focus surface when frame props are omitted', () => {
+    render(
+      <ExplorerHud
+        {...BASE_HUD_PROPS}
+        selectedObject={SELECTED_ALPHA}
+        onFocusSelectedObject={vi.fn()}
+      />,
+    )
+
+    expect(screen.queryByRole('region', { name: /camera controls/i })).toBeNull()
+    expect(screen.getByRole('button', { name: /Center target/ })).toBeTruthy()
   })
 
   it('marks the current centered mode pressed and disabled', () => {
@@ -272,6 +421,42 @@ describe('body-centered camera HUD', () => {
     expect(onReturnToPreviousView).toHaveBeenCalledTimes(1)
     expect(requestAnimationFrame).toHaveBeenCalled()
     expect(document.activeElement).toBe(previousView)
+  })
+
+  it('does not steal focus back from a persistent viewport after navigation', () => {
+    const animationFrames: FrameRequestCallback[] = []
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      animationFrames.push(callback)
+      return animationFrames.length
+    })
+    const renderHud = (cameraView: BodyCenteredCameraView | null) => (
+      <div>
+        <button type="button" data-testid="persistent-viewport">
+          Universe viewport
+        </button>
+        <ExplorerHud
+          {...BASE_HUD_PROPS}
+          selectedObject={SELECTED_ALPHA}
+          cameraView={cameraView}
+          onReturnToPreviousView={vi.fn()}
+        />
+      </div>
+    )
+    const { rerender } = render(renderHud(CENTERED_BOREALIS))
+
+    fireEvent.click(
+      within(
+        screen.getByRole('region', {
+          name: 'Body-centered camera controls',
+        }),
+      ).getByRole('button', { name: 'Return to Asteria system frame' }),
+    )
+    rerender(renderHud(null))
+    const viewport = screen.getByTestId('persistent-viewport')
+    viewport.focus()
+    for (const callback of animationFrames.splice(0)) callback(0)
+
+    expect(document.activeElement).toBe(viewport)
   })
 
   it('disables close approach when the selected object does not support it', () => {

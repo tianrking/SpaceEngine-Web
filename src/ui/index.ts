@@ -10,6 +10,7 @@ export {
 export type {
   BodyCenteredCameraView,
   BodyCenteredViewMode,
+  CameraFrameMode,
   CelestialAtmosphere,
   CelestialAtmosphereComponent,
   CelestialClassification,

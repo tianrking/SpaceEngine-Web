@@ -142,6 +142,7 @@ export interface SelectedCelestialObject {
 }
 
 export type BodyCenteredViewMode = 'orbit' | 'close-approach'
+export type CameraFrameMode = 'system' | 'free'
 
 export interface BodyCenteredCameraView {
   centeredObject: Pick<
@@ -175,9 +176,13 @@ export interface NavigationRailProps {
 
 export interface ObjectInspectorProps {
   selectedObject?: SelectedCelestialObject | null
-  /** `undefined` keeps legacy focus UI; `null` means no body camera lock. */
+  /** `undefined` keeps legacy focus UI; `null` means a non-body camera frame. */
   cameraView?: BodyCenteredCameraView | null
-  /** Distinguishes an in-flight return to the system frame from its settled state. */
+  /** Identifies a non-body camera frame when `cameraView` is null. */
+  cameraFrameMode?: CameraFrameMode
+  /** Distinguishes a non-body frame transition from its settled state. */
+  cameraFrameTransitioning?: boolean
+  /** @deprecated Use `cameraFrameMode="system"` and `cameraFrameTransitioning`. */
   systemOverviewTransitioning?: boolean
   open?: boolean
   onToggle?: () => void
@@ -213,9 +218,13 @@ export interface ExplorerHudProps
   selectedObject?: SelectedCelestialObject | null
   activeTool?: NavigationTool
   inspectorOpen?: boolean
-  /** `undefined` preserves legacy UI; `null` represents the system/unlocked frame. */
+  /** `undefined` preserves legacy UI; `null` represents a non-body camera frame. */
   cameraView?: BodyCenteredCameraView | null
-  /** Distinguishes an in-flight return to the system frame from its settled state. */
+  /** Identifies a non-body camera frame when `cameraView` is null. */
+  cameraFrameMode?: CameraFrameMode
+  /** Distinguishes a non-body frame transition from its settled state. */
+  cameraFrameTransitioning?: boolean
+  /** @deprecated Use `cameraFrameMode="system"` and `cameraFrameTransitioning`. */
   systemOverviewTransitioning?: boolean
   overlay?: ExplorerOverlay
   tourStep?: number
@@ -769,7 +778,8 @@ function InspectorOverview({
 
 interface CameraContextBarProps {
   cameraView: BodyCenteredCameraView | null
-  systemOverviewTransitioning?: boolean
+  cameraFrameMode: CameraFrameMode
+  cameraFrameTransitioning: boolean
   onCameraViewModeChange?: (mode: BodyCenteredViewMode) => void
   onReturnToPreviousView?: () => void
   onSystemOverview?: () => void
@@ -781,7 +791,8 @@ function cameraModeLabel(mode: BodyCenteredViewMode): string {
 
 function CameraContextBar({
   cameraView,
-  systemOverviewTransitioning = false,
+  cameraFrameMode,
+  cameraFrameTransitioning,
   onCameraViewModeChange,
   onReturnToPreviousView,
   onSystemOverview,
@@ -790,7 +801,8 @@ function CameraContextBar({
     cameraView?.closeApproachAvailable !== false
   const transitioning = cameraView
     ? cameraView.transitioning === true
-    : systemOverviewTransitioning
+    : cameraFrameTransitioning
+  const freeFlight = !cameraView && cameraFrameMode === 'free'
   const previousViewLabel =
     cameraView?.previousViewLabel?.trim() || 'previous view'
   const centeredDesignation = cameraView?.centeredObject.designation?.trim()
@@ -798,15 +810,21 @@ function CameraContextBar({
     ? transitioning
       ? `Preparing ${cameraModeLabel(cameraView.mode).toLocaleLowerCase()}`
       : cameraModeLabel(cameraView.mode)
-    : 'System frame · Body tracking unlocked'
+    : freeFlight
+      ? 'Body tracking unlocked'
+      : 'System frame · Body tracking unlocked'
 
   const cameraAnnouncement = cameraView
     ? transitioning
       ? `Centering on ${cameraView.centeredObject.name}`
       : `Centered on ${cameraView.centeredObject.name}, ${cameraModeLabel(cameraView.mode)}`
-    : transitioning
-      ? 'Returning to system overview'
-      : 'System overview'
+    : freeFlight
+      ? transitioning
+        ? 'Returning to free-flight view'
+        : 'Free flight'
+      : transitioning
+        ? 'Returning to system overview'
+        : 'System overview'
 
   return (
     <>
@@ -826,13 +844,17 @@ function CameraContextBar({
         aria-label={
           cameraView
             ? 'Body-centered camera controls'
-            : 'System camera controls'
+            : freeFlight
+              ? 'Free-flight camera controls'
+              : 'System camera controls'
         }
         aria-busy={transitioning || undefined}
       >
         <div className="se-camera-context-bar__identity" key="identity">
           {cameraView ? (
             <Crosshair size={18} strokeWidth={1.6} aria-hidden="true" />
+          ) : freeFlight ? (
+            <Compass size={18} strokeWidth={1.6} aria-hidden="true" />
           ) : (
             <Maximize2 size={18} strokeWidth={1.6} aria-hidden="true" />
           )}
@@ -844,8 +866,12 @@ function CameraContextBar({
                   ? `Centering on ${cameraView.centeredObject.name}…`
                   : `Centered on ${cameraView.centeredObject.name}`
                 : transitioning
-                  ? 'Returning to system overview…'
-                  : 'System overview'}
+                  ? freeFlight
+                    ? 'Returning to free-flight view…'
+                    : 'Returning to system overview…'
+                  : freeFlight
+                    ? 'Free flight'
+                    : 'System overview'}
             </strong>
             <small>
               {[centeredDesignation, cameraModeDetail]
@@ -862,47 +888,47 @@ function CameraContextBar({
             aria-label={`View mode for ${cameraView.centeredObject.name}`}
             key="modes"
           >
-          <button
-            type="button"
-            aria-pressed={cameraView.mode === 'orbit'}
-            onClick={() => onCameraViewModeChange?.('orbit')}
-            disabled={
-              transitioning ||
-              !onCameraViewModeChange ||
-              cameraView.mode === 'orbit'
-            }
-            title={
-              cameraView.mode === 'orbit'
-                ? 'Current view: orbit tracking'
-                : 'Track from orbit (G)'
-            }
-          >
-            <Orbit size={15} aria-hidden="true" />
-            <span>Orbit</span>
-            <kbd aria-hidden="true">G</kbd>
-          </button>
-          <button
-            type="button"
-            aria-pressed={cameraView.mode === 'close-approach'}
-            onClick={() => onCameraViewModeChange?.('close-approach')}
-            disabled={
-              transitioning ||
-              !onCameraViewModeChange ||
-              !closeApproachAvailable ||
-              cameraView.mode === 'close-approach'
-            }
-            title={
-              cameraView.mode === 'close-approach'
-                ? 'Current view: close approach'
-                : closeApproachAvailable
-                  ? 'Move to close approach (Shift+G)'
-                  : 'Close approach is unavailable for this body'
-            }
-          >
-            <ArrowDownToLine size={15} aria-hidden="true" />
-            <span>Close approach</span>
-            <kbd aria-hidden="true">⇧G</kbd>
-          </button>
+            <button
+              type="button"
+              aria-pressed={cameraView.mode === 'orbit'}
+              onClick={() => onCameraViewModeChange?.('orbit')}
+              disabled={
+                transitioning ||
+                !onCameraViewModeChange ||
+                cameraView.mode === 'orbit'
+              }
+              title={
+                cameraView.mode === 'orbit'
+                  ? 'Current view: orbit tracking'
+                  : 'Track from orbit (G)'
+              }
+            >
+              <Orbit size={15} aria-hidden="true" />
+              <span>Orbit</span>
+              <kbd aria-hidden="true">G</kbd>
+            </button>
+            <button
+              type="button"
+              aria-pressed={cameraView.mode === 'close-approach'}
+              onClick={() => onCameraViewModeChange?.('close-approach')}
+              disabled={
+                transitioning ||
+                !onCameraViewModeChange ||
+                !closeApproachAvailable ||
+                cameraView.mode === 'close-approach'
+              }
+              title={
+                cameraView.mode === 'close-approach'
+                  ? 'Current view: close approach'
+                  : closeApproachAvailable
+                    ? 'Move to close approach (Shift+G)'
+                    : 'Close approach is unavailable for this body'
+              }
+            >
+              <ArrowDownToLine size={15} aria-hidden="true" />
+              <span>Close approach</span>
+              <kbd aria-hidden="true">⇧G</kbd>
+            </button>
           </div>
         ) : null}
 
@@ -918,17 +944,23 @@ function CameraContextBar({
             <Undo2 size={15} aria-hidden="true" />
             <span>Previous view</span>
           </button>
-          {cameraView ? (
-            <button
-              type="button"
-              onClick={onSystemOverview}
-              disabled={transitioning || !onSystemOverview}
-              title="Return to system overview (0)"
-            >
-              <Maximize2 size={15} aria-hidden="true" />
-              <span>System overview</span>
-            </button>
-          ) : null}
+          <button
+            type="button"
+            onClick={onSystemOverview}
+            disabled={
+              transitioning ||
+              !onSystemOverview ||
+              (!cameraView && !freeFlight)
+            }
+            title={
+              !cameraView && !freeFlight
+                ? 'Current view: system overview'
+                : 'Return to system overview (0)'
+            }
+          >
+            <Maximize2 size={15} aria-hidden="true" />
+            <span>System overview</span>
+          </button>
         </div>
       </section>
     </>
@@ -938,6 +970,8 @@ function CameraContextBar({
 export function ObjectInspector({
   selectedObject,
   cameraView,
+  cameraFrameMode,
+  cameraFrameTransitioning,
   systemOverviewTransitioning,
   open = true,
   onToggle,
@@ -1033,6 +1067,8 @@ export function ObjectInspector({
     : []
   const cameraAware =
     cameraView !== undefined ||
+    cameraFrameMode !== undefined ||
+    cameraFrameTransitioning !== undefined ||
     systemOverviewTransitioning !== undefined ||
     Boolean(
       onCenterSelectedObject ||
@@ -1043,9 +1079,13 @@ export function ObjectInspector({
   const cameraTargetsSelection = Boolean(
     selectedObject && cameraView?.centeredObject.id === selectedObject.id,
   )
+  const resolvedFrameTransitioning =
+    cameraFrameTransitioning ?? systemOverviewTransitioning ?? false
+  const resolvedCameraFrameMode = cameraFrameMode ?? 'system'
   const cameraTransitioning = cameraView
     ? cameraView.transitioning === true
-    : systemOverviewTransitioning === true
+    : resolvedFrameTransitioning
+  const freeFlight = !cameraView && resolvedCameraFrameMode === 'free'
   const selectedIsCentered = cameraTargetsSelection && !cameraTransitioning
   const closeApproachAvailable =
     selectedObject?.closeApproachAvailable !== false &&
@@ -1217,15 +1257,22 @@ export function ObjectInspector({
                           </>
                         ) : (
                           <>
-                            {systemOverviewTransitioning
-                              ? 'Returning to system overview…'
-                              : systemOverviewTransitioning === false
-                                ? 'System overview'
-                                : 'System frame'}
+                            {cameraTransitioning
+                              ? freeFlight
+                                ? 'Returning to free-flight view…'
+                                : 'Returning to system overview…'
+                              : freeFlight
+                                ? 'Free flight'
+                                : cameraFrameMode === 'system' ||
+                                    systemOverviewTransitioning === false
+                                  ? 'System overview'
+                                  : 'System frame'}
                             <small>
-                              {systemOverviewTransitioning
+                              {cameraTransitioning
                                 ? 'Camera transition in progress'
-                                : 'Camera is not locked to a body'}
+                                : freeFlight
+                                  ? 'Body tracking unlocked'
+                                  : 'Camera is not locked to a body'}
                             </small>
                           </>
                         )}
@@ -1810,6 +1857,8 @@ export function WelcomeOverlay({
 export function ExplorerHud({
   selectedObject,
   cameraView,
+  cameraFrameMode,
+  cameraFrameTransitioning,
   systemOverviewTransitioning,
   webGpuStatus,
   fps,
@@ -1843,15 +1892,19 @@ export function ExplorerHud({
   onTourStepChange,
 }: ExplorerHudProps) {
   const hudRef = useRef<HTMLDivElement>(null)
+  const resolvedCameraFrameMode = cameraFrameMode ?? 'system'
+  const resolvedCameraFrameTransitioning =
+    cameraFrameTransitioning ?? systemOverviewTransitioning ?? false
   const previousCameraViewRef = useRef(cameraView)
-  const previousSystemOverviewTransitioningRef = useRef(
-    systemOverviewTransitioning,
+  const previousCameraFrameTransitioningRef = useRef(
+    resolvedCameraFrameTransitioning,
   )
   const cameraFocusReturnRef = useRef<HTMLElement | null>(null)
   const showCameraContext =
     cameraView !== undefined &&
     (cameraView !== null ||
-      systemOverviewTransitioning === true ||
+      cameraFrameMode !== undefined ||
+      resolvedCameraFrameTransitioning ||
       Boolean(onReturnToPreviousView))
 
   const rememberCameraFocusTarget = useCallback(() => {
@@ -1877,21 +1930,21 @@ export function ExplorerHud({
 
   useEffect(() => {
     const previousCameraView = previousCameraViewRef.current
-    const previousSystemOverviewTransitioning =
-      previousSystemOverviewTransitioningRef.current
+    const previousCameraFrameTransitioning =
+      previousCameraFrameTransitioningRef.current
     previousCameraViewRef.current = cameraView
-    previousSystemOverviewTransitioningRef.current =
-      systemOverviewTransitioning
+    previousCameraFrameTransitioningRef.current =
+      resolvedCameraFrameTransitioning
 
-    const enteredSettledSystemFrame = Boolean(
+    const enteredSettledFrame = Boolean(
       previousCameraView &&
         cameraView === null &&
-        systemOverviewTransitioning !== true,
+        !resolvedCameraFrameTransitioning,
     )
-    const systemTransitionSettled =
+    const frameTransitionSettled =
       cameraView === null &&
-      previousSystemOverviewTransitioning === true &&
-      systemOverviewTransitioning !== true
+      previousCameraFrameTransitioning &&
+      !resolvedCameraFrameTransitioning
     const bodyTransitionSettled = Boolean(
       cameraView &&
         previousCameraView?.transitioning &&
@@ -1899,14 +1952,25 @@ export function ExplorerHud({
     )
     if (
       !cameraFocusReturnRef.current ||
-      (!enteredSettledSystemFrame &&
-        !systemTransitionSettled &&
+      (!enteredSettledFrame &&
+        !frameTransitionSettled &&
         !bodyTransitionSettled)
     ) {
       return
     }
 
     const animationFrame = window.requestAnimationFrame(() => {
+      const activeElement =
+        document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null
+      if (
+        canRestoreFocus(activeElement) &&
+        !hudRef.current?.contains(activeElement)
+      ) {
+        cameraFocusReturnRef.current = null
+        return
+      }
       const focusTarget =
         hudRef.current?.querySelector<HTMLElement>(
           '[data-camera-history-action="true"]:not(:disabled)',
@@ -1924,7 +1988,7 @@ export function ExplorerHud({
       }
     })
     return () => window.cancelAnimationFrame(animationFrame)
-  }, [cameraView, systemOverviewTransitioning])
+  }, [cameraView, resolvedCameraFrameTransitioning])
 
   return (
     <div
@@ -1952,6 +2016,8 @@ export function ExplorerHud({
           <ObjectInspector
             selectedObject={selectedObject}
             cameraView={cameraView}
+            cameraFrameMode={cameraFrameMode}
+            cameraFrameTransitioning={cameraFrameTransitioning}
             systemOverviewTransitioning={systemOverviewTransitioning}
             open={inspectorOpen}
             onToggle={onInspectorToggle}
@@ -1972,7 +2038,8 @@ export function ExplorerHud({
           {showCameraContext && (
             <CameraContextBar
               cameraView={cameraView ?? null}
-              systemOverviewTransitioning={systemOverviewTransitioning}
+              cameraFrameMode={resolvedCameraFrameMode}
+              cameraFrameTransitioning={resolvedCameraFrameTransitioning}
               onCameraViewModeChange={onCameraViewModeChange}
               onReturnToPreviousView={
                 onReturnToPreviousView

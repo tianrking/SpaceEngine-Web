@@ -474,7 +474,10 @@ function App() {
   )
 
   const cameraView = useMemo<BodyCenteredCameraView | null>(() => {
-    if (cameraCenter.bodyId === null || cameraCenter.mode === 'system') return null
+    if (
+      cameraCenter.bodyId === null ||
+      (cameraCenter.mode !== 'orbit' && cameraCenter.mode !== 'close')
+    ) return null
     const centeredBody = BODY_LOOKUP.get(cameraCenter.bodyId)
     if (!centeredBody) return null
     return {
@@ -536,16 +539,21 @@ function App() {
     engineRef.current?.select(id)
   }, [])
 
+  const focusViewport = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      viewportRef.current?.querySelector<HTMLCanvasElement>('canvas')?.focus()
+    })
+  }, [])
+
   const handleCenterTarget = useCallback((id: string, mode: BodyCenteredViewMode) => {
-    const shouldRestoreViewportFocus = toProductTool(activeTool) !== null
-    engineRef.current?.centerOnBody(id, mode === 'close-approach' ? 'close' : 'orbit')
+    const centered = engineRef.current?.centerOnBody(
+      id,
+      mode === 'close-approach' ? 'close' : 'orbit',
+    )
+    if (!centered) return
     setActiveTool('explore')
-    if (shouldRestoreViewportFocus) {
-      window.requestAnimationFrame(() => {
-        viewportRef.current?.querySelector<HTMLCanvasElement>('canvas')?.focus()
-      })
-    }
-  }, [activeTool])
+    focusViewport()
+  }, [focusViewport])
 
   const handleFocusTarget = useCallback((id: string, surface = false) => {
     handleCenterTarget(id, surface ? 'close-approach' : 'orbit')
@@ -556,13 +564,14 @@ function App() {
   }, [cameraCenter.bodyId, handleCenterTarget])
 
   const handleReturnToPreviousView = useCallback(() => {
-    engineRef.current?.returnToPreviousView()
-  }, [])
+    if (engineRef.current?.returnToPreviousView()) focusViewport()
+  }, [focusViewport])
 
   const handleSystemOverview = useCallback(() => {
     engineRef.current?.showSystemOverview()
     setActiveTool('explore')
-  }, [])
+    focusViewport()
+  }, [focusViewport])
 
   const handleClearSelection = useCallback(() => {
     setSelectedBody(null)
@@ -581,6 +590,7 @@ function App() {
     if (tool === 'home') {
       engineRef.current?.showSystemOverview()
       setActiveTool('explore')
+      focusViewport()
       return
     }
     if (tool === 'search') {
@@ -589,13 +599,14 @@ function App() {
     }
     setActiveTool(tool)
     if (tool !== 'explore') setCinematic(false)
-  }, [handleOpenSearch])
+  }, [focusViewport, handleOpenSearch])
 
   const handleResetView = useCallback(() => {
     engineRef.current?.resetView()
     setCinematic(false)
     setActiveTool('explore')
-  }, [])
+    focusViewport()
+  }, [focusViewport])
 
   const handleOpenQuickTour = useCallback(() => {
     overlayReturnFocusRef.current =
@@ -626,7 +637,8 @@ function App() {
     setOverlay(null)
     setActiveTool('explore')
     engineRef.current?.focusOn('pelagos')
-  }, [])
+    focusViewport()
+  }, [focusViewport])
 
   useEffect(() => {
     const handleGlobalKeyDown = (event: KeyboardEvent) => {
@@ -711,8 +723,17 @@ function App() {
       <ExplorerHud
         selectedObject={hudObject}
         cameraView={cameraView}
-        systemOverviewTransitioning={
-          cameraCenter.mode === 'system' ? cameraCenter.transitioning : undefined
+        cameraFrameMode={
+          cameraCenter.mode === 'free'
+            ? 'free'
+            : cameraCenter.mode === 'system'
+              ? 'system'
+              : undefined
+        }
+        cameraFrameTransitioning={
+          cameraCenter.mode === 'free' || cameraCenter.mode === 'system'
+            ? cameraCenter.transitioning
+            : undefined
         }
         webGpuStatus={webGpuStatus}
         fps={telemetry.fps}
