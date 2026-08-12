@@ -10,6 +10,7 @@
     "test": "vitest run",
     "check": "npm run lint && npm run test && npm run build",
     "catalog:refresh": "node scripts/refresh-exoplanet-catalog.mjs",
+    "catalog:refresh:progressive": "node scripts/refresh-progressive-exoplanet-catalog.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
