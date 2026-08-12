@@ -9,6 +9,7 @@ import type {
   ProgressiveCatalogSort,
 } from './progressiveCatalogSearch'
 import type { CatalogOfflineStatus } from './catalogOfflineStore'
+import type { ObservedSystemBundle } from './progressiveObservedSystem'
 
 export type CatalogLoadSource = 'network' | 'offline-cache'
 
@@ -42,6 +43,16 @@ export interface CatalogHostSkyPayload {
   readonly offline: CatalogOfflineStatus
 }
 
+export interface CatalogSystemPayload {
+  readonly system: ObservedSystemBundle
+  readonly loadMs: number
+  readonly chunkIds: readonly number[]
+  readonly chunksFromMemoryCache: number
+  readonly chunksFromPersistentCache: number
+  readonly chunksFromNetwork: number
+  readonly cacheEntries: number
+}
+
 export interface CatalogOfflineProgressPayload {
   readonly completedChunks: number
   readonly totalChunks: number
@@ -65,6 +76,7 @@ export type CatalogWorkerRequest =
       readonly id: string
       readonly chunkId: number
     }
+  | { readonly type: 'system'; readonly requestId: number; readonly host: string }
   | { readonly type: 'offline-status'; readonly requestId: number }
   | { readonly type: 'host-sky'; readonly requestId: number }
   | { readonly type: 'install-offline-pack'; readonly requestId: number }
@@ -86,6 +98,11 @@ export type CatalogWorkerResponse =
       readonly type: 'detail-result'
       readonly requestId: number
       readonly payload: CatalogDetailPayload
+    }
+  | {
+      readonly type: 'system-result'
+      readonly requestId: number
+      readonly payload: CatalogSystemPayload
     }
   | {
       readonly type: 'offline-status'

@@ -25,6 +25,11 @@ import {
   queryProgressiveIndex,
   type PreparedProgressiveIndex,
 } from './progressiveCatalogSearch'
+import {
+  prepareObservedHostIndex,
+  streamObservedSystem,
+  type PreparedObservedHostIndex,
+} from './progressiveObservedSystem'
 import type {
   CatalogLoadSource,
   CatalogWorkerRequest,
@@ -55,17 +60,20 @@ interface CancellableRequest {
 const scope = self as unknown as WorkerScope
 const DETAIL_CACHE_LIMIT = 2
 const PERSISTENT_DETAIL_CACHE_LIMIT = 4
+const SYSTEM_LOAD_CONCURRENCY = 2
 const OFFLINE_INSTALL_CONCURRENCY = 2
 const MANIFEST_TIMEOUT_MS = 12_000
 
 let manifest: ProgressiveExoplanetManifest | null = null
 let preparedIndex: PreparedProgressiveIndex | null = null
+let preparedHostIndex: PreparedObservedHostIndex | null = null
 let hostSkyIndex: ProgressiveHostSkyIndex | null = null
 let initialization: Promise<ReadyCatalog> | null = null
 let persistentStorageAvailable = true
 const offlineStore = new CatalogOfflineStore()
 const chunkCache = new Map<number, ProgressiveDetailChunk>()
 const detailRequests = new Map<number, CancellableRequest>()
+const systemRequests = new Map<number, CancellableRequest>()
 const skyRequests = new Map<number, CancellableRequest>()
 const installRequests = new Map<number, CancellableRequest>()
 
@@ -171,6 +179,7 @@ async function initialize(): Promise<ReadyCatalog> {
     manifest = release.manifest
     const prepareStarted = performance.now()
     preparedIndex = prepareProgressiveIndex(release.index)
+    preparedHostIndex = prepareObservedHostIndex(release.index)
     const prepareMs = performance.now() - prepareStarted
     const offline = await offlineStatus(release.manifest)
     return {
@@ -247,6 +256,30 @@ async function networkDetail(
   } finally {
     request.controllers.delete(controller)
   }
+}
+
+interface LoadedDetailChunk {
+  readonly chunk: ProgressiveDetailChunk
+  readonly source: 'memory' | 'persistent' | 'network'
+}
+
+async function ensureDetailChunk(
+  activeManifest: ProgressiveExoplanetManifest,
+  chunkId: number,
+  request: CancellableRequest,
+): Promise<LoadedDetailChunk> {
+  const memory = chunkCache.get(chunkId)
+  if (memory) return { chunk: memory, source: 'memory' }
+  const persistent = await persistentDetail(activeManifest, chunkId)
+  if (request.cancelled) throw new DOMException('Catalogue request cancelled', 'AbortError')
+  if (persistent) {
+    rememberChunk(persistent)
+    return { chunk: persistent, source: 'persistent' }
+  }
+  const network = await networkDetail(activeManifest, chunkId, request)
+  if (request.cancelled) throw new DOMException('Catalogue request cancelled', 'AbortError')
+  rememberChunk(network)
+  return { chunk: network, source: 'network' }
 }
 
 async function persistentHostSky(
@@ -371,17 +404,9 @@ async function handleDetail(request: Extract<CatalogWorkerRequest, { type: 'deta
     const ready = await initialize()
     if (state.cancelled) throw new DOMException('Catalogue request cancelled', 'AbortError')
     const started = performance.now()
-    let chunk = chunkCache.get(request.chunkId)
-    const fromMemoryCache = chunk !== undefined
-    let fromPersistentCache = false
-    if (!chunk) {
-      chunk = await persistentDetail(ready.manifest, request.chunkId) ?? undefined
-      fromPersistentCache = chunk !== undefined
-    }
-    if (!chunk) chunk = await networkDetail(ready.manifest, request.chunkId, state)
+    const loaded = await ensureDetailChunk(ready.manifest, request.chunkId, state)
     if (state.cancelled) throw new DOMException('Catalogue request cancelled', 'AbortError')
-    rememberChunk(chunk)
-    const record = chunk.records.find(({ id }) => id === request.id)
+    const record = loaded.chunk.records.find(({ id }) => id === request.id)
     if (!record) throw new Error(`Catalogue record not found: ${request.id}`)
     post({
       type: 'detail-result',
@@ -389,13 +414,59 @@ async function handleDetail(request: Extract<CatalogWorkerRequest, { type: 'deta
       payload: {
         record,
         loadMs: performance.now() - started,
-        fromMemoryCache,
-        fromPersistentCache,
+        fromMemoryCache: loaded.source === 'memory',
+        fromPersistentCache: loaded.source === 'persistent',
         cacheEntries: chunkCache.size,
       },
     })
   } finally {
     detailRequests.delete(request.requestId)
+  }
+}
+
+async function handleSystem(request: Extract<CatalogWorkerRequest, { type: 'system' }>) {
+  const state: CancellableRequest = { cancelled: false, controllers: new Set() }
+  systemRequests.set(request.requestId, state)
+  try {
+    const ready = await initialize()
+    if (!preparedHostIndex) throw new Error('Catalogue host index is unavailable')
+    if (state.cancelled) throw new DOMException('Catalogue request cancelled', 'AbortError')
+    const started = performance.now()
+    let chunksFromMemoryCache = 0
+    let chunksFromPersistentCache = 0
+    let chunksFromNetwork = 0
+    const streamed = await streamObservedSystem(
+      ready.manifest,
+      preparedHostIndex,
+      request.host,
+      async (chunkId) => {
+        const loaded = await ensureDetailChunk(ready.manifest, chunkId, state)
+        if (loaded.source === 'memory') chunksFromMemoryCache += 1
+        else if (loaded.source === 'persistent') chunksFromPersistentCache += 1
+        else chunksFromNetwork += 1
+        return loaded.chunk
+      },
+      {
+        concurrency: SYSTEM_LOAD_CONCURRENCY,
+        isCancelled: () => state.cancelled,
+      },
+    )
+    if (state.cancelled) throw new DOMException('Catalogue request cancelled', 'AbortError')
+    post({
+      type: 'system-result',
+      requestId: request.requestId,
+      payload: {
+        system: streamed.system,
+        loadMs: performance.now() - started,
+        chunkIds: streamed.chunkIds,
+        chunksFromMemoryCache,
+        chunksFromPersistentCache,
+        chunksFromNetwork,
+        cacheEntries: chunkCache.size,
+      },
+    })
+  } finally {
+    systemRequests.delete(request.requestId)
   }
 }
 
@@ -491,6 +562,7 @@ async function handleOfflineInstall(
 
 function cancelRequest(requestId: number): void {
   const state = detailRequests.get(requestId) ??
+    systemRequests.get(requestId) ??
     skyRequests.get(requestId) ??
     installRequests.get(requestId)
   if (!state) return
@@ -535,6 +607,10 @@ scope.addEventListener('message', (event) => {
       }
       if (request.type === 'host-sky') {
         await handleHostSky(request)
+        return
+      }
+      if (request.type === 'system') {
+        await handleSystem(request)
         return
       }
       if (request.type === 'install-offline-pack') {

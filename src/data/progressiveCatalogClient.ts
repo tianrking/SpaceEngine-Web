@@ -4,6 +4,7 @@ import type {
   CatalogOfflineProgressPayload,
   CatalogQueryPayload,
   CatalogReadyPayload,
+  CatalogSystemPayload,
   CatalogWorkerRequest,
   CatalogWorkerResponse,
 } from './progressiveCatalogProtocol'
@@ -137,6 +138,16 @@ export class ProgressiveCatalogClient {
     return this.#request<Extract<SuccessResponse, { type: 'detail-result' }>>(
       { type: 'detail', id, chunkId },
       'detail-result',
+    )
+  }
+
+  system(host: string): {
+    requestId: number
+    promise: Promise<CatalogSystemPayload>
+  } {
+    return this.#request<Extract<SuccessResponse, { type: 'system-result' }>>(
+      { type: 'system', host },
+      'system-result',
     )
   }
 
