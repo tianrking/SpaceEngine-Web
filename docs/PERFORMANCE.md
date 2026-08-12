@@ -35,8 +35,9 @@ CPU time; the sample count and 50 ms limit are not relaxed on CI.
 The auxiliary index stores normalized searchable text in one UTF-8 byte buffer,
 record boundaries in a `Uint32Array`, and distance/discovery orders in two more
 `Uint32Array` instances. Source summary tuples are referenced rather than
-copied. This avoids one normalized JavaScript string and three object arrays per
-record while preserving Unicode-normalized substring search semantics.
+copied. A 256-entry Boyer–Moore–Horspool skip table is built once per query.
+This avoids one normalized JavaScript string and three object arrays per record
+while preserving Unicode-normalized substring search semantics.
 
 ## Reference run
 
@@ -46,11 +47,11 @@ change reported:
 | Measurement | Result |
 | --- | ---: |
 | Fixture | 100,000 synthetic summaries |
-| Index preparation | 350.0 ms |
+| Index preparation | 329.6 ms |
 | Auxiliary index | 11.0 MiB |
-| Observed heap delta | 17.5 MiB |
-| Exact ID/name/host search | 22.66 ms p95 |
-| Mixed text/filter/order scan | 15.00 ms p95 |
+| Observed heap delta | 19.4 MiB |
+| Exact ID/name/host search | 8.90 ms p95 |
+| Mixed text/filter/order scan | 9.17 ms p95 |
 | Budget | 50 ms p95 |
 
 These values are a reproducible engineering reference, not a universal browser

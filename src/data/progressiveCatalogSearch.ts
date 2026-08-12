@@ -137,24 +137,39 @@ export function prepareProgressiveIndex(
 function encodedSearchIncludes(
   prepared: PreparedProgressiveIndex,
   recordIndex: number,
-  needle: Uint8Array<ArrayBuffer>,
+  needle: EncodedSearchNeedle,
 ): boolean {
   const start = prepared.searchOffsets[recordIndex]
   const end = prepared.searchOffsets[recordIndex + 1]
-  const lastStart = end - needle.length
-  const firstByte = needle[0]
-  for (let offset = start; offset <= lastStart; offset += 1) {
-    if (prepared.searchBytes[offset] !== firstByte) continue
-    let needleOffset = 1
+  const lastStart = end - needle.bytes.length
+  let offset = start
+  while (offset <= lastStart) {
+    let needleOffset = needle.bytes.length - 1
     while (
-      needleOffset < needle.length &&
-      prepared.searchBytes[offset + needleOffset] === needle[needleOffset]
+      needleOffset >= 0 &&
+      prepared.searchBytes[offset + needleOffset] === needle.bytes[needleOffset]
     ) {
-      needleOffset += 1
+      needleOffset -= 1
     }
-    if (needleOffset === needle.length) return true
+    if (needleOffset < 0) return true
+    offset += needle.skip[prepared.searchBytes[offset + needle.bytes.length - 1]]
   }
   return false
+}
+
+interface EncodedSearchNeedle {
+  readonly bytes: Uint8Array<ArrayBuffer>
+  readonly skip: Uint32Array<ArrayBuffer>
+}
+
+function encodeSearchNeedle(needle: string): EncodedSearchNeedle {
+  const bytes = searchTextEncoder.encode(needle)
+  const skip = new Uint32Array(256)
+  skip.fill(bytes.length)
+  for (let index = 0; index < bytes.length - 1; index += 1) {
+    skip[bytes[index]] = bytes.length - index - 1
+  }
+  return { bytes, skip }
 }
 
 function matchesFilters(
@@ -184,7 +199,7 @@ export function queryProgressiveIndex(
   request: ProgressiveCatalogQuery,
 ): ProgressiveCatalogQueryResult {
   const needle = normalizeSearchText(request.query)
-  const encodedNeedle = needle ? searchTextEncoder.encode(needle) : null
+  const encodedNeedle = needle ? encodeSearchNeedle(needle) : null
   const filters = new Set(request.filters)
   const matches: ProgressiveSummaryTuple[] = []
   let totalMatches = 0
