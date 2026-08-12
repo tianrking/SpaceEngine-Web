@@ -13,6 +13,20 @@ import {
 } from 'three/tsl'
 import { ASTERIA_SYSTEM, JULIAN_DAY_SECONDS, orbitalStateAtTime } from '../domain'
 import {
+  appendBoundedCameraHistory,
+  beginBodyCentering,
+  beginSystemOverview,
+  cameraDistanceForMode,
+  completeCameraCentering,
+  enclosingVisualRadius,
+  minimumCameraDistance,
+  interruptCameraCentering,
+  shouldPushCameraHistory,
+  smoothFlightProgress,
+  trackingTranslation,
+  type BodyCameraViewMode,
+} from './cameraCentering'
+import {
   BODY_LOOKUP,
   CATALOG_BODIES,
   RENDER_BODIES,
@@ -32,6 +46,7 @@ import {
 } from './proceduralTextures'
 import type {
   CelestialBodyView,
+  CameraCenterState,
   CosmosEngineEvents,
   DisplaySettings,
   EngineCapabilities,
@@ -49,6 +64,7 @@ const ORBIT_BASE_OPACITY = 0.15
 const FAR_STAR_BASE_OPACITY = 0.88
 const CPU_GALAXY_BASE_OPACITY = 0.72
 const GPU_GALAXY_BASE_OPACITY = 1
+const CAMERA_HISTORY_LIMIT = 8
 
 interface BodyRuntime {
   definition: RenderBody
@@ -59,12 +75,33 @@ interface BodyRuntime {
 }
 
 interface CameraFlight {
-  targetId: string
+  centerBodyId: string | null
   startedAt: number
   durationMs: number
   startCamera: THREE.Vector3
   startTarget: THREE.Vector3
   viewDistance: number
+  approachDirection: THREE.Vector3
+  cameraOffset: THREE.Vector3 | null
+  targetOffset: THREE.Vector3 | null
+}
+
+interface SavedCameraView {
+  readonly mode: CameraCenterState['mode']
+  readonly bodyId: string | null
+  readonly cameraOffset: THREE.Vector3
+  readonly targetOffset: THREE.Vector3
+}
+
+interface StartCameraFlightOptions {
+  readonly centerBodyId: string | null
+  readonly center: THREE.Vector3
+  readonly viewDistance: number
+  readonly approachDirection: THREE.Vector3
+  readonly durationMs: number
+  readonly nextState: CameraCenterState
+  readonly cameraOffset?: THREE.Vector3
+  readonly targetOffset?: THREE.Vector3
 }
 
 interface NavigatorWithOptionalGpu {
@@ -108,7 +145,15 @@ export class CosmosEngine {
   private simulationDays = 0
   private timeScale = 1
   private navigationSpeed = 1
-  private selectedId = 'pelagos'
+  private selectedId: string | null = 'pelagos'
+  private cameraCenterState: CameraCenterState = {
+    mode: 'system',
+    bodyId: null,
+    transitioning: false,
+    canReturn: false,
+  }
+  private trackedCenter = new THREE.Vector3()
+  private readonly cameraViewHistory: SavedCameraView[] = []
   private cameraFlight: CameraFlight | null = null
   private lastTelemetryAt = 0
   private telemetryFrameCount = 0
@@ -187,6 +232,7 @@ export class CosmosEngine {
 
       this.initialized = true
       this.select('pelagos')
+      this.emitCameraCenterState()
       this.timer.reset()
       await this.renderer.setAnimationLoop(this.animate)
 
@@ -265,29 +311,170 @@ export class CosmosEngine {
     this.events.onSelection?.(body)
   }
 
-  focusOn(id: string, surface = false): void {
+  clearSelection(): void {
+    if (this.selectedId === null) return
+    this.selectedId = null
+    this.events.onSelectionCleared?.()
+  }
+
+  getCameraCenterState(): CameraCenterState {
+    return { ...this.cameraCenterState }
+  }
+
+  centerOnBody(id: string, mode: BodyCameraViewMode = 'orbit'): boolean {
     const body = BODY_LOOKUP.get(id)
     const target = this.bodyObjects.get(id)
-    if (!body || !target) return
-
-    this.select(id)
-    const renderRadius = id === STAR.id ? 3.4 : this.bodyRuntimes.get(id)?.definition.renderRadius ?? 1
-    this.cameraFlight = {
-      targetId: id,
-      startedAt: performance.now(),
-      durationMs: surface ? 2_800 : 1_900,
-      startCamera: this.camera.position.clone(),
-      startTarget: this.controls.target.clone(),
-      viewDistance: renderRadius * (surface ? 1.18 : id === STAR.id ? 4.4 : 4.2),
+    if (!body || !target) return false
+    if (mode === 'close' && body.bodyKind === 'star') return false
+    if (
+      this.cameraCenterState.transitioning &&
+      this.cameraCenterState.bodyId === id &&
+      this.cameraCenterState.mode === mode
+    ) {
+      return true
     }
+    if (!shouldPushCameraHistory(this.cameraCenterState, id, mode)) {
+      this.select(id)
+      return true
+    }
+
+    this.pushCurrentCameraView()
+    this.select(id)
+    const visualRadius = this.visualRadiusFor(id)
+    const center = target.getWorldPosition(new THREE.Vector3())
+    const approachDirection = this.camera.position
+      .clone()
+      .sub(this.controls.target)
+      .normalize()
+    if (approachDirection.lengthSq() < 0.1) {
+      approachDirection.set(1, 0.45, 1).normalize()
+    }
+    this.startCameraFlight({
+      centerBodyId: id,
+      center,
+      viewDistance: cameraDistanceForMode(visualRadius, mode),
+      approachDirection,
+      durationMs: mode === 'close' ? 2_400 : 1_900,
+      nextState: beginBodyCentering(id, mode, this.cameraViewHistory.length > 0),
+    })
+    this.controls.minDistance = minimumCameraDistance(visualRadius)
+    return true
+  }
+
+  focusOn(id: string, surface = false): void {
+    this.centerOnBody(id, surface ? 'close' : 'orbit')
+  }
+
+  returnToPreviousView(): boolean {
+    if (this.cameraFlight) this.cancelCameraFlightAtCurrentPose()
+    const saved = this.cameraViewHistory.pop()
+    if (!saved) return false
+    this.restoreSavedCameraView(saved)
+    return true
+  }
+
+  cancelCameraTransition(): boolean {
+    if (!this.cameraFlight) return false
+    this.cancelCameraFlightAtCurrentPose()
+    return true
+  }
+
+  showSystemOverview(): void {
+    this.pushCurrentCameraView()
+    const starCenter = this.bodyObjects
+      .get(STAR.id)
+      ?.getWorldPosition(new THREE.Vector3()) ?? this.worldRoot.position.clone()
+    const approachDirection = new THREE.Vector3(42, 28, 74).normalize()
+    this.startCameraFlight({
+      centerBodyId: null,
+      center: starCenter,
+      viewDistance: new THREE.Vector3(42, 28, 74).length(),
+      approachDirection,
+      durationMs: 1_500,
+      nextState: beginSystemOverview(this.cameraViewHistory.length > 0),
+    })
+    this.controls.minDistance = 1.4
   }
 
   resetView(): void {
-    this.cameraFlight = null
-    this.camera.position.set(42, 28, 74)
-    this.controls.target.set(0, 0, 0)
-    this.controls.update()
+    this.cameraViewHistory.length = 0
+    this.showSystemOverview()
+    this.cameraViewHistory.length = 0
+    this.cameraCenterState = {
+      ...this.cameraCenterState,
+      canReturn: false,
+    }
+    this.emitCameraCenterState()
     this.select('pelagos')
+  }
+
+  private visualRadiusFor(id: string): number {
+    if (id === STAR.id) return 3.4
+    const body = this.bodyRuntimes.get(id)?.definition
+    if (!body) return 1
+    return enclosingVisualRadius(
+      body.renderRadius,
+      body.hasRings ? body.ringOuterRatio : null,
+    )
+  }
+
+  private pushCurrentCameraView(): void {
+    if (this.cameraFlight) this.cancelCameraFlightAtCurrentPose()
+    const center = this.currentCenterWorldPosition()
+    const nextHistory = appendBoundedCameraHistory(this.cameraViewHistory, {
+      mode: this.cameraCenterState.mode,
+      bodyId: this.cameraCenterState.bodyId,
+      cameraOffset: this.camera.position.clone().sub(center),
+      targetOffset: this.controls.target.clone().sub(center),
+    }, CAMERA_HISTORY_LIMIT)
+    this.cameraViewHistory.splice(0, this.cameraViewHistory.length, ...nextHistory)
+  }
+
+  private restoreSavedCameraView(saved: SavedCameraView): void {
+    const center = this.centerWorldPositionFor(saved.bodyId)
+    const cameraOffset = saved.cameraOffset.clone()
+    const targetOffset = saved.targetOffset.clone()
+    const distance = Math.max(cameraOffset.distanceTo(targetOffset), 1)
+    const direction = cameraOffset.clone().sub(targetOffset).normalize()
+    if (direction.lengthSq() < 0.1) direction.set(1, 0.45, 1).normalize()
+    this.startCameraFlight({
+      centerBodyId: saved.bodyId,
+      center,
+      viewDistance: distance,
+      approachDirection: direction,
+      durationMs: 1_350,
+      cameraOffset,
+      targetOffset,
+      nextState:
+        saved.mode === 'system' || saved.bodyId === null
+          ? beginSystemOverview(this.cameraViewHistory.length > 0)
+          : beginBodyCentering(
+              saved.bodyId,
+              saved.mode,
+              this.cameraViewHistory.length > 0,
+            ),
+    })
+    this.controls.minDistance =
+      saved.bodyId === null ? 1.4 : minimumCameraDistance(this.visualRadiusFor(saved.bodyId))
+  }
+
+  private startCameraFlight(options: StartCameraFlightOptions): void {
+    const durationMs = this.prefersReducedMotion() ? 0 : options.durationMs
+    this.cameraCenterState = options.nextState
+    this.trackedCenter.copy(options.center)
+    this.cameraFlight = {
+      centerBodyId: options.centerBodyId,
+      startedAt: performance.now(),
+      durationMs,
+      startCamera: this.camera.position.clone(),
+      startTarget: this.controls.target.clone(),
+      viewDistance: options.viewDistance,
+      approachDirection: options.approachDirection.clone(),
+      cameraOffset: options.cameraOffset?.clone() ?? null,
+      targetOffset: options.targetOffset?.clone() ?? null,
+    }
+    this.emitCameraCenterState()
+    if (durationMs === 0) this.updateCameraFlight(performance.now())
   }
 
   dispose(): void {
@@ -321,6 +508,7 @@ export class CosmosEngine {
     this.simulationDays += deltaSeconds * this.timeScale * 0.12
 
     this.updateBodies(deltaSeconds)
+    this.updateTrackedCenter()
     this.updateKeyboardFlight(deltaSeconds)
     this.updateCameraFlight(now)
     this.recenterIfNeeded()
@@ -717,6 +905,14 @@ export class CosmosEngine {
   }
 
   private updateScaleLod(): void {
+    if (this.selectedId === null) {
+      for (const [id, object] of this.bodyObjects) {
+        const visual = this.bodyRuntimes.get(id)?.visualNode ?? object
+        const nextScale = THREE.MathUtils.lerp(visual.scale.x, 1, 0.1)
+        visual.scale.setScalar(nextScale)
+      }
+      return
+    }
     const selectedObject = this.bodyObjects.get(this.selectedId)
     if (!selectedObject) return
     const selectedRuntime = this.bodyRuntimes.get(this.selectedId)
@@ -734,7 +930,8 @@ export class CosmosEngine {
   }
 
   private updateKeyboardFlight(deltaSeconds: number): void {
-    if (this.cameraFlight || this.pressedKeys.size === 0) return
+    if (this.pressedKeys.size === 0) return
+    if (this.cameraFlight) this.cancelCameraFlightAtCurrentPose()
     const direction = new THREE.Vector3()
     this.camera.getWorldDirection(direction)
     const right = new THREE.Vector3().crossVectors(direction, this.camera.up).normalize()
@@ -753,31 +950,76 @@ export class CosmosEngine {
     const distance = this.navigationSpeed * boost * deltaSeconds * Math.max(0.7, targetDistance * 0.16)
     movement.normalize().multiplyScalar(distance)
     this.camera.position.add(movement)
-    this.controls.target.add(movement)
+    if (this.cameraCenterState.bodyId === null) this.controls.target.add(movement)
   }
 
   private updateCameraFlight(now: number): void {
     if (!this.cameraFlight) return
     const flight = this.cameraFlight
-    const targetObject = this.bodyObjects.get(flight.targetId)
-    if (!targetObject) {
-      this.cameraFlight = null
-      return
-    }
-
-    const target = targetObject.getWorldPosition(new THREE.Vector3())
-    const progress = THREE.MathUtils.clamp((now - flight.startedAt) / flight.durationMs, 0, 1)
-    const eased = progress * progress * (3 - 2 * progress)
-    const approachDirection = flight.startCamera.clone().sub(flight.startTarget).normalize()
-    if (approachDirection.lengthSq() < 0.1) approachDirection.set(1, 0.45, 1).normalize()
-    const destination = target
+    const center = this.centerWorldPositionFor(flight.centerBodyId)
+    const progress = flight.durationMs === 0
+      ? 1
+      : THREE.MathUtils.clamp((now - flight.startedAt) / flight.durationMs, 0, 1)
+    const eased = smoothFlightProgress(now - flight.startedAt, flight.durationMs)
+    const targetOffset = flight.targetOffset ?? new THREE.Vector3()
+    const cameraOffset = flight.cameraOffset ?? flight.approachDirection
       .clone()
-      .add(approachDirection.multiplyScalar(flight.viewDistance))
+      .multiplyScalar(flight.viewDistance)
       .add(new THREE.Vector3(0, flight.viewDistance * 0.16, 0))
+    const destinationTarget = center.clone().add(targetOffset)
+    const destinationCamera = center.clone().add(cameraOffset)
 
-    this.camera.position.lerpVectors(flight.startCamera, destination, eased)
-    this.controls.target.lerpVectors(flight.startTarget, target, eased)
-    if (progress >= 1) this.cameraFlight = null
+    this.camera.position.lerpVectors(flight.startCamera, destinationCamera, eased)
+    this.controls.target.lerpVectors(flight.startTarget, destinationTarget, eased)
+    this.trackedCenter.copy(center)
+    if (progress >= 1) this.finishCameraFlight()
+  }
+
+  private updateTrackedCenter(): void {
+    if (this.cameraFlight || this.cameraCenterState.bodyId === null) return
+    const currentCenter = this.centerWorldPositionFor(this.cameraCenterState.bodyId)
+    const delta = trackingTranslation(this.trackedCenter, currentCenter)
+    this.camera.position.add(new THREE.Vector3(delta.x, delta.y, delta.z))
+    this.controls.target.add(new THREE.Vector3(delta.x, delta.y, delta.z))
+    this.trackedCenter.copy(currentCenter)
+  }
+
+  private finishCameraFlight(): void {
+    this.cameraFlight = null
+    this.cameraCenterState = completeCameraCentering({
+      ...this.cameraCenterState,
+      canReturn: this.cameraViewHistory.length > 0,
+    })
+    this.trackedCenter.copy(this.currentCenterWorldPosition())
+    this.emitCameraCenterState()
+  }
+
+  private cancelCameraFlightAtCurrentPose(): void {
+    if (!this.cameraFlight) return
+    this.cameraFlight = null
+    this.cameraCenterState = interruptCameraCentering(
+      this.cameraCenterState,
+      this.cameraViewHistory.length > 0,
+    )
+    this.trackedCenter.copy(this.centerWorldPositionFor(null))
+    this.emitCameraCenterState()
+  }
+
+  private centerWorldPositionFor(bodyId: string | null): THREE.Vector3 {
+    const centerObject = this.bodyObjects.get(bodyId ?? STAR.id)
+    return centerObject?.getWorldPosition(new THREE.Vector3()) ?? this.worldRoot.position.clone()
+  }
+
+  private currentCenterWorldPosition(): THREE.Vector3 {
+    return this.centerWorldPositionFor(this.cameraCenterState.bodyId)
+  }
+
+  private emitCameraCenterState(): void {
+    this.events.onCameraCenterChange?.(this.getCameraCenterState())
+  }
+
+  private prefersReducedMotion(): boolean {
+    return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
   }
 
   private recenterIfNeeded(): void {
@@ -786,6 +1028,12 @@ export class CosmosEngine {
     this.worldRoot.position.sub(shift)
     this.camera.position.sub(shift)
     this.controls.target.sub(shift)
+    this.trackedCenter.sub(shift)
+    this.previousCameraPosition.sub(shift)
+    if (this.cameraFlight) {
+      this.cameraFlight.startCamera.sub(shift)
+      this.cameraFlight.startTarget.sub(shift)
+    }
     this.floatingOriginUnits.add(shift)
   }
 
@@ -820,13 +1068,15 @@ export class CosmosEngine {
       timeScale: this.timeScale,
       quality: this.quality,
       floatingOriginKm: originKm,
+      cameraCenter: this.getCameraCenterState(),
     }
     this.events.onTelemetry?.(telemetry)
   }
 
   private computeSelectedAltitudeKm(): number | null {
-    if (this.selectedId === STAR.id) return null
-    const runtime = this.bodyRuntimes.get(this.selectedId)
+    const centeredId = this.cameraCenterState.bodyId
+    if (centeredId === null || centeredId === STAR.id) return null
+    const runtime = this.bodyRuntimes.get(centeredId)
     if (!runtime) return null
     const worldPosition = runtime.orbitNode.getWorldPosition(new THREE.Vector3())
     const surfaceDistance = Math.max(this.camera.position.distanceTo(worldPosition) - runtime.definition.renderRadius, 0)
@@ -922,8 +1172,27 @@ export class CosmosEngine {
     ) {
       return
     }
+    const isOverviewCommand = event.code === 'Digit0' || event.code === 'Numpad0'
+    const isNavigationCommand =
+      event.code === 'KeyG' || event.code === 'Backspace' || isOverviewCommand
+    if (event.repeat && isNavigationCommand) {
+      if (event.code === 'Backspace' || isOverviewCommand) event.preventDefault()
+      return
+    }
+    if (event.code === 'Backspace') {
+      event.preventDefault()
+      this.returnToPreviousView()
+      return
+    }
+    if (isOverviewCommand) {
+      event.preventDefault()
+      this.showSystemOverview()
+      return
+    }
     this.pressedKeys.add(event.code)
-    if (event.code === 'KeyG') this.focusOn(this.selectedId)
+    if (event.code === 'KeyG' && this.selectedId !== null) {
+      this.centerOnBody(this.selectedId, event.shiftKey ? 'close' : 'orbit')
+    }
     if (event.code === 'Space') {
       event.preventDefault()
       this.setTimeScale(this.timeScale === 0 ? 1 : 0)
@@ -934,8 +1203,16 @@ export class CosmosEngine {
     this.pressedKeys.delete(event.code)
   }
 
+  private readonly clearPressedKeys = (): void => {
+    this.pressedKeys.clear()
+  }
+
+  private readonly onVisibilityChange = (): void => {
+    if (document.visibilityState !== 'visible') this.clearPressedKeys()
+  }
+
   private readonly cancelCameraFlight = (): void => {
-    this.cameraFlight = null
+    this.cancelCameraFlightAtCurrentPose()
   }
 
   private bindInput(): void {
@@ -943,6 +1220,8 @@ export class CosmosEngine {
     this.renderer.domElement.addEventListener('dblclick', this.onDoubleClick)
     window.addEventListener('keydown', this.onKeyDown)
     window.addEventListener('keyup', this.onKeyUp)
+    window.addEventListener('blur', this.clearPressedKeys)
+    document.addEventListener('visibilitychange', this.onVisibilityChange)
   }
 
   private unbindInput(): void {
@@ -950,5 +1229,7 @@ export class CosmosEngine {
     this.renderer.domElement.removeEventListener('dblclick', this.onDoubleClick)
     window.removeEventListener('keydown', this.onKeyDown)
     window.removeEventListener('keyup', this.onKeyUp)
+    window.removeEventListener('blur', this.clearPressedKeys)
+    document.removeEventListener('visibilitychange', this.onVisibilityChange)
   }
 }

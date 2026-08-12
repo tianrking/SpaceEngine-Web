@@ -2,6 +2,15 @@ export type RendererBackend = 'webgpu' | 'webgl2'
 
 export type QualityLevel = 'balanced' | 'ultra' | 'battery'
 
+export type CameraViewMode = 'system' | 'orbit' | 'close'
+
+export interface CameraCenterState {
+  readonly mode: CameraViewMode
+  readonly bodyId: string | null
+  readonly transitioning: boolean
+  readonly canReturn: boolean
+}
+
 /** Runtime-only visual controls. Values are normalized by the engine before use. */
 export interface DisplaySettings {
   readonly exposure: number
@@ -121,6 +130,8 @@ export interface EngineTelemetry {
   timeScale: number
   quality: QualityLevel
   floatingOriginKm: readonly [number, number, number]
+  /** Present on live engine telemetry; optional for backwards-compatible initial snapshots. */
+  cameraCenter?: CameraCenterState
 }
 
 export interface EngineCapabilities {
@@ -136,6 +147,8 @@ export interface CosmosEngineEvents {
   onReady?: (capabilities: EngineCapabilities) => void
   onTelemetry?: (telemetry: EngineTelemetry) => void
   onSelection?: (body: CelestialBodyView) => void
+  onSelectionCleared?: () => void
+  onCameraCenterChange?: (state: CameraCenterState) => void
   onError?: (error: Error) => void
 }
 
