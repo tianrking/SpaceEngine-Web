@@ -1,4 +1,5 @@
 export const PROGRESSIVE_EXOPLANET_SCHEMA_VERSION = '2.0.0' as const
+export const PROGRESSIVE_HOST_SKY_SCHEMA_VERSION = '1.0.0' as const
 export const PROGRESSIVE_EXOPLANET_MANIFEST_URL =
   '/catalog/nasa-exoplanets/manifest.json' as const
 
@@ -93,6 +94,33 @@ export interface ProgressiveExoplanetSummary {
   readonly chunkId: number
 }
 
+export type ProgressiveHostSkyTuple = readonly [
+  host: string,
+  raDeg: number | null,
+  decDeg: number | null,
+  distancePc: number | null,
+  gaiaMagnitude: number | null,
+  stellarSpectralType: string | null,
+  planetCount: number,
+  starCount: number | null,
+  gaiaDr3: string | null,
+  conflictFields: string | null,
+  representativePlanet: string,
+]
+
+export interface ProgressiveHostSkyIndex {
+  readonly schemaVersion: typeof PROGRESSIVE_HOST_SKY_SCHEMA_VERSION
+  readonly catalogRevision: string
+  readonly coordinateFrame: 'ICRS'
+  readonly columns: readonly string[]
+  readonly provenance: {
+    readonly selection: string
+    readonly conflictPolicy: string
+    readonly nullPolicy: string
+  }
+  readonly records: readonly ProgressiveHostSkyTuple[]
+}
+
 export interface CatalogAssetDescriptor {
   readonly path: string
   readonly sha256: string
@@ -137,6 +165,7 @@ export interface ProgressiveExoplanetManifest {
     readonly resultPageSize: number
   }
   readonly searchIndex: CatalogAssetDescriptor
+  readonly hostSkyIndex: CatalogAssetDescriptor
   readonly chunks: readonly CatalogChunkDescriptor[]
 }
 
@@ -173,6 +202,20 @@ const EXPECTED_INDEX_COLUMNS = [
   'discoveryFacility',
   'discoveryYear',
   'chunkId',
+] as const
+
+const EXPECTED_HOST_SKY_COLUMNS = [
+  'host',
+  'raDeg',
+  'decDeg',
+  'distancePc',
+  'gaiaMagnitude',
+  'stellarSpectralType',
+  'planetCount',
+  'starCount',
+  'gaiaDr3',
+  'conflictFields',
+  'representativePlanet',
 ] as const
 
 const EXPECTED_MEASUREMENT_KEYS = [
@@ -300,8 +343,12 @@ export function validateProgressiveManifest(input: unknown): ProgressiveExoplane
   assertPositiveInteger(input.recordCount, 'recordCount')
   assertPositiveInteger(input.hostCount, 'hostCount')
   assertAssetDescriptor(input.searchIndex, 'searchIndex')
+  assertAssetDescriptor(input.hostSkyIndex, 'hostSkyIndex')
   if (input.searchIndex.records !== input.recordCount) {
     throw new TypeError('Search-index record count must match manifest recordCount')
+  }
+  if (input.hostSkyIndex.records !== input.hostCount) {
+    throw new TypeError('Host-sky record count must match manifest hostCount')
   }
   if (!Array.isArray(input.chunks) || input.chunks.length === 0) {
     throw new TypeError('chunks must be a non-empty array')
@@ -344,7 +391,7 @@ export function validateProgressiveManifest(input: unknown): ProgressiveExoplane
     throw new TypeError('performance.chunkCount must match the chunk descriptors')
   }
   const releaseRoot = `/catalog/nasa-exoplanets/releases/${input.catalogRevision}/`
-  const descriptors = [input.searchIndex, ...input.chunks]
+  const descriptors = [input.searchIndex, input.hostSkyIndex, ...input.chunks]
   const paths = new Set<string>()
   for (const descriptor of descriptors) {
     if (!descriptor.path.startsWith(releaseRoot)) {
@@ -442,6 +489,79 @@ export function validateProgressiveSearchIndex(
     }
   }
   return input as unknown as ProgressiveSearchIndex
+}
+
+function assertHostSkyTuple(tuple: unknown, index: number): void {
+  if (!Array.isArray(tuple) || tuple.length !== EXPECTED_HOST_SKY_COLUMNS.length) {
+    throw new TypeError(
+      `records[${index}] must contain ${EXPECTED_HOST_SKY_COLUMNS.length} host fields`,
+    )
+  }
+  assertNonEmptyString(tuple[0], `records[${index}].host`)
+  assertNullableFinite(tuple[1], `records[${index}].raDeg`)
+  assertNullableFinite(tuple[2], `records[${index}].decDeg`)
+  assertNullableFinite(tuple[3], `records[${index}].distancePc`)
+  assertNullableFinite(tuple[4], `records[${index}].gaiaMagnitude`)
+  assertNullableString(tuple[5], `records[${index}].stellarSpectralType`)
+  assertPositiveInteger(tuple[6], `records[${index}].planetCount`)
+  assertNullableNonNegativeInteger(tuple[7], `records[${index}].starCount`)
+  assertNullableString(tuple[8], `records[${index}].gaiaDr3`)
+  assertNullableString(tuple[9], `records[${index}].conflictFields`)
+  assertNonEmptyString(tuple[10], `records[${index}].representativePlanet`)
+  if (tuple[1] !== null && (Number(tuple[1]) < 0 || Number(tuple[1]) >= 360)) {
+    throw new TypeError(`records[${index}].raDeg is out of range`)
+  }
+  if (tuple[2] !== null && (Number(tuple[2]) < -90 || Number(tuple[2]) > 90)) {
+    throw new TypeError(`records[${index}].decDeg is out of range`)
+  }
+  if (tuple[3] !== null && Number(tuple[3]) <= 0) {
+    throw new TypeError(`records[${index}].distancePc must be positive or null`)
+  }
+}
+
+export function validateProgressiveHostSkyIndex(
+  input: unknown,
+  manifest: ProgressiveExoplanetManifest,
+): ProgressiveHostSkyIndex {
+  if (!isRecord(input)) throw new TypeError('Host-sky index must be an object')
+  if (
+    input.schemaVersion !== PROGRESSIVE_HOST_SKY_SCHEMA_VERSION ||
+    input.catalogRevision !== manifest.catalogRevision ||
+    input.coordinateFrame !== 'ICRS'
+  ) {
+    throw new TypeError('Host-sky index is incompatible with the active manifest')
+  }
+  if (
+    !Array.isArray(input.columns) ||
+    input.columns.join('\u0000') !== EXPECTED_HOST_SKY_COLUMNS.join('\u0000')
+  ) {
+    throw new TypeError('Host-sky columns do not match the application schema')
+  }
+  if (!isRecord(input.provenance)) {
+    throw new TypeError('Host-sky provenance is required')
+  }
+  for (const field of ['selection', 'conflictPolicy', 'nullPolicy'] as const) {
+    assertNonEmptyString(input.provenance[field], `provenance.${field}`)
+  }
+  if (!Array.isArray(input.records) || input.records.length !== manifest.hostCount) {
+    throw new TypeError('Host-sky record count does not match the manifest')
+  }
+  const hosts = new Set<string>()
+  let previousHost: string | null = null
+  for (const [index, tuple] of input.records.entries()) {
+    assertHostSkyTuple(tuple, index)
+    const host = (tuple as unknown[])[0] as string
+    if (hosts.has(host)) throw new TypeError(`Duplicate host-sky identity: ${host}`)
+    if (previousHost !== null && previousHost.localeCompare(host, 'en', {
+      sensitivity: 'base',
+      numeric: true,
+    }) > 0) {
+      throw new TypeError('Host-sky records are not sorted by host name')
+    }
+    hosts.add(host)
+    previousHost = host
+  }
+  return input as unknown as ProgressiveHostSkyIndex
 }
 
 export function validateProgressiveDetailChunk(
@@ -628,6 +748,17 @@ export async function loadProgressiveSearchIndex(
     value,
     manifest,
   )
+}
+
+export async function loadProgressiveHostSkyIndex(
+  manifest: ProgressiveExoplanetManifest,
+  signal?: AbortSignal,
+  cachedBytes?: ArrayBuffer,
+): Promise<ProgressiveHostSkyIndex> {
+  const value = cachedBytes
+    ? await verifyProgressiveAssetBytes(manifest.hostSkyIndex, cachedBytes)
+    : (await fetchProgressiveAsset(manifest.hostSkyIndex, signal)).value
+  return validateProgressiveHostSkyIndex(value, manifest)
 }
 
 export async function loadProgressiveDetailChunk(

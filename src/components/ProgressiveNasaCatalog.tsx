@@ -1,5 +1,7 @@
 import {
+  lazy,
   memo,
+  Suspense,
   useCallback,
   useDeferredValue,
   useEffect,
@@ -17,6 +19,8 @@ import {
   CircleHelp,
   DatabaseZap,
   HardDriveDownload,
+  List,
+  MapPinned,
   ExternalLink,
   RefreshCcw,
   Search,
@@ -38,6 +42,7 @@ import type {
 } from '../data/progressiveCatalogSearch'
 import type {
   CatalogDetailPayload,
+  CatalogHostSkyPayload,
   CatalogLoadSource,
   CatalogOfflineProgressPayload,
   CatalogQueryPayload,
@@ -77,6 +82,17 @@ const snapshotDate = new Intl.DateTimeFormat('en-US', {
 })
 
 let clientModulePromise: Promise<typeof import('../data/progressiveCatalogClient')> | null = null
+let skyAtlasModulePromise: Promise<typeof import('./ObservedSkyAtlas')> | null = null
+
+function requestSkyAtlasModule(): Promise<typeof import('./ObservedSkyAtlas')> {
+  skyAtlasModulePromise ??= import('./ObservedSkyAtlas').catch((error: unknown) => {
+    skyAtlasModulePromise = null
+    throw error
+  })
+  return skyAtlasModulePromise
+}
+
+const LazyObservedSkyAtlas = lazy(requestSkyAtlasModule)
 
 function requestCatalogClient(): Promise<ProgressiveCatalogClient> {
   clientModulePromise ??= import('../data/progressiveCatalogClient').catch((error: unknown) => {
@@ -460,33 +476,30 @@ const OfflinePackControl = memo(function OfflinePackControl({
   onInstall,
   onRemove,
 }: OfflinePackControlProps) {
-  const totalPackBytes = offline.storedBytes > 0 && offline.packInstalled
-    ? offline.storedBytes
-    : null
   return (
     <section className="product-offline-pack" aria-label="Offline catalogue pack">
       <div className="product-offline-pack__summary">
         <span className={offline.packInstalled ? 'is-ready' : undefined}>
-          {loadSource === 'offline-cache' ? (
-            <WifiOff size={12} aria-hidden="true" />
-          ) : offline.packInstalled ? (
+          {offline.packInstalled ? (
             <DatabaseZap size={12} aria-hidden="true" />
+          ) : loadSource === 'offline-cache' ? (
+            <WifiOff size={12} aria-hidden="true" />
           ) : (
             <HardDriveDownload size={12} aria-hidden="true" />
           )}
-          {loadSource === 'offline-cache'
-            ? 'Running from verified offline core'
-            : offline.packInstalled
-              ? 'Full research pack ready'
+          {offline.packInstalled
+            ? 'Full research pack ready'
+            : loadSource === 'offline-cache'
+              ? 'Running from verified offline core'
               : offline.coreCached
                 ? 'Search core cached'
                 : 'Browser storage optional'}
         </span>
         <small>
           {offline.packInstalled
-            ? `${offline.detailChunksCached}/${offline.detailChunksTotal} chunks · ${displayBytes(totalPackBytes ?? offline.storedBytes)}`
+            ? `${offline.detailChunksCached}/${offline.detailChunksTotal} details + sky atlas · ${displayBytes(offline.storedBytes)}`
             : offline.supported
-              ? `${offline.detailChunksCached}/${offline.detailChunksTotal} detail chunks cached`
+              ? `${offline.detailChunksCached}/${offline.detailChunksTotal} details · atlas ${offline.skyCached ? 'cached' : 'on demand'}`
               : 'IndexedDB unavailable'}
         </small>
       </div>
@@ -499,7 +512,9 @@ const OfflinePackControl = memo(function OfflinePackControl({
             aria-label="Offline pack installation progress"
           />
           <span>
-            Verifying chunk {operation.progress.completedChunks}/{operation.progress.totalChunks}
+            {operation.progress.completedChunks === 0
+              ? 'Verifying observed-host sky index'
+              : `Verifying detail ${operation.progress.completedChunks}/${operation.progress.totalChunks}`}
             {' · '}{displayBytes(operation.progress.storedBytes)} / {displayBytes(operation.progress.totalBytes)}
           </span>
         </div>
@@ -523,7 +538,7 @@ const OfflinePackControl = memo(function OfflinePackControl({
             ) : (
               <Trash2 size={12} aria-hidden="true" />
             )}
-            {operation.status === 'removing' ? 'Removing pack…' : 'Remove offline detail pack'}
+            {operation.status === 'removing' ? 'Removing pack…' : 'Remove offline research pack'}
           </button>
         ) : (
           <button
@@ -541,9 +556,9 @@ const OfflinePackControl = memo(function OfflinePackControl({
         )
       ) : null}
       <p>
-        The app shell and search core are cached after first use. The optional pack keeps all
-        scientific details in this browser; interrupted installs never replace the last complete
-        release.
+        The app shell and search core are cached after first use. The optional pack keeps the
+        observed-host atlas and every scientific detail in this browser; interrupted installs
+        never replace the last complete release.
       </p>
     </section>
   )
@@ -566,6 +581,14 @@ type DetailState =
   | { readonly status: 'error'; readonly id: string; readonly message: string }
   | { readonly status: 'ready'; readonly id: string; readonly detail: CatalogDetailPayload }
 
+type CatalogViewMode = 'records' | 'sky'
+
+type HostSkyState =
+  | { readonly status: 'idle' }
+  | { readonly status: 'loading' }
+  | { readonly status: 'error'; readonly message: string }
+  | { readonly status: 'ready'; readonly payload: CatalogHostSkyPayload }
+
 export const ProgressiveNasaCatalog = memo(function ProgressiveNasaCatalog({
   searchInputRef,
 }: ProgressiveNasaCatalogProps) {
@@ -576,6 +599,7 @@ export const ProgressiveNasaCatalog = memo(function ProgressiveNasaCatalog({
   const [query, setQuery] = useState('')
   const [filters, setFilters] = useState<readonly ProgressiveCatalogFilter[]>([])
   const [sort, setSort] = useState<ProgressiveCatalogSort>('name')
+  const [viewMode, setViewMode] = useState<CatalogViewMode>('records')
   const [visibleCount, setVisibleCount] = useState(RESULTS_PAGE_SIZE)
   const [queryResult, setQueryResult] = useState<CatalogQueryPayload | null>(null)
   const [queryBusy, setQueryBusy] = useState(false)
@@ -583,9 +607,11 @@ export const ProgressiveNasaCatalog = memo(function ProgressiveNasaCatalog({
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [detailState, setDetailState] = useState<DetailState>({ status: 'idle' })
   const [offlineOperation, setOfflineOperation] = useState<OfflineOperation>({ status: 'idle' })
+  const [hostSkyState, setHostSkyState] = useState<HostSkyState>({ status: 'idle' })
   const queryRequest = useRef<number | null>(null)
   const detailRequest = useRef<number | null>(null)
   const offlineRequest = useRef<number | null>(null)
+  const hostSkyRequest = useRef<number | null>(null)
   const deferredQuery = useDeferredValue(query)
   const filterKey = filters.join('|')
 
@@ -608,7 +634,7 @@ export const ProgressiveNasaCatalog = memo(function ProgressiveNasaCatalog({
   }, [retryToken])
 
   useEffect(() => {
-    if (catalogue.status !== 'ready') return
+    if (catalogue.status !== 'ready' || viewMode !== 'records') return
     let active = true
     setQueryBusy(true)
     setQueryError(null)
@@ -640,7 +666,7 @@ export const ProgressiveNasaCatalog = memo(function ProgressiveNasaCatalog({
     return () => {
       active = false
     }
-  }, [catalogue.status, deferredQuery, filterKey, filters, sort, visibleCount])
+  }, [catalogue.status, deferredQuery, filterKey, filters, sort, viewMode, visibleCount])
 
   useEffect(
     () => () => {
@@ -648,6 +674,7 @@ export const ProgressiveNasaCatalog = memo(function ProgressiveNasaCatalog({
         if (queryRequest.current !== null) client.cancel(queryRequest.current)
         if (detailRequest.current !== null) client.cancel(detailRequest.current)
         if (offlineRequest.current !== null) client.cancel(offlineRequest.current)
+        if (hostSkyRequest.current !== null) client.cancel(hostSkyRequest.current)
       })
     },
     [],
@@ -742,6 +769,56 @@ export const ProgressiveNasaCatalog = memo(function ProgressiveNasaCatalog({
       current.status === 'ready' ? { ...current, offline } : current,
     )
   }, [])
+
+  const showHostSky = useCallback(() => {
+    setViewMode('sky')
+    resetResultState()
+    const activeQuery = queryRequest.current
+    if (activeQuery !== null) {
+      queryRequest.current = null
+      setQueryBusy(false)
+      void requestCatalogClient().then((client) => client.cancel(activeQuery))
+    }
+    void requestSkyAtlasModule().catch(() => undefined)
+    if (hostSkyState.status === 'ready' || hostSkyRequest.current !== null) return
+    setHostSkyState({ status: 'loading' })
+    void requestCatalogClient().then(
+      (client) => {
+        const request = client.hostSky()
+        hostSkyRequest.current = request.requestId
+        void request.promise.then(
+          (payload) => {
+            if (hostSkyRequest.current !== request.requestId) return
+            hostSkyRequest.current = null
+            updateOfflineStatus(payload.offline)
+            setHostSkyState({ status: 'ready', payload })
+          },
+          (error: unknown) => {
+            if (error instanceof DOMException && error.name === 'AbortError') return
+            if (hostSkyRequest.current !== request.requestId) return
+            hostSkyRequest.current = null
+            setHostSkyState({ status: 'error', message: errorMessage(error) })
+          },
+        )
+      },
+      (error: unknown) => {
+        hostSkyRequest.current = null
+        setHostSkyState({ status: 'error', message: errorMessage(error) })
+      },
+    )
+  }, [hostSkyState.status, resetResultState, updateOfflineStatus])
+
+  const openHostRecords = useCallback(
+    (host: string) => {
+      setQuery(host)
+      setFilters([])
+      setSort('name')
+      setViewMode('records')
+      resetResultState()
+      requestAnimationFrame(() => searchInputRef.current?.focus())
+    },
+    [resetResultState, searchInputRef],
+  )
 
   const installOfflinePack = useCallback(() => {
     const emptyProgress: CatalogOfflineProgressPayload = {
@@ -852,7 +929,28 @@ export const ProgressiveNasaCatalog = memo(function ProgressiveNasaCatalog({
         onRemove={removeOfflinePack}
       />
 
-      <label htmlFor={inputId}>Search the complete NASA Exoplanet Archive</label>
+      <div className="product-catalog-view-switch" role="group" aria-label="NASA catalogue view">
+        <button
+          type="button"
+          aria-pressed={viewMode === 'records'}
+          onClick={() => setViewMode('records')}
+        >
+          <List size={13} aria-hidden="true" /> Research records
+        </button>
+        <button
+          type="button"
+          aria-pressed={viewMode === 'sky'}
+          onClick={showHostSky}
+        >
+          <MapPinned size={13} aria-hidden="true" /> Observed sky
+        </button>
+      </div>
+
+      <label htmlFor={inputId}>
+        {viewMode === 'sky'
+          ? 'Filter observed NASA host systems'
+          : 'Search the complete NASA Exoplanet Archive'}
+      </label>
       <div className="product-search__field">
         <Search size={17} aria-hidden="true" />
         <input
@@ -860,7 +958,9 @@ export const ProgressiveNasaCatalog = memo(function ProgressiveNasaCatalog({
           id={inputId}
           type="search"
           value={query}
-          placeholder="Planet, host, spectral type, method…"
+          placeholder={viewMode === 'sky'
+            ? 'Host system name…'
+            : 'Planet, host, spectral type, method…'}
           autoComplete="off"
           spellCheck="false"
           onChange={(event) => updateQuery(event.target.value)}
@@ -874,6 +974,8 @@ export const ProgressiveNasaCatalog = memo(function ProgressiveNasaCatalog({
         )}
       </div>
 
+      {viewMode === 'records' ? (
+        <>
       <div className="product-catalog-controls">
         <div className="product-catalog-filters" role="group" aria-label="NASA archive filters">
           {CATALOG_FILTERS.map((filter) => (
@@ -1016,6 +1118,44 @@ export const ProgressiveNasaCatalog = memo(function ProgressiveNasaCatalog({
           <p>Remove a filter or search by planet, host, method, or facility.</p>
         </div>
       ) : null}
+        </>
+      ) : hostSkyState.status === 'ready' ? (
+        <Suspense
+          fallback={(
+            <div className="product-nasa-load-state" aria-busy="true">
+              <RefreshCcw className="is-spinning" size={18} aria-hidden="true" />
+              <strong>Preparing the GPU-friendly sky canvas</strong>
+            </div>
+          )}
+        >
+          <LazyObservedSkyAtlas
+            index={hostSkyState.payload.index}
+            filterQuery={deferredQuery}
+            loadMs={hostSkyState.payload.loadMs}
+            source={hostSkyState.payload.fromMemoryCache
+              ? 'memory'
+              : hostSkyState.payload.fromPersistentCache
+                ? 'offline-storage'
+                : 'network'}
+            onOpenHost={openHostRecords}
+          />
+        </Suspense>
+      ) : hostSkyState.status === 'error' ? (
+        <div className="product-nasa-load-state is-error" role="alert">
+          <AlertTriangle size={20} aria-hidden="true" />
+          <strong>Observed sky unavailable</strong>
+          <p>{hostSkyState.message}</p>
+          <button type="button" onClick={showHostSky}>
+            <RefreshCcw size={13} aria-hidden="true" /> Retry verified atlas
+          </button>
+        </div>
+      ) : (
+        <div className="product-nasa-load-state" aria-busy="true">
+          <RefreshCcw className="is-spinning" size={20} aria-hidden="true" />
+          <strong>Loading 4,749 observed host coordinates</strong>
+          <p>The content-addressed ICRS index is decoded off the main thread.</p>
+        </div>
+      )}
     </div>
   )
 })

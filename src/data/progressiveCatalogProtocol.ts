@@ -2,6 +2,7 @@ import type {
   ProgressiveExoplanetManifest,
   ProgressiveExoplanetRecord,
   ProgressiveExoplanetSummary,
+  ProgressiveHostSkyIndex,
 } from './progressiveExoplanetCatalog'
 import type {
   ProgressiveCatalogFilter,
@@ -32,6 +33,14 @@ export interface CatalogDetailPayload {
   readonly cacheEntries: number
 }
 
+export interface CatalogHostSkyPayload {
+  readonly index: ProgressiveHostSkyIndex
+  readonly loadMs: number
+  readonly fromMemoryCache: boolean
+  readonly fromPersistentCache: boolean
+  readonly offline: CatalogOfflineStatus
+}
+
 export interface CatalogOfflineProgressPayload {
   readonly completedChunks: number
   readonly totalChunks: number
@@ -56,6 +65,7 @@ export type CatalogWorkerRequest =
       readonly chunkId: number
     }
   | { readonly type: 'offline-status'; readonly requestId: number }
+  | { readonly type: 'host-sky'; readonly requestId: number }
   | { readonly type: 'install-offline-pack'; readonly requestId: number }
   | { readonly type: 'remove-offline-pack'; readonly requestId: number }
   | { readonly type: 'cancel'; readonly requestId: number }
@@ -80,6 +90,11 @@ export type CatalogWorkerResponse =
       readonly type: 'offline-status'
       readonly requestId: number
       readonly payload: CatalogOfflineStatus
+    }
+  | {
+      readonly type: 'host-sky-result'
+      readonly requestId: number
+      readonly payload: CatalogHostSkyPayload
     }
   | {
       readonly type: 'offline-progress'

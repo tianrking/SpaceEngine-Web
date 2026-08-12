@@ -23,7 +23,7 @@
 
 ## Overview
 
-Astral Surveyor is a browser-based vertical slice for testing the engineering foundations of a large-scale universe explorer. The application renders a deliberately compressed, visual-scale version of the fictional Asteria system and pairs it with a source-backed research catalogue of **6,336 confirmed exoplanets across 4,749 host systems**. It combines a GPU-initialized spiral starfield, eight planets, eighteen parent-relative moons, procedural surfaces, rings, cloud shells, atmospheric presentation, a cinematic scientific HUD, visual calibration, live renderer telemetry, and an installable verified offline research pack.
+Astral Surveyor is a browser-based vertical slice for testing the engineering foundations of a large-scale universe explorer. The application renders a deliberately compressed, visual-scale version of the fictional Asteria system and pairs it with a source-backed research catalogue of **6,336 confirmed exoplanets across 4,749 host systems**. It combines a GPU-initialized spiral starfield, eight planets, eighteen parent-relative moons, procedural surfaces, rings, cloud shells, atmospheric presentation, a cinematic scientific HUD, an interactive real-coordinate ICRS host atlas, visual calibration, live renderer telemetry, and an installable verified offline research pack.
 
 The renderer and product UI now consume the same deterministic domain catalogue. That single source owns f64 Kepler mechanics, nested orbital hierarchy, SI inputs, equation-derived physical measurements, astronomical units, seeded procedural properties, provenance, and high/low precision helpers.
 
@@ -48,7 +48,7 @@ This project is an original clean-room implementation. It is not a port, fork, o
 | Rendering | Three.js r185 `WebGPURenderer` | Scene graph, node materials, logarithmic depth, WebGPU selection, and WebGL 2 fallback |
 | GPU programs | Three.js Shading Language (TSL) | WebGPU compute initialization for the spiral starfield and backend-compatible node materials |
 | Procedural visuals | `simplex-noise`, Canvas textures | Seeded planet albedo, clouds, glows, rings, and small rocky-surface displacement |
-| Astronomical data | NASA Exoplanet Archive TAP release | Versioned composite parameters for 6,336 confirmed exoplanets, a compact search index, and 17 content-addressed scientific-detail chunks |
+| Astronomical data | NASA Exoplanet Archive TAP release | Versioned composite parameters for 6,336 confirmed exoplanets, a compact search index, a 4,749-host ICRS sky index, and 17 content-addressed scientific-detail chunks |
 | Catalogue runtime | Dedicated Web Worker, Web Crypto, IndexedDB, immutable HTTP assets | Off-main-thread search, SHA-256/byte-size/schema verification, cancellable detail requests, bounded memory/disk caches, and an optional complete offline pack |
 | Offline shell | Generated Service Worker | Atomically content-versioned application-shell precache and network-first navigation fallback without intercepting catalogue release validation |
 | State boundary | React state plus engine snapshots | Commands flow into `CosmosEngine`; telemetry returns to React every 400 ms rather than every frame |
@@ -70,6 +70,7 @@ WebAssembly is not currently used. The project first establishes correctness in 
 - **Procedural presentation.** Planets and moons include generated textures, class-aware terrain displacement, pressure-scaled atmosphere shells, cloud layers, ring geometry, stellar glow, and ACES filmic tone mapping.
 - **Live visual observatory.** Tune tone-mapped exposure, orbital-guide brightness, and starfield brightness without rebuilding the scene or reallocating GPU geometry/material resources; versioned preferences persist locally.
 - **Complete exoplanet archive.** Search all 6,336 confirmed planets in the pinned release by planet, host, spectral type, discovery method, or facility; combine Nearby, Earth-size, Temperate, and Recent filters and sort by name, distance, or discovery date.
+- **Observed-host sky atlas.** Explore all 4,749 NASA host systems on an interactive high-DPI ICRS canvas using reported RA/Dec, distance, Gaia identity/magnitude, spectral type, multiplicity, and confirmed-planet count. Its 172 KiB gzip data asset and 3.3 KiB gzip UI chunk load only when requested; pointer and keyboard selection work, and composite-field conflicts remain visible instead of being resolved to a convenient value.
 - **Scientific detail on demand.** The initial catalogue transfer is a compact 175 KiB gzip search index, including precomputed distance and discovery orders. Expanding a result fetches only one 78–153 KiB gzip detail chunk containing measurements, asymmetric errors, limit flags, source references, external IDs, discovery equipment, spectra/JWST counts, and stellar context.
 - **Explicit data integrity.** Every immutable asset is checked against manifest byte size and SHA-256 before use. Missing source values remain `null`, composite fields stay labelled, stale detail requests can be cancelled, and only two decoded chunks remain in Worker memory.
 - **Verified offline observatory.** After one successful online load, the generated Service Worker can restore the application shell and the Worker can restore the complete 6,336-planet search core from IndexedDB. An explicit 17-chunk research pack adds all scientific details for offline use; incomplete downloads never become the active complete pack, and the previous release pointer is retained for future recovery tooling.
@@ -88,7 +89,7 @@ Astral Surveyor keeps two intentionally separate scientific layers:
 - Internal values use SI units and JavaScript `number`/f64 precision.
 - Climate and habitability labels are conservative exploration heuristics, not biosignature detections.
 - Visual radii and orbital distances are compressed independently from the physical catalogue.
-- The checked-in NASA release contains 6,336 unique planets in 4,749 host systems. Its metadata preserves the exact TAP query, source URL, retrieval time, release identity, content hashes, chunk boundaries, selection rule, and null policy.
+- The checked-in NASA release contains 6,336 unique planets in 4,749 host systems. Its metadata preserves the exact TAP query, source URL, retrieval time, release identity, content hashes, chunk boundaries, selection rule, conflict policy, and null policy. The host atlas is a map of confirmed-planet discoveries, not a statistically complete stellar census.
 
 The equations, assumptions, input/derived boundary, and limitations are documented in [the scientific model](docs/SCIENCE_MODEL.md). The path from this implemented progressive NASA release to Gaia/SIMBAD/IVOA cross-matching and 100,000-summary scale is documented in the [real-catalog expansion roadmap](docs/CATALOG_EXPANSION.md).
 
@@ -99,13 +100,13 @@ The prototype is intentionally narrower than a production astronomical simulator
 | Area | What works now | Not implemented yet |
 | --- | --- | --- |
 | Scale | Floating-origin recentering and logarithmic depth in a compressed visual system | Physically scaled travel from planetary terrain to interstellar or galactic distances |
-| Coordinates | f64 domain values, parent-relative moon transforms, and tested high/low split utilities | High/low shader integration, hierarchical galaxy/system/planet reference frames, or catalogue-grade observed sky coordinates |
+| Coordinates | f64 domain values, parent-relative moon transforms, tested high/low split utilities, and a verified ICRS RA/Dec atlas for all 4,749 observed NASA hosts | High/low shader integration, epoch propagation/proper-motion covariance, or hierarchical galaxy/system/planet navigation frames |
 | Terrain | Fixed sphere meshes, seeded textures, and small CPU vertex displacement | Cube-sphere quadtree LOD, tile scheduling, geomorphing, collision, walking, or terrain-level landing |
 | Atmosphere | Transparent additive shells and animated cloud presentation | Rayleigh/Mie scattering, precomputed atmosphere LUTs, volumetric clouds, weather, or physically based eclipses |
 | Physics | Equation-derived bulk properties, stellar environment, and elliptic two-body Kepler motion | N-body gravity, perturbations, resonances, tidal evolution, relativistic trajectories, spacecraft dynamics, or aerodynamics |
-| Data | Fictional deterministic Asteria plus a versioned 6,336-planet NASA release with content-addressed chunks, uncertainties/limits, selected field references, external IDs, and honest nulls | Reviewed Gaia astrometry/cross-matches, SIMBAD aliases, authoritative ephemerides, full per-field reference coverage, observed atmospheres/terrain, or spatial sky tiles |
+| Data | Fictional deterministic Asteria plus a versioned 6,336-planet NASA release with content-addressed detail/host indexes, ICRS coordinates, uncertainties/limits, selected field references, external IDs, conflict flags, and honest nulls | Reviewed Gaia astrometry/cross-matches, SIMBAD aliases, authoritative ephemerides, full per-field reference coverage, observed atmospheres/terrain, or HEALPix spatial tiles |
 | Universe generation | Seeded catalogue/RNG modules and on-demand procedural visual textures | Persistent sectors, billions of addressable objects, streaming catalogues, or generator-version migrations |
-| Product UI | Inspector, system list, local simulated-body search, Worker-backed full exoplanet research search, schematic star map, `localStorage` saved places with memory fallback, visual calibration, runtime settings, shortcut guide, quality, cinematic, and time controls | Rendering and travelling through observed host systems, cloud sync, shared locations, user accounts, or server persistence |
+| Product UI | Inspector, system list, local simulated-body search, Worker-backed full exoplanet research search, interactive observed-host sky atlas, schematic Asteria map, `localStorage` saved places with memory fallback, visual calibration, runtime settings, shortcut guide, quality, cinematic, and time controls | Rendering and travelling through observed host systems, cloud sync, shared locations, user accounts, or server persistence |
 | Platform resilience | Automatic WebGL 2 fallback, an explicit fallback route, a content-versioned offline app shell, verified IndexedDB search-core fallback, and an optional complete scientific-detail pack | GPU device-loss recovery, automatic catalogue rollback UI, cross-browser automated E2E coverage, or formal performance budgets |
 
 The rendered Asteria catalogue is a physically constrained fictional scenario. Its derived values are internally consistent with the documented inputs, but they are not telescope observations. Visual radii and orbital distances are compressed for readability and must not be interpreted as a 1:1 scale model. The separate NASA research index is observational archive data and is not currently rendered as flyable systems.
@@ -189,6 +190,7 @@ flowchart LR
   Catalog --> Engine
   Manifest["Versioned manifest<br/>hashes, sizes, provenance"] --> Worker["Dedicated catalogue Worker"]
   Index["Compact search index<br/>6,336 planets"] --> Worker
+  HostSky["On-demand ICRS host index<br/>4,749 real coordinates"] -->|sky view only| Worker
   Detail["17 immutable detail chunks<br/>errors, limits, references"] -->|selected chunk only| Worker
   Worker <--> IDB["IndexedDB<br/>verified core and optional full pack"]
   Worker -->|immutable summaries and selected detail| UI
@@ -198,7 +200,7 @@ flowchart LR
   Renderer -->|automatic or forced fallback| GL["WebGL 2 and CPU buffers<br/>24K galaxy points"]
 ```
 
-The Three.js animation loop owns camera motion, hierarchical orbital updates, GPU resources, and per-frame rendering. React receives low-frequency snapshots for presentation, keeping reconciliation out of the render hot path. Display calibration mutates existing renderer uniforms/material properties in place. A Dedicated Worker owns NASA manifest/index validation, search, chunk loading, cancellation, memory/disk eviction, and atomic pack-readiness state; React receives at most the visible 20-result page plus one selected detail record. IndexedDB stores only verified catalogue assets, while the generated Service Worker owns the application shell and deliberately leaves catalogue release validation to the Worker. The DOM-free simulation domain remains independent from both renderer and observed catalogue.
+The Three.js animation loop owns camera motion, hierarchical orbital updates, GPU resources, and per-frame rendering. React receives low-frequency snapshots for presentation, keeping reconciliation out of the render hot path. Display calibration mutates existing renderer uniforms/material properties in place. A Dedicated Worker owns NASA manifest/index validation, search, on-demand host-atlas loading, chunk loading, cancellation, memory/disk eviction, and atomic pack-readiness state; React receives at most the visible 20-result page plus one selected detail record. The host atlas draws 4,749 systems into one lazy-loaded Canvas rather than creating thousands of DOM nodes. IndexedDB stores only verified catalogue assets, while the generated Service Worker owns the application shell and deliberately leaves catalogue release validation to the Worker. The DOM-free simulation domain remains independent from both renderer and observed catalogue.
 
 For deeper design notes, see [Architecture](docs/ARCHITECTURE.md) and [Research](docs/RESEARCH.md).
 
@@ -273,7 +275,7 @@ The unit suite currently verifies:
 - astronomical distance/speed formatting;
 - camera-relative high/low precision splitting and reconstruction;
 - display-setting normalization, persistence, and renderer calibration derivation; and
-- NASA manifest/chunk hashes, schema, provenance, uniqueness, null preservation, representative records, filters, sorting, and measured full-index search budget.
+- NASA manifest/chunk/host-index hashes, schema, ICRS ranges, provenance, composite conflicts, uniqueness, null preservation, representative records, filters, sorting, and measured full-index search budget.
 
 GitHub Actions runs `npm ci` followed by `npm run check` for pull requests and pushes to `main`.
 
@@ -322,6 +324,7 @@ The public deployment for this repository is <https://space-engine-web.vercel.ap
 - [x] Replace the 128-record prototype with all 6,336 confirmed NASA planets in a reproducible, content-addressed progressive release
 - [x] Move full-catalogue search, verified detail loading, cancellation, and bounded caching into a Dedicated Worker
 - [x] Add a content-versioned offline shell, verified IndexedDB search-core fallback, and an explicit complete scientific-detail pack
+- [x] Add a lazy, Worker-verified ICRS Canvas atlas for all 4,749 real NASA host coordinates
 - [x] Document the staged 100+ to 100,000-object real-catalog architecture, provenance, rights, caching, and performance gates
 - [ ] Add hierarchical coordinate frames and use high/low values in render shaders
 - [ ] Build six-face cube-sphere quadtree terrain with screen-space error, seams, and tile budgets

@@ -51,6 +51,7 @@ function manifestFixture(revision: string): ProgressiveExoplanetManifest {
     },
     performance: { detailChunkSize: 1, chunkCount: 2, resultPageSize: 20 },
     searchIndex: descriptor(`${root}/search-index.json`, 2),
+    hostSkyIndex: descriptor(`${root}/host-sky-index.json`, 4),
     chunks,
   }
 }
@@ -75,6 +76,7 @@ describe('catalogue IndexedDB release store', () => {
     )
     expect(status).toMatchObject({
       coreCached: true,
+      skyCached: false,
       packInstalled: false,
       detailChunksCached: 0,
       rollbackRevision: null,
@@ -97,6 +99,13 @@ describe('catalogue IndexedDB release store', () => {
 
     await store.putAsset(
       manifest.catalogRevision,
+      manifest.hostSkyIndex,
+      bytes(manifest.hostSkyIndex.bytes, 4),
+      'sky',
+    )
+
+    await store.putAsset(
+      manifest.catalogRevision,
       manifest.chunks[1],
       bytes(manifest.chunks[1].bytes, 3),
       'detail',
@@ -104,14 +113,16 @@ describe('catalogue IndexedDB release store', () => {
     const installed = await store.markPackReady(manifest)
     expect(installed).toMatchObject({
       packInstalled: true,
+      skyCached: true,
       detailChunksCached: 2,
       detailChunksTotal: 2,
-      storedBytes: 9,
+      storedBytes: 13,
     })
 
     const removed = await store.clearPack(manifest)
     expect(removed).toMatchObject({
       coreCached: true,
+      skyCached: false,
       packInstalled: false,
       detailChunksCached: 0,
       storedBytes: 2,

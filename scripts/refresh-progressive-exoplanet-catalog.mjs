@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 
 const SCHEMA_VERSION = '2.0.0'
+const HOST_SKY_SCHEMA_VERSION = '1.0.0'
 const CATALOG_ID = 'nasa-exoplanets'
 const DETAIL_CHUNK_SIZE = 384
 const FETCH_TIMEOUT_MS = 90_000
@@ -328,6 +329,61 @@ function summaryOrders(summaries) {
   }
 }
 
+function strictHostValue(records, host, field, select) {
+  const reported = records.map(select).filter((value) => value !== null)
+  const unique = new Map(reported.map((value) => [String(value), value]))
+  if (unique.size > 1) {
+    throw new Error(`Conflicting ${field} values for NASA host: ${host}`)
+  }
+  return unique.values().next().value ?? null
+}
+
+function compositeHostValue(records, select) {
+  const reported = records.map(select).filter((value) => value !== null)
+  const unique = new Map(reported.map((value) => [String(value), value]))
+  return {
+    value: unique.size <= 1 ? unique.values().next().value ?? null : null,
+    conflicted: unique.size > 1,
+  }
+}
+
+function hostSkyRecords(planets) {
+  const systems = new Map()
+  for (const planet of planets) {
+    const records = systems.get(planet.host) ?? []
+    records.push(planet)
+    systems.set(planet.host, records)
+  }
+  return [...systems.entries()]
+    .sort(([left], [right]) => compareText(left, right))
+    .map(([host, records]) => {
+      const gaiaMagnitude = compositeHostValue(
+        records,
+        (planet) => planet.measurements.gaiaMagnitude.value,
+      )
+      const spectralType = compositeHostValue(records, (planet) => planet.hostStar.spectralType)
+      const starCount = compositeHostValue(records, (planet) => planet.system.starCount)
+      const conflicts = [
+        gaiaMagnitude.conflicted ? 'gaiaMagnitude' : null,
+        spectralType.conflicted ? 'stellarSpectralType' : null,
+        starCount.conflicted ? 'starCount' : null,
+      ].filter(Boolean)
+      return [
+        host,
+        strictHostValue(records, host, 'right ascension', (planet) => planet.coordinates.raDeg),
+        strictHostValue(records, host, 'declination', (planet) => planet.coordinates.decDeg),
+        strictHostValue(records, host, 'distance', (planet) => planet.measurements.distancePc.value),
+        gaiaMagnitude.value,
+        spectralType.value,
+        records.length,
+        starCount.value,
+        strictHostValue(records, host, 'Gaia DR3 identity', (planet) => planet.externalIds.gaiaDr3),
+        conflicts.length > 0 ? conflicts.join(',') : null,
+        records[0].name,
+      ]
+    })
+}
+
 async function existingReleasePlanets() {
   if (!process.argv.includes('--repack-existing')) return null
   const manifest = JSON.parse(
@@ -428,7 +484,34 @@ async function main() {
     records: summaries,
   })
 
-  const hostCount = new Set(planets.map(({ host }) => host)).size
+  const hostRecords = hostSkyRecords(planets)
+  const hostSky = await writeContentAddressed(releaseUrl, 'host-sky-index', {
+    schemaVersion: HOST_SKY_SCHEMA_VERSION,
+    catalogRevision: revision,
+    coordinateFrame: 'ICRS',
+    columns: [
+      'host',
+      'raDeg',
+      'decDeg',
+      'distancePc',
+      'gaiaMagnitude',
+      'stellarSpectralType',
+      'planetCount',
+      'starCount',
+      'gaiaDr3',
+      'conflictFields',
+      'representativePlanet',
+    ],
+    provenance: {
+      selection: 'One record per exact NASA Exoplanet Archive hostname.',
+      conflictPolicy:
+        'Conflicting non-null coordinates, distance, or Gaia identity fail the build. Conflicting composite magnitude, spectral type, or star count is omitted and named in conflictFields.',
+      nullPolicy: 'Absent source cells remain null; no sky coordinate or stellar value is imputed.',
+    },
+    records: hostRecords,
+  })
+
+  const hostCount = hostRecords.length
   const manifest = {
     schemaVersion: SCHEMA_VERSION,
     catalogId: CATALOG_ID,
@@ -466,6 +549,12 @@ async function main() {
       bytes: index.bytes,
       records: summaries.length,
     },
+    hostSkyIndex: {
+      path: `/catalog/nasa-exoplanets/releases/${revision}/${hostSky.filename}`,
+      sha256: hostSky.sha256,
+      bytes: hostSky.bytes,
+      records: hostRecords.length,
+    },
     chunks,
   }
 
@@ -482,6 +571,7 @@ async function main() {
           hostCount,
           retrievedAt,
           chunkCount: chunks.length,
+          hostSkyBytes: hostSky.bytes,
         },
         null,
         2,

@@ -4,5 +4,6 @@ export const PROGRESSIVE_EXOPLANET_RELEASE = {
   "recordCount": 6336,
   "hostCount": 4749,
   "retrievedAt": "2026-08-12T00:00:00.000Z",
-  "chunkCount": 17
+  "chunkCount": 17,
+  "hostSkyBytes": 528046
 } as const

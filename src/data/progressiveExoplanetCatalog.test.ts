@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest'
 import {
   decodeProgressiveSummary,
   validateProgressiveDetailChunk,
+  validateProgressiveHostSkyIndex,
   validateProgressiveManifest,
   validateProgressiveSearchIndex,
 } from './progressiveExoplanetCatalog'
@@ -31,11 +32,32 @@ describe('progressive NASA exoplanet catalogue', () => {
     expect(manifest.hostCount).toBeGreaterThan(4_000)
     expect(manifest.performance.chunkCount).toBe(manifest.chunks.length)
 
-    for (const descriptor of [manifest.searchIndex, ...manifest.chunks]) {
+    for (const descriptor of [
+      manifest.searchIndex,
+      manifest.hostSkyIndex,
+      ...manifest.chunks,
+    ]) {
       const asset = await readPublicJson(descriptor.path)
       expect(asset.bytes.byteLength).toBe(descriptor.bytes)
       expect(digest(asset.bytes)).toBe(descriptor.sha256)
     }
+  })
+
+  it('validates one real ICRS sky record per observed host system', async () => {
+    const manifest = validateProgressiveManifest(
+      (await readPublicJson('/catalog/nasa-exoplanets/manifest.json')).value,
+    )
+    const sky = validateProgressiveHostSkyIndex(
+      (await readPublicJson(manifest.hostSkyIndex.path)).value,
+      manifest,
+    )
+
+    expect(sky.coordinateFrame).toBe('ICRS')
+    expect(sky.records).toHaveLength(manifest.hostCount)
+    expect(new Set(sky.records.map(([host]) => host)).size).toBe(manifest.hostCount)
+    expect(sky.records.every(([, ra, dec]) => ra !== null && dec !== null)).toBe(true)
+    expect(sky.records.some(([host]) => host === 'Proxima Cen')).toBe(true)
+    expect(sky.records.filter((tuple) => tuple[9] !== null)).toHaveLength(7)
   })
 
   it('validates and decodes every searchable real record', async () => {

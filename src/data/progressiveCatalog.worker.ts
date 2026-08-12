@@ -8,13 +8,16 @@ import {
 import {
   fetchProgressiveAsset,
   loadProgressiveDetailChunk,
+  loadProgressiveHostSkyIndex,
   loadProgressiveManifest,
   loadProgressiveSearchIndex,
   validateProgressiveDetailChunk,
+  validateProgressiveHostSkyIndex,
   validateProgressiveSearchIndex,
   verifyProgressiveAssetBytes,
   type ProgressiveDetailChunk,
   type ProgressiveExoplanetManifest,
+  type ProgressiveHostSkyIndex,
   type ProgressiveSearchIndex,
 } from './progressiveExoplanetCatalog'
 import {
@@ -56,11 +59,13 @@ const MANIFEST_TIMEOUT_MS = 12_000
 
 let manifest: ProgressiveExoplanetManifest | null = null
 let preparedIndex: PreparedProgressiveIndex | null = null
+let hostSkyIndex: ProgressiveHostSkyIndex | null = null
 let initialization: Promise<ReadyCatalog> | null = null
 let persistentStorageAvailable = true
 const offlineStore = new CatalogOfflineStore()
 const chunkCache = new Map<number, ProgressiveDetailChunk>()
 const detailRequests = new Map<number, CancellableRequest>()
+const skyRequests = new Map<number, CancellableRequest>()
 const installRequests = new Map<number, CancellableRequest>()
 
 function errorMessage(error: unknown): string {
@@ -239,6 +244,121 @@ async function networkDetail(
   }
 }
 
+async function persistentHostSky(
+  activeManifest: ProgressiveExoplanetManifest,
+): Promise<ProgressiveHostSkyIndex | null> {
+  const bytes = await optionalStorage(
+    () => offlineStore.asset(activeManifest.hostSkyIndex),
+    null,
+  )
+  if (!bytes) return null
+  try {
+    return await loadProgressiveHostSkyIndex(activeManifest, undefined, bytes)
+  } catch {
+    return null
+  }
+}
+
+async function networkHostSky(
+  activeManifest: ProgressiveExoplanetManifest,
+  request: CancellableRequest,
+): Promise<ProgressiveHostSkyIndex> {
+  const controller = new AbortController()
+  request.controllers.add(controller)
+  try {
+    const fetched = await fetchProgressiveAsset(
+      activeManifest.hostSkyIndex,
+      controller.signal,
+    )
+    if (request.cancelled) throw new DOMException('Catalogue request cancelled', 'AbortError')
+    const index = validateProgressiveHostSkyIndex(fetched.value, activeManifest)
+    await optionalStorage(
+      () =>
+        offlineStore.putAsset(
+          activeManifest.catalogRevision,
+          activeManifest.hostSkyIndex,
+          fetched.bytes,
+          'sky',
+        ),
+      undefined,
+    )
+    return index
+  } finally {
+    request.controllers.delete(controller)
+  }
+}
+
+async function ensureHostSky(
+  activeManifest: ProgressiveExoplanetManifest,
+  request: CancellableRequest,
+): Promise<{
+  index: ProgressiveHostSkyIndex
+  fromMemoryCache: boolean
+  fromPersistentCache: boolean
+}> {
+  if (hostSkyIndex) {
+    return { index: hostSkyIndex, fromMemoryCache: true, fromPersistentCache: false }
+  }
+  const persistent = await persistentHostSky(activeManifest)
+  if (persistent) {
+    hostSkyIndex = persistent
+    return { index: persistent, fromMemoryCache: false, fromPersistentCache: true }
+  }
+  const network = await networkHostSky(activeManifest, request)
+  hostSkyIndex = network
+  return { index: network, fromMemoryCache: false, fromPersistentCache: false }
+}
+
+async function ensureStoredHostSky(
+  activeManifest: ProgressiveExoplanetManifest,
+  request: CancellableRequest,
+): Promise<ProgressiveHostSkyIndex> {
+  const stored = await offlineStore.asset(activeManifest.hostSkyIndex)
+  if (stored) {
+    try {
+      const index = await loadProgressiveHostSkyIndex(
+        activeManifest,
+        undefined,
+        stored,
+      )
+      hostSkyIndex = index
+      return index
+    } catch {
+      // The descriptor-aware store removes mismatches; fetch a verified replacement.
+    }
+  }
+  const index = await networkHostSky(activeManifest, request)
+  hostSkyIndex = index
+  return index
+}
+
+async function handleHostSky(
+  request: Extract<CatalogWorkerRequest, { type: 'host-sky' }>,
+): Promise<void> {
+  const state: CancellableRequest = { cancelled: false, controllers: new Set() }
+  skyRequests.set(request.requestId, state)
+  try {
+    const ready = await initialize()
+    if (state.cancelled) throw new DOMException('Catalogue request cancelled', 'AbortError')
+    const started = performance.now()
+    const loaded = await ensureHostSky(ready.manifest, state)
+    if (state.cancelled) throw new DOMException('Catalogue request cancelled', 'AbortError')
+    post({
+      type: 'host-sky-result',
+      requestId: request.requestId,
+      payload: {
+        index: loaded.index,
+        loadMs: performance.now() - started,
+        fromMemoryCache: loaded.fromMemoryCache,
+        fromPersistentCache: loaded.fromPersistentCache,
+        offline: await offlineStatus(ready.manifest),
+      },
+    })
+  } finally {
+    skyRequests.delete(request.requestId)
+  }
+}
+
 async function handleDetail(request: Extract<CatalogWorkerRequest, { type: 'detail' }>) {
   const state: CancellableRequest = { cancelled: false, controllers: new Set() }
   detailRequests.set(request.requestId, state)
@@ -289,55 +409,68 @@ async function handleOfflineInstall(
 
   const state: CancellableRequest = { cancelled: false, controllers: new Set() }
   installRequests.set(request.requestId, state)
-  const descriptors = ready.manifest.chunks
-  const totalBytes = descriptors.reduce((total, descriptor) => total + descriptor.bytes, 0)
-  let nextIndex = 0
-  let completedChunks = 0
-  let storedBytes = 0
-
-  const installNext = async (): Promise<void> => {
-    while (true) {
-      if (state.cancelled) throw new DOMException('Offline installation cancelled', 'AbortError')
-      const index = nextIndex
-      nextIndex += 1
-      const descriptor = descriptors[index]
-      if (!descriptor) return
-      let bytes = await offlineStore.asset(descriptor)
-      if (bytes) {
-        try {
-          await verifyProgressiveAssetBytes(descriptor, bytes)
-        } catch {
-          bytes = null
-        }
-      }
-      if (!bytes) {
-        const controller = new AbortController()
-        state.controllers.add(controller)
-        try {
-          const fetched = await fetchProgressiveAsset(descriptor, controller.signal)
-          bytes = fetched.bytes
-          await offlineStore.putAsset(
-            ready.manifest.catalogRevision,
-            descriptor,
-            bytes,
-            'detail',
-          )
-        } finally {
-          state.controllers.delete(controller)
-        }
-      }
-      if (state.cancelled) throw new DOMException('Offline installation cancelled', 'AbortError')
-      completedChunks += 1
-      storedBytes += descriptor.bytes
-      post({
-        type: 'offline-progress',
-        requestId: request.requestId,
-        payload: { completedChunks, totalChunks: descriptors.length, storedBytes, totalBytes },
-      })
-    }
-  }
-
   try {
+    const descriptors = ready.manifest.chunks
+    const totalBytes = ready.manifest.hostSkyIndex.bytes +
+      descriptors.reduce((total, descriptor) => total + descriptor.bytes, 0)
+    let nextIndex = 0
+    let completedChunks = 0
+    await ensureStoredHostSky(ready.manifest, state)
+    if (state.cancelled) throw new DOMException('Offline installation cancelled', 'AbortError')
+    let storedBytes = ready.manifest.hostSkyIndex.bytes
+    post({
+      type: 'offline-progress',
+      requestId: request.requestId,
+      payload: {
+        completedChunks,
+        totalChunks: descriptors.length,
+        storedBytes,
+        totalBytes,
+      },
+    })
+
+    const installNext = async (): Promise<void> => {
+      while (true) {
+        if (state.cancelled) throw new DOMException('Offline installation cancelled', 'AbortError')
+        const index = nextIndex
+        nextIndex += 1
+        const descriptor = descriptors[index]
+        if (!descriptor) return
+        let bytes = await offlineStore.asset(descriptor)
+        if (bytes) {
+          try {
+            await verifyProgressiveAssetBytes(descriptor, bytes)
+          } catch {
+            bytes = null
+          }
+        }
+        if (!bytes) {
+          const controller = new AbortController()
+          state.controllers.add(controller)
+          try {
+            const fetched = await fetchProgressiveAsset(descriptor, controller.signal)
+            bytes = fetched.bytes
+            await offlineStore.putAsset(
+              ready.manifest.catalogRevision,
+              descriptor,
+              bytes,
+              'detail',
+            )
+          } finally {
+            state.controllers.delete(controller)
+          }
+        }
+        if (state.cancelled) throw new DOMException('Offline installation cancelled', 'AbortError')
+        completedChunks += 1
+        storedBytes += descriptor.bytes
+        post({
+          type: 'offline-progress',
+          requestId: request.requestId,
+          payload: { completedChunks, totalChunks: descriptors.length, storedBytes, totalBytes },
+        })
+      }
+    }
+
     await Promise.all(
       Array.from(
         { length: Math.min(OFFLINE_INSTALL_CONCURRENCY, descriptors.length) },
@@ -352,7 +485,9 @@ async function handleOfflineInstall(
 }
 
 function cancelRequest(requestId: number): void {
-  const state = detailRequests.get(requestId) ?? installRequests.get(requestId)
+  const state = detailRequests.get(requestId) ??
+    skyRequests.get(requestId) ??
+    installRequests.get(requestId)
   if (!state) return
   state.cancelled = true
   for (const controller of state.controllers) controller.abort()
@@ -393,6 +528,10 @@ scope.addEventListener('message', (event) => {
         })
         return
       }
+      if (request.type === 'host-sky') {
+        await handleHostSky(request)
+        return
+      }
       if (request.type === 'install-offline-pack') {
         await handleOfflineInstall(request)
         return
@@ -403,6 +542,7 @@ scope.addEventListener('message', (event) => {
           throw new Error('Persistent offline storage is unavailable in this browser.')
         }
         chunkCache.clear()
+        hostSkyIndex = null
         post({
           type: 'offline-status',
           requestId: request.requestId,

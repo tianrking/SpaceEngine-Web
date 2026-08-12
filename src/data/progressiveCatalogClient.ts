@@ -1,5 +1,6 @@
 import type {
   CatalogDetailPayload,
+  CatalogHostSkyPayload,
   CatalogOfflineProgressPayload,
   CatalogQueryPayload,
   CatalogReadyPayload,
@@ -136,6 +137,13 @@ export class ProgressiveCatalogClient {
     return this.#request<Extract<SuccessResponse, { type: 'detail-result' }>>(
       { type: 'detail', id, chunkId },
       'detail-result',
+    )
+  }
+
+  hostSky(): { requestId: number; promise: Promise<CatalogHostSkyPayload> } {
+    return this.#request<Extract<SuccessResponse, { type: 'host-sky-result' }>>(
+      { type: 'host-sky' },
+      'host-sky-result',
     )
   }
 

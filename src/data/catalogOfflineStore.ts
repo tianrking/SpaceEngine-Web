@@ -16,7 +16,7 @@ interface StoredAsset {
   readonly revision: string
   readonly sha256: string
   readonly bytes: number
-  readonly kind: 'index' | 'detail'
+  readonly kind: 'index' | 'detail' | 'sky'
   readonly payload: ArrayBuffer
   readonly cachedAt: string
   readonly lastAccessedAt: string
@@ -47,6 +47,7 @@ export interface CachedCatalogRelease {
 export interface CatalogOfflineStatus {
   readonly supported: boolean
   readonly coreCached: boolean
+  readonly skyCached: boolean
   readonly packInstalled: boolean
   readonly revision: string
   readonly detailChunksCached: number
@@ -246,7 +247,7 @@ export class CatalogOfflineStore {
       key: OFFLINE_PACK_KEY,
       revision: manifest.catalogRevision,
       installedAt: new Date().toISOString(),
-      storedBytes: manifest.searchIndex.bytes +
+      storedBytes: manifest.searchIndex.bytes + manifest.hostSkyIndex.bytes +
         manifest.chunks.reduce((total, descriptor) => total + descriptor.bytes, 0),
       chunkCount: manifest.chunks.length,
     } satisfies StoredOfflinePack)
@@ -259,6 +260,7 @@ export class CatalogOfflineStore {
     const transaction = database.transaction([ASSET_STORE, META_STORE], 'readwrite')
     const assets = transaction.objectStore(ASSET_STORE)
     for (const descriptor of manifest.chunks) assets.delete(descriptor.path)
+    assets.delete(manifest.hostSkyIndex.path)
     transaction.objectStore(META_STORE).delete(OFFLINE_PACK_KEY)
     await transactionComplete(transaction)
     return this.status(manifest)
@@ -302,15 +304,18 @@ export class CatalogOfflineStore {
     await transactionComplete(transaction)
     const currentPaths = new Set(manifest.chunks.map(({ path }) => path))
     const details = stored.filter((asset) => currentPaths.has(asset.path))
+    const skyCached = stored.some((asset) => asset.path === manifest.hostSkyIndex.path)
     return {
       supported: true,
       coreCached:
         release?.manifest.catalogRevision === manifest.catalogRevision &&
         stored.some((asset) => asset.path === manifest.searchIndex.path),
+      skyCached,
       packInstalled:
         pack?.revision === manifest.catalogRevision &&
         pack.chunkCount === manifest.chunks.length &&
-        details.length === manifest.chunks.length,
+        details.length === manifest.chunks.length &&
+        skyCached,
       revision: manifest.catalogRevision,
       detailChunksCached: details.length,
       detailChunksTotal: manifest.chunks.length,
@@ -319,7 +324,9 @@ export class CatalogOfflineStore {
           .filter(
             (asset) =>
               asset.revision === manifest.catalogRevision &&
-              (asset.kind === 'index' || currentPaths.has(asset.path)),
+              (asset.kind === 'index' ||
+                asset.path === manifest.hostSkyIndex.path ||
+                currentPaths.has(asset.path)),
           )
           .reduce((total, asset) => total + asset.bytes, 0),
       installedAt: pack?.revision === manifest.catalogRevision ? pack.installedAt : null,
@@ -339,6 +346,7 @@ export function unsupportedCatalogOfflineStatus(
   return {
     supported: false,
     coreCached: false,
+    skyCached: false,
     packInstalled: false,
     revision: manifest.catalogRevision,
     detailChunksCached: 0,

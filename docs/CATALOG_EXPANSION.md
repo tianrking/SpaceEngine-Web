@@ -46,8 +46,10 @@ The current domain is intentionally small and internally consistent:
   retrieval time across 4,749 host systems. A compact search index and 17
   content-addressed detail chunks preserve honest nulls, asymmetric errors,
   limit flags, references, external IDs, discovery context, and reproducible
-  TAP metadata. The release is inspectable and searchable but is not yet a
-  canonical flyable-system graph.
+  TAP metadata. A separate content-addressed host index contains one ICRS
+  RA/Dec record for each of the 4,749 exact NASA hostnames and drives a lazy
+  high-DPI Canvas atlas. The release is inspectable and searchable but is not
+  yet a canonical flyable-system graph.
 - [`src/data/catalogOfflineStore.ts`](../src/data/catalogOfflineStore.ts) now
   persists only hash-verified release assets, atomically activates a verified
   search core, gates the optional 17-chunk detail pack behind a complete-pack
@@ -680,10 +682,11 @@ Implemented checkpoint (2026-08-12): the production build generates an
 atomically versioned application-shell Service Worker; its cached HTML is never
 mutated independently of the hashed JS/CSS assets. After a successful online
 load, the catalogue Worker can recover the verified manifest/search core from
-IndexedDB with the network disabled. Users may explicitly install all 17
-scientific-detail chunks; every cached or downloaded chunk is checked against
-the manifest byte size, SHA-256 digest, and schema before it counts toward pack
-readiness. The ready marker changes only after the complete pack is present, so
+IndexedDB with the network disabled. Opening the sky atlas caches its separate
+4,749-host ICRS index; the explicit research pack installs that index plus all
+17 scientific-detail chunks. Every cached or downloaded asset is checked
+against the manifest byte size, SHA-256 digest, and schema before it counts
+toward pack readiness. The ready marker changes only after the complete pack is present, so
 an interrupted installation remains resumable but inactive. Clearing the pack
 removes application-managed detail records while preserving the search core.
 The store retains the previous release pointer, but automated rollback
@@ -739,7 +742,8 @@ unchanged.
 
 **Current checkpoint:** the complete progressive NASA composite release and
 Worker-backed UI prove manifest-driven delivery, content-hash validation,
-cancellable detail loading, bounded memory caching, source visibility,
+cancellable detail loading, bounded memory caching, source visibility, a
+real-coordinate ICRS discovery atlas with explicit composite conflict flags,
 verified offline search/core recovery, an explicitly installed full-detail
 pack, and sub-50 ms full-index search. They do **not** satisfy every Stage 1
 exit criterion: reviewed Gaia identity matches, full field-level reference
