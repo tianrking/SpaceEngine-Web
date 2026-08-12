@@ -28,6 +28,41 @@ The implementation is backend-neutral camera/scene-graph logic and therefore fol
 
 This checklist does not claim cube-sphere terrain landing, physically based Rayleigh/Mie atmospheres, N-body or spacecraft dynamics, or flyable observed NASA systems.
 
+## Internationalization boundary
+
+Internationalization is a presentation-layer concern and stays outside the simulation and rendering hot paths. `src/i18n/locale.ts` is the locale registry and declares the deterministic English default plus Spanish, Traditional Chinese, and French. With no valid stored preference, startup selects English; otherwise it selects the saved locale. `src/main.tsx` waits for that locale before mounting React, preventing a transient render in a different language.
+
+The source-of-truth translations are typed authoring modules under `src/i18n/namespaces/`. `scripts/generate-i18n-packs.mjs` combines the `app`, `hud`, `tools`, and `nasa` namespaces and the typed `science` narratives into versioned `public/locales/<locale>.json` files. Each science section contains the complete authored description and facts for all 27 rendered Asteria bodies. Resource-parity tests require every locale to expose the exact English interface key set and canonical body-ID set with non-empty values.
+
+In production, `src/i18n/localeLoader.ts` requests the selected `/locales/<locale>.json`, validates its pack version, locale identity, namespace shape, and science entries, and deduplicates concurrent requests. The active locale is the only translation payload required before React mounts and no locale is bundled into the initial JavaScript. Service Worker installation separately fetches English as the required offline fallback; unselected Spanish, Traditional Chinese, and French packs are not requested. A later selection loads its locale on demand and reuses the loaded pack for the remainder of the session. If a requested non-English pack cannot be loaded, initialization falls back to English; failure to load English is handled by the static startup error boundary.
+
+Service Worker installation precaches `/locales/en.json` into `astral-locales-v<packVersion>` as the required offline boot fallback. Spanish, Traditional Chinese, and French are not install-time downloads. All `/locales/*.json` requests remain network-first: successful responses update the current-schema locale cache, and a previously used pack can satisfy the request when the network fails. That cache is retained across shell-only revisions; activation removes obsolete shell caches and any locale cache from an older pack schema. Installing the entry shell therefore guarantees an English locale fallback, not offline readiness for an unrequested non-English locale.
+
+The Welcome screen and Settings panel both call the same asynchronous `setAppLocale` boundary. It loads the requested pack before changing i18next language and writing the versioned `astral-surveyor.locale` preference. `LocaleDocumentSync` then synchronizes `<html lang>`, document title, description, the localized web-manifest link, social metadata, and cross-tab `storage` events. Presentation components derive their `Intl.NumberFormat` and `Intl.DateTimeFormat` locale from the same registry, so visible values and accessibility labels change coherently.
+
+Language changes cause React presentation updates only. They do not construct or dispose `CosmosEngine`, alter its animation loop, reset camera/simulation state, re-run WebGPU capability selection, or reallocate Three.js resources. The locale boundary is also independent from the progressive NASA catalogue client, verified immutable assets, Dedicated Worker, and observed-host atlas. Changing language does not restart that Worker, repeat the current catalogue query, or alter the catalogue's existing request-driven loading state.
+
+These isolation claims are covered above the component boundary. `src/App.i18n.test.tsx` changes language and asserts that the same `CosmosEngine` construction and exact canvas node remain active; `src/components/ProgressiveNasaCatalog.i18n.test.tsx` asserts that the catalogue client is initialized only once. The global Vitest setup initializes English only, while locale-specific tests opt into other languages explicitly. Generated JSON packs are read and passed through the production `validateLocalePack` schema in `src/i18n/localeLoader.test.ts`, including the required 27 science entries.
+
+Canonical scientific identity is also a boundary. Proper names, catalogue/host designations, chemical formulae, physical-unit symbols, source citations, and raw source-catalogue values are not translated. Application explanations, controls, status messages, metadata, and ARIA text are translated around those canonical values.
+
+### Adding a locale
+
+1. Extend `SUPPORTED_LOCALES` and `LOCALE_OPTIONS` in `src/i18n/locale.ts` with the locale key, native label, HTML language tag, and `Intl` locale.
+2. Add the locale to the generator's locale list in `scripts/generate-i18n-packs.mjs`.
+3. Add the complete locale tree to `src/i18n/namespaces/app.ts`, `hud.ts`, `tools.ts`, and `nasa.ts`, plus all canonical body entries in `src/i18n/namespaces/science.ts`, preserving interpolation names and scientific notation.
+4. Add the localized web manifest and its registry metadata, then run `npm run i18n:generate` to refresh `public/locales`.
+5. Verify startup loading, Welcome and Settings switching, local persistence, cross-tab synchronization, metadata/ARIA updates, long-label responsive layouts, number/date formatting, and the absence of requests for unselected locale packs.
+6. Run the focused i18n tests and `npm run i18n:check`; the full `npm run check` quality gate includes the same committed-pack freshness check.
+
+## Delivery and offline cache boundary
+
+`scripts/generate-service-worker.mjs` reads the built `index.html` and precaches `/`, `/index.html`, the JavaScript and CSS assets referenced directly by that document, the favicon, the localized web manifests, and the required English locale pack. All built JavaScript/CSS/font assets, manifests, and locale packs contribute to the generated shell revision, but revision hashing does not make the non-shell files or the three optional locale packs install-time downloads.
+
+Code-split runtime assets retain their request-driven boundaries. `CosmosEngine` is imported by the application after React mounts; the NASA catalogue client, Dedicated Worker, and observed-host atlas are loaded when their corresponding product paths request them. These chunks are not HTML module preloads and are not fetched during Service Worker installation. The Service Worker likewise bypasses `/catalog/nasa-exoplanets/`, leaving manifest validation, content hashes, IndexedDB storage, cancellation, and the optional complete research pack to the catalogue Worker.
+
+This split minimizes install-time transfer and prevents the offline shell from silently downloading GPU or research features that the user has not opened. Its availability claim is deliberately bounded: the entry shell and English locale are precached, an on-demand locale can fall back after a prior successful request stored it in the current `astral-locales-v<packVersion>` cache, and verified NASA data can fall back through the Worker's IndexedDB path. The locale cache survives shell-only activation and is replaced only when the pack schema changes. The shell alone does not guarantee offline execution of uncached engine or NASA lazy chunks, or an unrequested non-English language.
+
 ## 設計目標
 
 首版是一個可測量的垂直切片，而非靠「畫很多球體」宣稱完成宇宙引擎。所有跨尺度能力都要能分開測試：數值模擬、空間參考系、渲染後端、程序生成、資源排程與 UI。

@@ -34,6 +34,7 @@ This project is an original clean-room implementation. It is not a port, fork, o
 <p align="center">
   <img alt="React 19" src="https://img.shields.io/badge/React%2019-20232a?style=for-the-badge&logo=react&logoColor=61dafb" />
   <img alt="TypeScript 6" src="https://img.shields.io/badge/TypeScript%206-3178c6?style=for-the-badge&logo=typescript&logoColor=white" />
+  <img alt="i18next 26" src="https://img.shields.io/badge/i18next%2026-26a69a?style=for-the-badge&logo=i18next&logoColor=white" />
   <img alt="Three.js r185" src="https://img.shields.io/badge/Three.js%20r185-000000?style=for-the-badge&logo=threedotjs&logoColor=white" />
   <img alt="WebGPU primary" src="https://img.shields.io/badge/WebGPU-Primary-6e56cf?style=for-the-badge" />
   <img alt="Vite 8" src="https://img.shields.io/badge/Vite%208-646cff?style=for-the-badge&logo=vite&logoColor=white" />
@@ -45,12 +46,13 @@ This project is an original clean-room implementation. It is not a port, fork, o
 | --- | --- | --- |
 | Interface | React 19, Lucide React, CSS | HUD, object inspector, system navigator, time controls, quality presets, and responsive overlays |
 | Language | TypeScript 6 | Typed engine contracts, simulation-domain code, UI, and build-time checks |
+| Internationalization | i18next 26, react-i18next 17, `Intl` | Typed authoring resources, generated per-locale packs, on-demand non-English loading, synchronized document metadata, and locale-aware values |
 | Rendering | Three.js r185 `WebGPURenderer` | Scene graph, node materials, logarithmic depth, WebGPU selection, and WebGL 2 fallback |
 | GPU programs | Three.js Shading Language (TSL) | WebGPU compute initialization for the spiral starfield and backend-compatible node materials |
 | Procedural visuals | `simplex-noise`, Canvas textures | Seeded planet albedo, clouds, glows, rings, and small rocky-surface displacement |
 | Astronomical data | NASA Exoplanet Archive TAP release | Versioned composite parameters for 6,336 confirmed exoplanets, a compact search index, a 4,749-host ICRS sky index, and 17 content-addressed scientific-detail chunks |
 | Catalogue runtime | Dedicated Web Worker, Web Crypto, IndexedDB, immutable HTTP assets | Off-main-thread packed UTF-8 search, SHA-256/byte-size/schema verification, cancellable detail requests, bounded memory/disk caches, and an optional complete offline pack |
-| Offline shell | Generated Service Worker | Atomically content-versioned application-shell precache and network-first navigation fallback without intercepting catalogue release validation |
+| Offline shell | Generated Service Worker | Content-versioned entry-shell precache, required-English locale precache, network-first navigation, and a persistent on-demand locale cache without intercepting catalogue release validation |
 | State boundary | React state plus engine snapshots | Commands flow into `CosmosEngine`; telemetry returns to React every 400 ms rather than every frame |
 | Tooling | Vite 8, Oxlint | Development server, optimized production build, and static analysis |
 | Tests | Vitest 4 | Deterministic catalogue, RNG, units, orbital mechanics, and precision-helper tests |
@@ -78,9 +80,10 @@ WebAssembly is not currently used. The project first establishes correctness in 
 - **Measured 100k search architecture.** A deterministic, explicitly synthetic 100,000-summary fixture runs in CI. The Worker search core stores normalized text in one UTF-8 byte buffer with typed offsets/orders instead of duplicating 100,000 JavaScript object forests; exact identity/name and mixed-filter p95 are both required to remain below 50 ms, while the auxiliary index must remain below 24 MiB.
 - **Honest runtime telemetry.** The research panel reports packed-index CPU time separately from end-to-end verified readiness, which also includes network or IndexedDB loading, byte/hash/schema checks, and offline-state inspection.
 - **Explicit data integrity.** Every immutable asset is checked against manifest byte size and SHA-256 before use. Missing source values remain `null`, composite fields stay labelled, stale detail requests can be cancelled, and only two decoded chunks remain in Worker memory.
-- **Verified offline observatory.** After one successful online load, the generated Service Worker can restore the application shell and the Worker can restore the complete 6,336-planet search core from IndexedDB. An explicit 17-chunk research pack adds all scientific details for offline use; incomplete downloads never become the active complete pack, and the previous release pointer is retained for future recovery tooling.
+- **Bounded offline observatory.** The generated Service Worker precaches the HTML, directly referenced entry JavaScript/CSS, icon, localized manifests, and the required English pack so the default interface has an offline language fallback. It does not install-fetch Spanish, Traditional Chinese, French, the code-split `CosmosEngine`, NASA client/Worker/atlas chunks, or catalogue assets. Non-English locale requests are network-first and can reuse a previously cached pack when the network fails; the NASA Worker separately restores its verified search core from IndexedDB, and an explicit 17-chunk research pack adds all scientific details. Installing the entry shell therefore does not claim that every lazy feature or language is available offline.
 - **Working product tools.** Search and filter all 27 bodies, inspect satellite families in the system map, save any destination locally, inspect the scientific/runtime model, and open an accessible keyboard guide.
 - **Product-grade scientific HUD.** Switch between Overview, Physics, and Orbit tabs; inspect bulk properties, climate assumptions, atmospheric composition, conservative environment labels, provenance, and the live render pipeline.
+- **Product-wide localization.** English is the deterministic default, with complete Spanish, Traditional Chinese, and French application chrome. Application bootstrap requests the active `/locales/<locale>.json` pack; optional non-English packs stay outside the initial transfer unless selected, while Service Worker installation separately caches English as the required offline fallback. Language changes are available before launch and in Settings, persist locally, synchronize across open tabs, and do not recreate the Three.js/WebGPU engine.
 
 ## Scientific model and provenance
 
@@ -112,7 +115,7 @@ The prototype is intentionally narrower than a production astronomical simulator
 | Data | Fictional deterministic Asteria plus a versioned 6,336-planet NASA release with content-addressed detail/host indexes, ICRS coordinates, uncertainties/limits, selected field references, external IDs, conflict flags, and honest nulls | Reviewed Gaia astrometry/cross-matches, SIMBAD aliases, authoritative ephemerides, full per-field reference coverage, observed atmospheres/terrain, or HEALPix spatial tiles |
 | Universe generation | Seeded catalogue/RNG modules and on-demand procedural visual textures | Persistent sectors, billions of addressable objects, streaming catalogues, or generator-version migrations |
 | Product UI | Inspector, system list, local simulated-body search, Worker-backed full exoplanet research search, interactive observed-host sky atlas, schematic Asteria map, `localStorage` saved places with memory fallback, visual calibration, runtime settings, shortcut guide, quality, cinematic, and time controls | Rendering and travelling through observed host systems, cloud sync, shared locations, user accounts, or server persistence |
-| Platform resilience | Automatic WebGL 2 fallback, an explicit fallback route, a content-versioned offline app shell, verified IndexedDB search-core fallback, and an optional complete scientific-detail pack | GPU device-loss recovery, automatic catalogue rollback UI, cross-browser automated E2E coverage, or formal performance budgets |
+| Platform resilience | Automatic WebGL 2 fallback, an explicit fallback route, a content-versioned entry shell with required-English fallback, persistent cached-locale fallback, verified IndexedDB search-core fallback, and an optional complete scientific-detail pack | Guaranteed offline availability for uncached lazy chunks or non-English locales, GPU device-loss recovery, automatic catalogue rollback UI, cross-browser automated E2E coverage, or formal performance budgets |
 
 The rendered Asteria catalogue is a physically constrained fictional scenario. Its derived values are internally consistent with the documented inputs, but they are not telescope observations. Visual radii and orbital distances are compressed for readability and must not be interpreted as a 1:1 scale model. The separate NASA research index is observational archive data and is not currently rendered as flyable systems. Body-centered navigation applies only to rendered Asteria objects; it does not add observed terrain, observed atmospheres, N-body dynamics, or travel to NASA catalogue systems.
 
@@ -153,6 +156,31 @@ While centered on a star, planet, or moon, each simulation tick measures the bod
 | Quality selector | Switch between Performance, Balanced, and Ultra render resolution |
 | Aperture button | Toggle cinematic mode and hide interface chrome |
 
+## Internationalization
+
+Astral Surveyor starts in **English** when there is no valid saved language preference. A valid saved preference is loaded before React mounts, so the first rendered interface uses the selected language without briefly rendering another locale. The language can be changed from the Welcome screen before entering the observatory or later from **Settings → Language**.
+
+| Language | Locale key | Document language |
+| --- | --- | --- |
+| English (default) | `en` | `en` |
+| Español | `es` | `es` |
+| 繁體中文 | `zh-TW` | `zh-Hant` |
+| Français | `fr` | `fr` |
+
+The preference uses a versioned `localStorage` record; a storage event keeps other open Astral Surveyor tabs in sync. A language change first loads and validates the requested pack, then activates and persists it. This updates React presentation state only: it does not reconstruct `CosmosEngine`, restart the simulation, restart the NASA catalogue Worker, repeat the active NASA query, or reallocate GPU resources. The document `<html lang>` value, page title, description, localized web-manifest link, Open Graph/Twitter metadata, visible labels, and accessibility text are synchronized with the active locale. Scientific numbers and dates use the corresponding `Intl` locale.
+
+Object names, catalogue designations, host names, chemical formulae, physical-unit symbols, source citations, and raw NASA catalogue values intentionally remain canonical. Translating those identifiers could change their scientific meaning or make records harder to verify against the cited source.
+
+Typed authoring resources live under `src/i18n/namespaces/`. The `app`, `hud`, `tools`, and `nasa` namespaces drive interface copy through i18next; the typed `science` resource supplies a complete description and fact set for every rendered Asteria body. `scripts/generate-i18n-packs.mjs` combines those resources into versioned `public/locales/<locale>.json` files. Each pack contains one language's interface namespaces and science narratives.
+
+Application bootstrap requests only the active pack. Service Worker installation separately precaches the required English pack as the offline boot fallback. Spanish, Traditional Chinese, and French remain outside the initial JavaScript bundle and are requested only when selected. Locale requests are network-first; successful responses are stored in `astral-locales-v<packVersion>` and may be reused when the network is unavailable. That cache is retained across shell-only revisions, while a locale-pack schema bump replaces obsolete locale caches. To add another locale:
+
+1. Add its key and native-language label to `src/i18n/locale.ts`, including the correct HTML and `Intl` locale identifiers.
+2. Add the locale to the pack generator and provide the exact English key set in every interface namespace plus a complete 27-body entry in `src/i18n/namespaces/science.ts`; keep interpolations and scientific symbols intact.
+3. Add its localized web manifest, then run `npm run i18n:generate` to refresh the committed JSON packs.
+4. Exercise the Welcome and Settings selectors, persistence and cross-tab updates, document metadata, ARIA text, long-label layouts, and locale-aware number/date formatting.
+5. Add or update localization tests, then run `npm run check` before committing.
+
 ## Quick start
 
 ### Prerequisites
@@ -181,11 +209,13 @@ http://localhost:5173/?renderer=webgl2
 | Command | Purpose |
 | --- | --- |
 | `npm run dev` | Start the Vite development server with hot module replacement |
-| `npm run build` | Type-check project references, create the production bundle, and generate its content-versioned Service Worker |
+| `npm run build` | Regenerate locale packs, type-check project references, create the production bundle, and generate its content-versioned Service Worker |
 | `npm run preview` | Serve the existing production bundle locally, normally on port 4173 |
 | `npm run lint` | Run Oxlint across the project |
 | `npm run test` | Run the regular Vitest unit suite once; the dedicated 100k scale gate is intentionally isolated |
-| `npm run check` | Run lint, regular tests, the isolated 100k catalogue gate, and the production build in sequence |
+| `npm run check` | Run lint, regular tests, the isolated 100k catalogue gate, the committed-locale-pack freshness check, and the production build in sequence |
+| `npm run i18n:check` | Verify that committed `public/locales` packs exactly match the typed authoring resources without rewriting them |
+| `npm run i18n:generate` | Generate the versioned per-locale JSON packs in `public/locales` from the typed authoring resources |
 | `npm run catalog:refresh` | Rebuild the complete manifest/index/chunk NASA release from the official TAP endpoint |
 | `npm run catalog:benchmark` | Run the isolated, synthetic 100,000-summary catalogue scale gate and print its environment-labelled measurements |
 
@@ -210,13 +240,13 @@ flowchart LR
   Detail["17 immutable detail chunks<br/>errors, limits, references"] -->|selected chunk only| Worker
   Worker <--> IDB["IndexedDB<br/>verified core and optional full pack"]
   Worker -->|immutable summaries and selected detail| UI
-  SW["Generated Service Worker<br/>content-versioned app shell"] --> UI
+  SW["Generated Service Worker<br/>versioned entry shell and persistent locale cache"] --> UI
   Engine --> Renderer["Three.js WebGPURenderer"]
   Renderer -->|preferred backend| GPU["WebGPU and TSL compute<br/>96K galaxy points"]
   Renderer -->|automatic or forced fallback| GL["WebGL 2 and CPU buffers<br/>24K galaxy points"]
 ```
 
-The Three.js animation loop owns camera motion, hierarchical orbital updates, GPU resources, and per-frame rendering. Its camera-center state records `free`, `system`, `orbit`, or `close`, independently from React's selected object. After orbital transforms update, a completed body-centered view translates the camera and controls target by the centered body's world-space delta before rendering. Camera history stores center-relative offsets, so Previous View remains valid for moving moons and after floating-origin recentering; an interrupted history restore recovers its pending destination instead of dropping it. React receives low-frequency snapshots for presentation, keeping reconciliation out of the render hot path. Display calibration mutates existing renderer uniforms/material properties in place. A Dedicated Worker owns NASA manifest/index validation, search, on-demand host-atlas loading, chunk loading, cancellation, memory/disk eviction, and atomic pack-readiness state; React receives at most the visible 20-result page plus one selected detail record. The host atlas draws 4,749 systems into one lazy-loaded Canvas rather than creating thousands of DOM nodes. IndexedDB stores only verified catalogue assets, while the generated Service Worker owns the application shell and deliberately leaves catalogue release validation to the Worker. The DOM-free simulation domain remains independent from both renderer and observed catalogue.
+The Three.js animation loop owns camera motion, hierarchical orbital updates, GPU resources, and per-frame rendering. Its camera-center state records `free`, `system`, `orbit`, or `close`, independently from React's selected object. After orbital transforms update, a completed body-centered view translates the camera and controls target by the centered body's world-space delta before rendering. Camera history stores center-relative offsets, so Previous View remains valid for moving moons and after floating-origin recentering; an interrupted history restore recovers its pending destination instead of dropping it. React receives low-frequency snapshots for presentation, keeping reconciliation out of the render hot path. Display calibration mutates existing renderer uniforms/material properties in place. A Dedicated Worker owns NASA manifest/index validation, search, on-demand host-atlas loading, chunk loading, cancellation, memory/disk eviction, and atomic pack-readiness state; React receives at most the visible 20-result page plus one selected detail record. The host atlas draws 4,749 systems into one lazy-loaded Canvas rather than creating thousands of DOM nodes. IndexedDB stores only verified catalogue assets. The generated Service Worker precaches the entry shell referenced by the built document plus icons/manifests and the required English locale. It retains other successfully requested locale packs in a stable network-first cache, and deliberately leaves both code-split runtime chunks and catalogue release validation to their request-driven owners. The DOM-free simulation domain remains independent from both renderer and observed catalogue.
 
 For deeper design notes, see [Architecture](docs/ARCHITECTURE.md) and [Research](docs/RESEARCH.md).
 
@@ -233,15 +263,18 @@ For deeper design notes, see [Architecture](docs/ARCHITECTURE.md) and [Research]
 │   └── RESEARCH.md            # Source-grounded SpaceEngine/WebGPU research
 ├── public/
 │   ├── catalog/              # Immutable NASA manifest, search index, and detail chunks
-│   └── ...                   # Favicon, web manifest, robots, and sitemap metadata
+│   ├── locales/              # Generated per-locale runtime packs
+│   └── ...                   # Favicon, localized web manifests, robots, and sitemap metadata
 ├── scripts/
+│   ├── generate-i18n-packs.mjs                    # Typed-resource to runtime-pack generator
 │   ├── generate-service-worker.mjs                # Content-versioned offline-shell builder
-│   └── refresh-progressive-exoplanet-catalog.mjs # Reproducible NASA release builder
+│   └── refresh-progressive-exoplanet-catalog.mjs  # Reproducible NASA release builder
 ├── src/
 │   ├── components/            # Navigator, product tools, saved places, and shortcut dialog
 │   ├── data/                  # Catalogue validators, Worker/client, search engine, and release constants
 │   ├── domain/                # Canonical catalogue, physics, f64 orbits, RNG, units, precision
 │   ├── engine/                # Three.js renderer, domain adapters, procedural textures
+│   ├── i18n/                  # Locale loading, persistence, document sync, and typed authoring resources
 │   ├── pwa/                   # Production Service Worker registration boundary
 │   ├── ui/                    # Reusable HUD components and styles
 │   ├── App.tsx                # UI-to-engine orchestration
@@ -291,6 +324,8 @@ The unit suite currently verifies:
 - astronomical distance/speed formatting;
 - camera-relative high/low precision splitting and reconstruction;
 - body-centered camera distance, ring-safe enclosing radius, moving-center translation, smooth/reduced-motion transitions, explicit free-flight interruption semantics, restore-transaction recovery, and bounded previous-view history;
+- four-locale resource-key parity, generated-pack runtime-schema validation, versioned language persistence, cross-tab-safe document synchronization, and translated product surfaces;
+- App-level language isolation: switching locale preserves the exact `CosmosEngine` instance and canvas node, while the NASA catalogue test confirms its client is initialized only once;
 - display-setting normalization, persistence, and renderer calibration derivation; and
 - NASA manifest/chunk/host-index hashes, schema, ICRS ranges, provenance, composite conflicts, uniqueness, null preservation, representative records, filters, sorting, and measured full-index search budget; and
 - a clearly labelled synthetic 100,000-summary architecture gate covering exact identity/name search, mixed filters/orderings, and compact auxiliary-index storage.
@@ -298,6 +333,8 @@ The unit suite currently verifies:
 Benchmark scope, methodology, current reference results, and non-claims are documented in [Performance](docs/PERFORMANCE.md). The 100k fixture validates engineering scale only; it is never exposed as observed catalogue data and does not satisfy the roadmap requirement for 100,000 reviewed real summaries.
 
 GitHub Actions runs `npm ci` followed by `npm run check` for pull requests and pushes to `main`.
+
+Vitest's global i18n setup boots English only, matching the deterministic product default; tests that exercise another locale activate it explicitly. The generated-pack suite reads every committed JSON file through the same runtime schema validator used by production loading and confirms all 27 science narratives are present.
 
 Browser behavior still requires a manual two-backend smoke test:
 
@@ -348,6 +385,7 @@ The public deployment for this repository is <https://space-engine-web.vercel.ap
 - [x] Move full-catalogue search, verified detail loading, cancellation, and bounded caching into a Dedicated Worker
 - [x] Add a content-versioned offline shell, verified IndexedDB search-core fallback, and an explicit complete scientific-detail pack
 - [x] Add a lazy, Worker-verified ICRS Canvas atlas for all 4,749 real NASA host coordinates
+- [x] Add English-default product localization with Spanish, Traditional Chinese, and French, including persisted Welcome/Settings controls and synchronized metadata/accessibility text
 - [x] Document the staged 100+ to 100,000-object real-catalog architecture, provenance, rights, caching, and performance gates
 - [x] Add a CI-enforced synthetic 100,000-summary search/memory gate backed by a compact UTF-8/typed-offset Worker index
 - [ ] Add hierarchical coordinate frames and use high/low values in render shaders
