@@ -1,5 +1,31 @@
 # Architecture
 
+## Body-centered camera reference frames
+
+Camera selection and camera centering are separate engine states:
+
+- **Selected body** drives inspection and the next explicit navigation command.
+- **Centered body** is the star, planet, or moon whose moving world-space origin is followed by the camera. A system view has no centered body.
+- `Orbit` and `Close` are presentation distances around the same body reference frame; neither is a terrain landing mode.
+
+The animation order is deliberately `orbital update → centered-body translation → keyboard/flight update → floating-origin recenter → controls update → render`. After a centered body's parent-relative transform changes, the engine applies its world-center delta to both camera position and `OrbitControls.target`. Manual orbit/dolly input changes the relative pose but does not detach a completed tracked frame. A transition interrupted by manual input keeps the current pose instead of snapping to its destination.
+
+Previous View stores at most eight snapshots as camera and target offsets relative to each snapshot's center. Restoring a view resolves the center's current world position, so a saved moon view remains meaningful after the moon advances in its orbit. System overview is pushed like another reversible destination; destructive reset clears that history. Ringed bodies use an enclosing outer-ring radius for distance constraints. Reduced-motion preference selects zero-duration transitions, and floating-origin shifts update every live camera anchor in the same local frame.
+
+The implementation is backend-neutral camera/scene-graph logic and therefore follows the same path under WebGPU and WebGL 2. It is not an interstellar coordinate hierarchy: observed NASA catalogue systems remain research records and sky-atlas points, not flyable render scenes.
+
+### Camera verification checklist
+
+- Selected and Centered remain independent until an explicit Orbit or Close command.
+- Star, planet, and parent-relative moon centers remain locked at high time scale while manual orbit/dolly preserves the relative view.
+- Previous View restores up to eight immediate views; system overview is reversible, while reset clears history.
+- Transition cancellation keeps the current pose without a destination snap.
+- Ringed-body framing stays outside the outer ring; reduced-motion transitions complete immediately.
+- Floating-origin recentering does not double-apply center movement or create a false velocity spike.
+- WebGPU and WebGL 2 use the same camera-state behavior.
+
+This checklist does not claim cube-sphere terrain landing, physically based Rayleigh/Mie atmospheres, N-body or spacecraft dynamics, or flyable observed NASA systems.
+
 ## 設計目標
 
 首版是一個可測量的垂直切片，而非靠「畫很多球體」宣稱完成宇宙引擎。所有跨尺度能力都要能分開測試：數值模擬、空間參考系、渲染後端、程序生成、資源排程與 UI。
