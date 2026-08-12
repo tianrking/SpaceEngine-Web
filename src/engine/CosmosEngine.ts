@@ -21,6 +21,7 @@ import {
   cameraLodReferenceId,
   completeCameraCentering,
   enclosingVisualRadius,
+  isCameraFlightInputCode,
   minimumCameraDistance,
   recoverInterruptedRestoreTarget,
   interruptCameraCentering,
@@ -980,7 +981,6 @@ export class CosmosEngine {
 
   private updateKeyboardFlight(deltaSeconds: number): void {
     if (this.pressedKeys.size === 0) return
-    if (this.cameraFlight) this.cancelCameraFlightAtCurrentPose()
     const direction = new THREE.Vector3()
     this.camera.getWorldDirection(direction)
     const right = new THREE.Vector3().crossVectors(direction, this.camera.up).normalize()
@@ -993,6 +993,7 @@ export class CosmosEngine {
     if (this.pressedKeys.has('KeyE')) movement.add(up)
     if (this.pressedKeys.has('KeyQ')) movement.sub(up)
     if (movement.lengthSq() === 0) return
+    if (this.cameraFlight) this.cancelCameraFlightAtCurrentPose()
 
     const targetDistance = Math.max(this.camera.position.distanceTo(this.controls.target), 1)
     const boost = this.pressedKeys.has('ShiftLeft') || this.pressedKeys.has('ShiftRight') ? 4 : 1
@@ -1244,9 +1245,16 @@ export class CosmosEngine {
     }
     const isOverviewCommand = event.code === 'Digit0' || event.code === 'Numpad0'
     const isNavigationCommand =
-      event.code === 'KeyG' || event.code === 'Backspace' || isOverviewCommand
+      event.code === 'KeyG' ||
+      event.code === 'Backspace' ||
+      event.code === 'Space' ||
+      isOverviewCommand
     if (event.repeat && isNavigationCommand) {
-      if (event.code === 'Backspace' || isOverviewCommand) event.preventDefault()
+      if (
+        event.code === 'Backspace' ||
+        event.code === 'Space' ||
+        isOverviewCommand
+      ) event.preventDefault()
       return
     }
     if (event.code === 'Backspace') {
@@ -1259,14 +1267,16 @@ export class CosmosEngine {
       this.showSystemOverview()
       return
     }
-    this.pressedKeys.add(event.code)
     if (event.code === 'KeyG' && this.selectedId !== null) {
       this.centerOnBody(this.selectedId, event.shiftKey ? 'close' : 'orbit')
+      return
     }
     if (event.code === 'Space') {
       event.preventDefault()
       this.setTimeScale(this.timeScale === 0 ? 1 : 0)
+      return
     }
+    if (isCameraFlightInputCode(event.code)) this.pressedKeys.add(event.code)
   }
 
   private readonly onKeyUp = (event: KeyboardEvent): void => {

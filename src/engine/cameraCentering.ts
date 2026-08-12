@@ -12,6 +12,16 @@ const MINIMUM_ABSOLUTE_DISTANCE = 0.025
 const MINIMUM_RADIUS_FACTOR = 1.22
 const CLOSE_RADIUS_FACTOR = 1.7
 const ORBIT_RADIUS_FACTOR = 4.2
+const CAMERA_FLIGHT_INPUT_CODES = new Set([
+  'KeyW',
+  'KeyA',
+  'KeyS',
+  'KeyD',
+  'KeyQ',
+  'KeyE',
+  'ShiftLeft',
+  'ShiftRight',
+])
 
 function assertVisualRadius(visualRadius: number): void {
   if (!Number.isFinite(visualRadius) || visualRadius <= 0) {
@@ -61,6 +71,10 @@ export function smoothFlightProgress(elapsedMs: number, durationMs: number): num
   if (!Number.isFinite(durationMs) || durationMs <= 0) return elapsedMs >= 0 ? 1 : 0
   const progress = Math.min(Math.max(elapsedMs / durationMs, 0), 1)
   return progress * progress * (3 - 2 * progress)
+}
+
+export function isCameraFlightInputCode(code: string): boolean {
+  return CAMERA_FLIGHT_INPUT_CODES.has(code)
 }
 
 export function beginBodyCentering(

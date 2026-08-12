@@ -8,6 +8,7 @@ import {
   cameraLodReferenceId,
   completeCameraCentering,
   enclosingVisualRadius,
+  isCameraFlightInputCode,
   minimumCameraDistance,
   recoverInterruptedRestoreTarget,
   interruptCameraCentering,
@@ -54,6 +55,24 @@ describe('camera centering state and geometry', () => {
     expect(smoothFlightProgress(500, 1_000)).toBeCloseTo(0.5)
     expect(smoothFlightProgress(1_000, 1_000)).toBe(1)
     expect(smoothFlightProgress(5_000, 1_000)).toBe(1)
+  })
+
+  it('keeps one-shot camera commands out of continuous flight input', () => {
+    for (const code of [
+      'KeyW',
+      'KeyA',
+      'KeyS',
+      'KeyD',
+      'KeyQ',
+      'KeyE',
+      'ShiftLeft',
+      'ShiftRight',
+    ]) {
+      expect(isCameraFlightInputCode(code)).toBe(true)
+    }
+    for (const code of ['KeyG', 'Backspace', 'Digit0', 'Numpad0', 'Space']) {
+      expect(isCameraFlightInputCode(code)).toBe(false)
+    }
   })
 
   it('transitions between body-centered and system states explicitly', () => {
