@@ -979,8 +979,11 @@ export class CosmosEngine {
     if (this.cameraFlight || this.cameraCenterState.bodyId === null) return
     const currentCenter = this.centerWorldPositionFor(this.cameraCenterState.bodyId)
     const delta = trackingTranslation(this.trackedCenter, currentCenter)
-    this.camera.position.add(new THREE.Vector3(delta.x, delta.y, delta.z))
-    this.controls.target.add(new THREE.Vector3(delta.x, delta.y, delta.z))
+    const translation = new THREE.Vector3(delta.x, delta.y, delta.z)
+    this.camera.position.add(translation)
+    this.controls.target.add(translation)
+    // Reference-frame motion keeps the body centered; it is not user navigation speed.
+    this.previousCameraPosition.add(translation)
     this.trackedCenter.copy(currentCenter)
   }
 
@@ -1059,7 +1062,7 @@ export class CosmosEngine {
       backend: this.backend,
       fps: Math.round(this.lastFps),
       frameTimeMs: this.lastFps > 0 ? 1_000 / this.lastFps : 0,
-      drawCalls: info.calls,
+      drawCalls: info.drawCalls,
       triangles: info.triangles,
       starCount: this.starCount,
       cameraSpeed: this.cameraSpeedMetersPerSecond,
