@@ -31,6 +31,8 @@ interface EngineMock {
   readonly showAsteriaSystem: ReturnType<typeof vi.fn>
   readonly showSystemOverview: ReturnType<typeof vi.fn>
   readonly resetView: ReturnType<typeof vi.fn>
+  readonly select: ReturnType<typeof vi.fn>
+  readonly centerOnBody: ReturnType<typeof vi.fn>
   readonly centerOnObservedObject: ReturnType<typeof vi.fn>
   readonly returnToPreviousView: ReturnType<typeof vi.fn>
 }
@@ -374,6 +376,10 @@ describe('observed-universe App integration', () => {
       requestId: host === 'Alpha' ? 101 : 202,
       promise: host === 'Alpha' ? alpha.promise : beta.promise,
     }))
+    catalogHarness.client.hostSky.mockReturnValue({
+      requestId: 99,
+      promise: Promise.resolve({ index: HOST_INDEX }),
+    })
 
     let alphaNavigation!: Promise<void>
     await act(async () => {
@@ -591,13 +597,18 @@ describe('observed-universe App integration', () => {
   it('owns Digit0 and Numpad0 while cancelling an observed hierarchy request', async () => {
     await renderReadyApp()
     const engine = engineHarness.instances[0]
-    const panel = await openProductPanel()
-    catalogHarness.client.system.mockReturnValue({
-      requestId: 701,
-      promise: Promise.resolve({ system: observedSystem('Alpha'), chunkIds: [1] }),
-    })
-    await act(async () => {
-      await panel.onOpenObservedSystem?.('Alpha')
+    act(() => uiHarness.hud?.onOverlayClose?.())
+    act(() => {
+      engine.events.onObservedSceneChange?.({
+        mode: 'observed-system',
+        activeHost: 'Alpha',
+        activeSystemId: 'observed-system:Alpha',
+        selectedObjectId: null,
+        selectedHost: 'Alpha',
+        centeredObjectId: null,
+        centeredViewMode: null,
+        transitioning: false,
+      })
     })
     await waitFor(() => expect(uiHarness.hud?.cameraFrameMode).toBe('observed-system'))
 
@@ -708,5 +719,50 @@ describe('observed-universe App integration', () => {
       expect(uiHarness.hud?.cameraFrameMode).toBe('system')
       expect(uiHarness.hud?.selectedObject).toBeNull()
     })
+  })
+
+  it('switches from NASA frames before selecting or centering Asteria bodies', async () => {
+    await renderReadyApp()
+    const engine = engineHarness.instances[0]
+    let panel = await openProductPanel()
+    await act(async () => {
+      await panel.onExploreObservedUniverse?.(HOST_INDEX, 'Alpha')
+    })
+    expect(uiHarness.hud?.cameraFrameMode).toBe('observed-universe')
+
+    panel = await openProductPanel()
+    act(() => panel.onSelect('pelagos'))
+    expect(engine.showAsteriaSystem).toHaveBeenCalledOnce()
+    expect(engine.select).toHaveBeenLastCalledWith('pelagos')
+    await waitFor(() => expect(uiHarness.hud?.cameraFrameMode).toBe('system'))
+
+    await act(async () => {
+      await panel.onExploreObservedUniverse?.(HOST_INDEX, 'Beta')
+    })
+    panel = await openProductPanel()
+    act(() => panel.onFocus('orison'))
+    expect(engine.showAsteriaSystem).toHaveBeenCalledTimes(2)
+    expect(engine.centerOnBody).toHaveBeenLastCalledWith('orison', 'orbit')
+    expect(engine.centerOnObservedObject).not.toHaveBeenCalledWith('orison', 'orbit')
+  })
+
+  it('exposes direct Asteria and full observed-universe switches in the HUD', async () => {
+    await renderReadyApp()
+    const engine = engineHarness.instances[0]
+    catalogHarness.client.hostSky.mockReturnValue({
+      requestId: 801,
+      promise: Promise.resolve({ index: HOST_INDEX }),
+    })
+
+    await act(async () => {
+      uiHarness.hud?.onOpenObservedUniverse?.()
+      await Promise.resolve()
+    })
+    await waitFor(() => expect(engine.showObservedUniverse).toHaveBeenCalledWith(HOST_INDEX, undefined))
+    expect(uiHarness.hud?.cameraFrameMode).toBe('observed-universe')
+
+    act(() => uiHarness.hud?.onOpenAsteriaSystem?.())
+    expect(engine.showAsteriaSystem).toHaveBeenCalledOnce()
+    await waitFor(() => expect(uiHarness.hud?.cameraFrameMode).toBe('system'))
   })
 })

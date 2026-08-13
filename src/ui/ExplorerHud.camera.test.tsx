@@ -587,6 +587,7 @@ describe('body-centered camera HUD', () => {
   it('opens a canonical observed host frame and routes back to the observed universe', () => {
     const onReturnToPreviousView = vi.fn()
     const onSystemOverview = vi.fn()
+    const onOpenAsteriaSystem = vi.fn()
     render(
       <ExplorerHud
         {...BASE_HUD_PROPS}
@@ -594,9 +595,11 @@ describe('body-centered camera HUD', () => {
         cameraView={null}
         cameraFrameMode="observed-system"
         cameraFrameName="TRAPPIST-1"
+        cameraFrameCount={4_749}
         onCenterSelectedObject={vi.fn()}
         onReturnToPreviousView={onReturnToPreviousView}
         onSystemOverview={onSystemOverview}
+        onOpenAsteriaSystem={onOpenAsteriaSystem}
       />,
     )
 
@@ -610,7 +613,7 @@ describe('body-centered camera HUD', () => {
     ).toBeTruthy()
     expect(
       within(cameraControls).getByText(
-        'NASA archive-composite · Local visual scale',
+        'NASA archive-composite · Local system · 4,749 host systems remain visible',
       ),
     ).toBeTruthy()
     expect(screen.getByText('TRAPPIST-1 system', { selector: 'dd' })).toBeTruthy()
@@ -631,6 +634,12 @@ describe('body-centered camera HUD', () => {
     fireEvent.click(overview)
     expect(onSystemOverview).toHaveBeenCalledTimes(1)
 
+    const asteria = within(cameraControls).getByRole('button', {
+      name: 'Open Asteria system',
+    })
+    fireEvent.click(asteria)
+    expect(onOpenAsteriaSystem).toHaveBeenCalledTimes(1)
+
     const inspectorActions = screen.getByRole('group', {
       name: 'Center camera on Alpha',
     })
@@ -639,6 +648,28 @@ describe('body-centered camera HUD', () => {
         name: /^Close approach/,
       }) as HTMLButtonElement).disabled,
     ).toBe(true)
+  })
+
+  it('offers the full observed universe directly from the Asteria frame', () => {
+    const onOpenObservedUniverse = vi.fn()
+    render(
+      <ExplorerHud
+        {...BASE_HUD_PROPS}
+        selectedObject={SELECTED_ALPHA}
+        cameraView={null}
+        cameraFrameMode="system"
+        onOpenObservedUniverse={onOpenObservedUniverse}
+      />,
+    )
+
+    const openUniverse = screen.getByRole('button', {
+      name: 'Open observed universe',
+    })
+    expect(openUniverse.getAttribute('title')).toBe(
+      'Show all catalogued host systems',
+    )
+    fireEvent.click(openUniverse)
+    expect(onOpenObservedUniverse).toHaveBeenCalledOnce()
   })
 
   it('locks observed-system camera actions while returning to the universe', () => {

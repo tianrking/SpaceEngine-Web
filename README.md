@@ -153,14 +153,14 @@ While centered on an Asteria body or a moving observed planet, each simulation t
 | `Space` | Pause or resume simulation time |
 | **Go to orbit** | Center a supported selected Asteria or observed object |
 | **Close approach** | Move closer to a supported Asteria body or observed planet; this is not terrain landing |
-| **System overview** | Move to the local Asteria/observed overview; from an observed system, return to its host-universe context |
+| **System overview** | Reset the local Asteria/observed camera without changing scientific context; the camera bar also exposes direct **Asteria system** and **Observed universe** scene switches |
 | **Observation deck / reset** | Restore the initial Asteria product view, clear observed UI state, and clear Asteria camera-view history |
 | Navigation rail | Open Explore, Search, Star map, Saved places, or Settings |
 | Search source switch | Move between 27 rendered Asteria bodies and the progressive 6,336-record NASA research archive |
 | **Explore observed universe in 3D** | Build the single-draw 4,749-host ICRS point cloud from the on-demand verified index |
 | **Locate in 3D sky** | Select and center a host direction; works for both distance-bearing and sky-only records |
 | **Fly to system** | For one of the 4,722 distance-bearing hosts, stream its exact-host records and open the observed star/planet scene |
-| Observed camera context | Return from an opened observed system to the host universe, then from the observed universe to Asteria |
+| Observed camera context | Return from an opened observed system to the host universe, or switch directly between Asteria and the observed universe without relying on camera history |
 | Display calibration | Adjust exposure, orbit brightness, or starfield brightness; reset to the balanced observatory defaults |
 | Time transport controls | Pause, resume, change the positive time scale, or reset the epoch |
 | Quality selector | Switch between Performance, Balanced, and Ultra render resolution |
@@ -253,15 +253,15 @@ flowchart LR
   UI -->|verified host index or exact-host system| Engine
   SW["Generated Service Worker<br/>versioned entry shell and persistent locale cache"] --> UI
   Engine --> Renderer["Three.js WebGPURenderer"]
-  Engine --> Observed["Observed scene<br/>one 4,749-host Points draw or on-demand system"]
+  Engine --> Observed["Observed scene<br/>persistent 4,749-host Points draw plus on-demand local system"]
   Observed --> Renderer
   Renderer -->|preferred backend| GPU["WebGPU and TSL compute<br/>96K galaxy points"]
   Renderer -->|automatic or forced fallback| GL["WebGL 2 and CPU buffers<br/>24K galaxy points"]
 ```
 
-The Three.js animation loop owns camera motion, hierarchical orbital updates, GPU resources, and per-frame rendering. Asteria camera-center state and observed-scene state both keep the inspected selection separate from the centered target. After orbital transforms update, a completed centered view translates the camera and controls target by the target's world-space delta before rendering, including for moving observed planets. Camera history stores center-relative Asteria offsets, while explicit observed context actions return from system to host universe to Asteria. React receives low-frequency snapshots for presentation, keeping reconciliation out of the render hot path. Display calibration mutates existing renderer uniforms/material properties in place.
+The Three.js animation loop owns camera motion, hierarchical orbital updates, GPU resources, and per-frame rendering. Asteria camera-center state and observed-scene state both keep the inspected selection separate from the centered target. After orbital transforms update, a completed centered view translates the camera and controls target by the target's world-space delta before rendering, including for moving observed planets. Camera history stores center-relative Asteria offsets, while explicit observed context actions return from system to host universe to Asteria. Selecting an Asteria result from an observed scene first changes the scene frame, so the selection is never routed to a hidden catalogue. React receives low-frequency snapshots for presentation, keeping reconciliation out of the render hot path. Display calibration mutates existing renderer uniforms/material properties in place.
 
-A Dedicated Worker owns NASA manifest/index validation, search, on-demand host-index loading, exact-host chunk streaming, cancellation, memory/disk eviction, and atomic pack-readiness state. React receives only a visible 20-result page, one selected detail, or one exact-host bundle containing at most eight planets in this release. The 2D atlas draws all hosts into one lazy Canvas; the engine builds the 3D universe as one `THREE.Points` cloud, then atomically replaces it with an on-demand system scene when requested. IndexedDB stores only verified catalogue assets. The generated Service Worker precaches the entry shell referenced by the built document plus icons/manifests and the required English locale. It retains other successfully requested locale packs in a stable network-first cache, and deliberately leaves both code-split runtime chunks and catalogue release validation to their request-driven owners. The DOM-free Asteria simulation domain remains separate from the observed catalogue adapter.
+A Dedicated Worker owns NASA manifest/index validation, search, on-demand host-index loading, exact-host chunk streaming, cancellation, memory/disk eviction, and atomic pack-readiness state. React receives only a visible 20-result page, one selected detail, or one exact-host bundle containing at most eight planets in this release. The 2D atlas draws all hosts into one lazy Canvas; the engine builds the 3D universe as one `THREE.Points` cloud and keeps that complete 4,749-host cloud mounted as an interstellar backdrop while an on-demand local system branch is open. The local branch is disposed independently when the user returns to the universe or Asteria. IndexedDB stores only verified catalogue assets. The generated Service Worker precaches the entry shell referenced by the built document plus icons/manifests and the required English locale. It retains other successfully requested locale packs in a stable network-first cache, and deliberately leaves both code-split runtime chunks and catalogue release validation to their request-driven owners. The DOM-free Asteria simulation domain remains separate from the observed catalogue adapter.
 
 For deeper design notes, see [Architecture](docs/ARCHITECTURE.md) and [Research](docs/RESEARCH.md).
 

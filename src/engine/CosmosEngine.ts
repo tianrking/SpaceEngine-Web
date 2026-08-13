@@ -156,6 +156,16 @@ interface ObservedPlanetRuntime {
   readonly mesh: THREE.Mesh
 }
 
+export function shouldDisposeSceneObjectGeometry(
+  object: THREE.Object3D,
+): object is THREE.Object3D & { geometry: THREE.BufferGeometry } {
+  const renderable = object as THREE.Object3D & {
+    readonly isSprite?: boolean
+    readonly geometry?: THREE.BufferGeometry
+  }
+  return renderable.isSprite !== true && renderable.geometry !== undefined
+}
+
 export class CosmosEngine {
   private readonly host: HTMLElement
   private readonly events: CosmosEngineEvents
@@ -163,7 +173,9 @@ export class CosmosEngine {
   private readonly worldRoot = new THREE.Group()
   private readonly sharedBackgroundRoot = new THREE.Group()
   private readonly asteriaRoot = new THREE.Group()
-  private observedRoot: THREE.Group | null = null
+  private observedHostRoot: THREE.Group | null = null
+  private observedSystemRoot: THREE.Group | null = null
+  private observedHostCatalogRevision: string | null = null
   private readonly camera = new THREE.PerspectiveCamera(52, 1, 0.001, 100_000)
   private readonly renderer: THREE.WebGPURenderer
   private readonly controls: OrbitControls
@@ -343,51 +355,61 @@ export class CosmosEngine {
 
   showObservedUniverse(index: ProgressiveHostSkyIndex, focusHost?: string): void {
     if (!this.initialized) return
-    const points = buildObservedHostPoints(index)
-    const nextRoot = new THREE.Group()
-    nextRoot.name = 'Observed NASA host universe'
-    const positions = new Float32Array(points.length * 3)
-    const colors = new Float32Array(points.length * 3)
-    const color = new THREE.Color()
-    this.observedHostPoints.clear()
-    for (const [pointIndex, point] of points.entries()) {
-      positions[pointIndex * 3] = point.position.x
-      positions[pointIndex * 3 + 1] = point.position.y
-      positions[pointIndex * 3 + 2] = point.position.z
-      color.set(this.observedSpectralColor(point.spectralType))
-      colors[pointIndex * 3] = color.r
-      colors[pointIndex * 3 + 1] = color.g
-      colors[pointIndex * 3 + 2] = color.b
-      this.observedHostPoints.set(point.id, point)
+    this.replaceObservedSystemRoot(null)
+    this.observedPlanetRuntimes.clear()
+    this.observedSystemStarId = null
+    const canReuseHostCloud =
+      this.observedHostRoot !== null &&
+      this.observedHostCloud !== null &&
+      this.observedHostCatalogRevision === index.catalogRevision &&
+      this.observedHostPoints.size === index.records.length
+    if (!canReuseHostCloud) {
+      const points = buildObservedHostPoints(index)
+      const nextRoot = new THREE.Group()
+      nextRoot.name = 'Observed NASA host universe'
+      const positions = new Float32Array(points.length * 3)
+      const colors = new Float32Array(points.length * 3)
+      const color = new THREE.Color()
+      this.observedHostPoints.clear()
+      for (const [pointIndex, point] of points.entries()) {
+        positions[pointIndex * 3] = point.position.x
+        positions[pointIndex * 3 + 1] = point.position.y
+        positions[pointIndex * 3 + 2] = point.position.z
+        color.set(this.observedSpectralColor(point.spectralType))
+        colors[pointIndex * 3] = color.r
+        colors[pointIndex * 3 + 1] = color.g
+        colors[pointIndex * 3 + 2] = color.b
+        this.observedHostPoints.set(point.id, point)
+      }
+      const geometry = new THREE.BufferGeometry()
+      geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+      geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3))
+      const material = new THREE.PointsNodeMaterial({
+        size: 5.2,
+        sizeAttenuation: false,
+        vertexColors: true,
+        transparent: true,
+        opacity: OBSERVED_HOST_BASE_OPACITY,
+        depthWrite: false,
+      })
+      const nextStarfieldBrightnessBindings: BrightnessBinding[] = []
+      this.bindMaterialBrightness(
+        nextStarfieldBrightnessBindings,
+        material,
+        OBSERVED_HOST_BASE_OPACITY,
+        this.displaySettings.starfieldBrightness,
+        observedHostVisualCalibration,
+      )
+      const cloud = new THREE.Points(geometry, material)
+      cloud.name = 'Observed NASA hosts'
+      cloud.userData.observedHostIds = points.map(({ id }) => id)
+      nextRoot.add(cloud)
+      this.replaceObservedHostRoot(nextRoot, nextStarfieldBrightnessBindings)
+      this.observedHostCloud = cloud
+      this.observedHostCatalogRevision = index.catalogRevision
     }
-    const geometry = new THREE.BufferGeometry()
-    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
-    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3))
-    const material = new THREE.PointsNodeMaterial({
-      size: 5.2,
-      sizeAttenuation: false,
-      vertexColors: true,
-      transparent: true,
-      opacity: OBSERVED_HOST_BASE_OPACITY,
-      depthWrite: false,
-    })
-    const nextStarfieldBrightnessBindings: BrightnessBinding[] = []
-    this.bindMaterialBrightness(
-      nextStarfieldBrightnessBindings,
-      material,
-      OBSERVED_HOST_BASE_OPACITY,
-      this.displaySettings.starfieldBrightness,
-      observedHostVisualCalibration,
-    )
-    const cloud = new THREE.Points(geometry, material)
-    cloud.name = 'Observed NASA hosts'
-    cloud.userData.observedHostIds = points.map(({ id }) => id)
-    nextRoot.add(cloud)
-    this.replaceObservedRoot(nextRoot, {
-      starfield: nextStarfieldBrightnessBindings,
-    })
-    this.observedHostCloud = cloud
-    this.observedRaycastTarget = cloud
+    this.observedRaycastTarget = this.observedHostCloud
+    if (this.observedHostRoot) this.observedHostRoot.visible = true
     this.asteriaRoot.visible = false
     this.raycaster.params.Points = { threshold: 8 }
     this.observedSceneState = {
@@ -420,7 +442,7 @@ export class CosmosEngine {
     }
     this.emitObservedSceneState()
     const center = new THREE.Vector3(point.position.x, point.position.y, point.position.z)
-      .add(this.observedRoot?.position ?? new THREE.Vector3())
+      .add(this.observedHostRoot?.position ?? new THREE.Vector3())
     this.startCameraFlight({
       centerBodyId: null,
       center,
@@ -506,13 +528,12 @@ export class CosmosEngine {
       nextPlanetRuntimes.set(planet.id, { definition: planet, orbitNode, mesh })
     }
 
-    this.replaceObservedRoot(nextRoot, { orbit: nextOrbitBrightnessBindings })
+    this.replaceObservedSystemRoot(nextRoot, nextOrbitBrightnessBindings)
     this.observedPlanetRuntimes.clear()
     for (const [id, runtime] of nextPlanetRuntimes) this.observedPlanetRuntimes.set(id, runtime)
     this.observedSystemStarId = model.starId
-    this.observedHostCloud = null
+    if (this.observedHostRoot) this.observedHostRoot.visible = true
     this.observedRaycastTarget = null
-    this.observedHostPoints.clear()
     this.asteriaRoot.visible = false
     this.observedSceneState = {
       mode: 'observed-system',
@@ -1630,39 +1651,47 @@ export class CosmosEngine {
     this.emitCameraCenterState()
   }
 
-  private replaceObservedRoot(
-    nextRoot: THREE.Group,
-    nextBindings: {
-      readonly orbit?: readonly BrightnessBinding[]
-      readonly starfield?: readonly BrightnessBinding[]
-    } = {},
+  private replaceObservedHostRoot(
+    nextRoot: THREE.Group | null,
+    nextBindings: readonly BrightnessBinding[] = [],
   ): void {
-    const previous = this.observedRoot
-    this.observedRoot = nextRoot
-    this.worldRoot.add(nextRoot)
+    const previous = this.observedHostRoot
+    this.observedHostRoot = nextRoot
+    if (nextRoot) this.worldRoot.add(nextRoot)
     if (previous) {
       this.worldRoot.remove(previous)
-      this.disposeSceneBranch(previous)
+      this.deferSceneBranchDisposal(previous)
+    }
+    this.observedStarfieldBrightnessBindings.splice(
+      0,
+      this.observedStarfieldBrightnessBindings.length,
+      ...nextBindings,
+    )
+  }
+
+  private replaceObservedSystemRoot(
+    nextRoot: THREE.Group | null,
+    nextBindings: readonly BrightnessBinding[] = [],
+  ): void {
+    const previous = this.observedSystemRoot
+    this.observedSystemRoot = nextRoot
+    if (nextRoot) this.worldRoot.add(nextRoot)
+    if (previous) {
+      this.worldRoot.remove(previous)
+      this.deferSceneBranchDisposal(previous)
     }
     this.observedOrbitBrightnessBindings.splice(
       0,
       this.observedOrbitBrightnessBindings.length,
-      ...(nextBindings.orbit ?? []),
-    )
-    this.observedStarfieldBrightnessBindings.splice(
-      0,
-      this.observedStarfieldBrightnessBindings.length,
-      ...(nextBindings.starfield ?? []),
+      ...nextBindings,
     )
   }
 
   private clearObservedScene(): void {
-    if (this.observedRoot) {
-      this.worldRoot.remove(this.observedRoot)
-      this.disposeSceneBranch(this.observedRoot)
-      this.observedRoot = null
-    }
+    this.replaceObservedHostRoot(null)
+    this.replaceObservedSystemRoot(null)
     this.observedHostCloud = null
+    this.observedHostCatalogRevision = null
     this.observedRaycastTarget = null
     this.observedHostPoints.clear()
     this.observedPlanetRuntimes.clear()
@@ -1675,12 +1704,44 @@ export class CosmosEngine {
   private disposeSceneBranch(root: THREE.Object3D): void {
     root.traverse((object) => {
       const renderable = object as THREE.Mesh
-      renderable.geometry?.dispose?.()
+      // Three.js reuses one module-level geometry for every Sprite. Disposing it while
+      // swapping an observed system destroys the vertex buffer used by sprites that
+      // remain in the active scene, which WebGPU correctly rejects on later submits.
+      if (shouldDisposeSceneObjectGeometry(object)) object.geometry.dispose()
       const material = renderable.material
       if (Array.isArray(material)) material.forEach((entry) => entry.dispose())
       else material?.dispose?.()
     })
     root.clear()
+  }
+
+  private deferSceneBranchDisposal(root: THREE.Object3D): void {
+    if (this.backend !== 'webgpu') {
+      this.disposeSceneBranch(root)
+      return
+    }
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        if (this.disposed) {
+          root.clear()
+          return
+        }
+        const backend = this.renderer.backend as typeof this.renderer.backend & {
+          device?: { queue?: { onSubmittedWorkDone?: () => Promise<void> } }
+        }
+        const submittedWorkDone = backend.device?.queue?.onSubmittedWorkDone?.()
+        if (!submittedWorkDone) {
+          this.disposeSceneBranch(root)
+          return
+        }
+        void submittedWorkDone
+          .catch(() => undefined)
+          .then(() => {
+            if (this.disposed) root.clear()
+            else this.disposeSceneBranch(root)
+          })
+      })
+    })
   }
 
   private emitObservedSceneState(): void {
@@ -1715,9 +1776,9 @@ export class CosmosEngine {
   }
 
   private findObservedSystemObject(id: string): THREE.Mesh | null {
-    if (!this.observedRoot) return null
+    if (!this.observedSystemRoot) return null
     if (id === this.observedSystemStarId) {
-      return this.observedRoot.children.find(
+      return this.observedSystemRoot.children.find(
         (child) => child.userData.observedObjectId === id,
       ) as THREE.Mesh | undefined ?? null
     }
@@ -1733,7 +1794,7 @@ export class CosmosEngine {
       this.raycaster.params.Points = { threshold: Math.max(0.12, worldPerPixel * 6) }
       return this.raycaster.intersectObject(this.observedRaycastTarget, false)[0] ?? null
     }
-    if (this.observedSceneState.mode !== 'observed-system' || !this.observedRoot) return null
+    if (this.observedSceneState.mode !== 'observed-system' || !this.observedSystemRoot) return null
     const targets: THREE.Object3D[] = []
     const star = this.observedSystemStarId
       ? this.findObservedSystemObject(this.observedSystemStarId)

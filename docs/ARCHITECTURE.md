@@ -21,7 +21,7 @@ Ringed Asteria bodies use an enclosing outer-ring radius for distance constraint
 - Star, planet, and parent-relative moon centers remain locked at high time scale while manual orbit/dolly preserves the relative view.
 - Time-dependent observed planets remain locked after centering while another observed object may be selected for inspection.
 - Previous View restores up to eight immediate views; system overview is reversible, while reset clears history.
-- Observed context returns from system to host universe to Asteria, and local overview does not silently switch scenes.
+- Observed context returns from system to host universe to Asteria, direct scene-switch controls make both Asteria and the host universe reachable, and local overview does not silently switch scenes.
 - Transition cancellation keeps the current pose without a destination snap.
 - Free flight, system overview, and body-centered views remain distinct in engine telemetry and the HUD.
 - Redirecting an in-progress Previous View does not lose its popped history destination.
@@ -57,7 +57,7 @@ flowchart LR
 - ICRS right ascension and declination define the direction in a right-handed render frame with celestial north on `+Y`.
 - The 4,722 hosts with a finite reported distance use `72 + 162 × log1p(distancePc)` as a monotonic **visual** radius. The physical parsec value remains in the selection payload and inspector; the render radius is not presented as a linear interstellar scale.
 - The 27 distance-null hosts are placed on a dedicated visual shell and remain labelled **sky-only**. They can be selected and directionally centered, but system opening is disabled because their depth is not known.
-- Host raycasting targets the single point cloud with a screen-derived threshold. Replacing the observed universe or system disposes the previous observed geometry/material branch while leaving the shared background and renderer alive.
+- Host raycasting targets the single point cloud with a screen-derived threshold. The host cloud and local observed-system branches have independent roots and material bindings: opening a system keeps all 4,749 hosts visible as an interstellar backdrop, while returning to the universe disposes only the local system branch. Returning to Asteria disposes both observed branches while leaving the shared background and renderer alive.
 
 ### Exact-host system stream
 
@@ -77,7 +77,7 @@ The release does not provide longitude of ascending node, argument of periapsis,
 - A click updates observed selection and the inspector. Locate/Orbit changes the centered target separately. Clearing selection preserves an already centered view.
 - A distance-bearing host can open its exact-host system; a sky-only host remains in the host universe. A newer universe/system command cancels or invalidates an older request so a late result cannot replace the active scene.
 - Observed stars and planets support Orbit centering. Observed planets also support Close. When a reported period drives planet motion, a completed centered frame follows the moving mesh using the same camera/target translation rule as Asteria.
-- Home/reset returns to Asteria and clears observed React presentation state. Observed system/universe return actions follow the explicit scene hierarchy instead of consuming hidden Asteria camera history.
+- Home/reset and the explicit Asteria scene switch return to Asteria and clear observed React presentation state. Asteria catalogue selection/focus also switches frames before dispatching to the engine. Observed system/universe return actions follow the explicit scene hierarchy instead of consuming hidden Asteria camera history.
 
 Gaia-scale stellar density is not implied by this 4,749-host exoplanet sample. Future expansion remains release-reviewed Gaia HEALPix tiling plus SIMBAD identity cross-matching, with per-field provenance, proper-motion/epoch handling, spatial budgets, and cancellation. It is not part of the current runtime.
 

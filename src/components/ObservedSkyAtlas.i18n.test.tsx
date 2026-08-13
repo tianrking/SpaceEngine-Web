@@ -92,6 +92,7 @@ describe('observed NASA sky localization', () => {
       [index],
       [index, 'Kepler-186'],
     ])
+    expect(screen.getByText(/2 plotted host systems/i)).toBeTruthy()
     expect(onOpenObservedSystem).toHaveBeenCalledWith('Kepler-186')
     expect(onOpenHost).toHaveBeenCalledWith('Kepler-186')
   })

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import * as THREE from 'three/webgpu'
 import type { ProgressiveHostSkyIndex } from '../data/progressiveExoplanetCatalog'
 import type { ObservedSystemBundle } from '../data/progressiveObservedSystem'
 import {
@@ -21,8 +22,21 @@ import {
   observedStarId,
   shouldStartObservedCentering,
 } from './observedScene'
+import { shouldDisposeSceneObjectGeometry } from './CosmosEngine'
 
 describe('observed scene math and identity', () => {
+  it('preserves Three.js shared sprite geometry when retiring a scene branch', () => {
+    const sprite = new THREE.Sprite(new THREE.SpriteNodeMaterial())
+    const mesh = new THREE.Mesh(new THREE.SphereGeometry(1), new THREE.MeshBasicNodeMaterial())
+
+    expect(shouldDisposeSceneObjectGeometry(sprite)).toBe(false)
+    expect(shouldDisposeSceneObjectGeometry(mesh)).toBe(true)
+
+    sprite.material.dispose()
+    mesh.geometry.dispose()
+    mesh.material.dispose()
+  })
+
   it('converts ICRS directions into the right-handed render frame', () => {
     expect(icrsDirection(0, 0)).toEqual({ x: 1, y: 0, z: 0 })
     const east = icrsDirection(90, 0)

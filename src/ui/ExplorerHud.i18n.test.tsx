@@ -66,7 +66,7 @@ describe('Explorer HUD internationalization', () => {
       })
     const englishKeys = leafKeys(hudResources.en)
 
-    expect(englishKeys).toHaveLength(183)
+    expect(englishKeys).toHaveLength(188)
     for (const localeCase of CASES) {
       expect(leafKeys(hudResources[localeCase.locale])).toEqual(englishKeys)
     }

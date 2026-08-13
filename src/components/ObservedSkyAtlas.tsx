@@ -376,7 +376,7 @@ export const ObservedSkyAtlas = memo(function ObservedSkyAtlas({
           )}
           <span>
             <strong>{t(exploringUniverse ? 'navigation.openingUniverse' : 'navigation.explore3d')}</strong>
-            <small>{t('navigation.explore3dDetail', { count: records.length.toLocaleString(intlLocale) })}</small>
+            <small>{t('navigation.explore3dDetail', { count: index.records.length.toLocaleString(intlLocale) })}</small>
           </span>
         </button>
       ) : null}

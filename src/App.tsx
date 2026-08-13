@@ -1106,22 +1106,34 @@ function App() {
     setTelemetry((current) => ({ ...current, timeScale: 1, simulationDate: INITIAL_DATE }))
   }, [])
 
-  const handleSelectTarget = useCallback((id: string) => {
-    const body = BODY_LOOKUP.get(id)
-    if (body) {
-      setObservedSelection(null)
-      setObservedSystem(null)
-      setSelectedBody(body)
-      setInspectorOpen(true)
-    }
-    engineRef.current?.select(id)
-  }, [])
-
   const focusViewport = useCallback(() => {
     window.requestAnimationFrame(() => {
       viewportRef.current?.querySelector<HTMLCanvasElement>('canvas')?.focus()
     })
   }, [])
+
+  const showAsteriaScene = useCallback(() => {
+    cancelObservedRequest()
+    engineRef.current?.showAsteriaSystem()
+    observedCenteredSelectionRef.current = null
+    setObservedSelection(null)
+    setObservedSystem(null)
+    setObservedNavigationState({ status: 'idle' })
+    setActiveTool('explore')
+    setCinematic(false)
+    focusViewport()
+  }, [cancelObservedRequest, focusViewport])
+
+  const handleSelectTarget = useCallback((id: string) => {
+    const body = BODY_LOOKUP.get(id)
+    if (!body) return
+    if (observedScene.mode !== 'asteria') showAsteriaScene()
+    setObservedSelection(null)
+    setObservedSystem(null)
+    setSelectedBody(body)
+    setInspectorOpen(true)
+    engineRef.current?.select(id)
+  }, [observedScene.mode, showAsteriaScene])
 
   const handleExploreObservedUniverse = useCallback(
     async (index: ProgressiveHostSkyIndex, focusHost?: string) => {
@@ -1194,6 +1206,21 @@ function App() {
       )
       if (observedUniverseRequestRef.current !== navigationRequest) return
       const client = getProgressiveCatalogClient()
+      if (!observedHostIndexRef.current) {
+        const hostSkyRequest = client.hostSky()
+        observedSystemRequestRef.current = {
+          client,
+          requestId: hostSkyRequest.requestId,
+          host: hostName,
+        }
+        const { index } = await hostSkyRequest.promise
+        if (
+          observedSystemRequestRef.current?.requestId !== hostSkyRequest.requestId ||
+          observedUniverseRequestRef.current !== navigationRequest
+        ) return
+        observedHostIndexRef.current = index
+        activeEngine.showObservedUniverse(index, hostName)
+      }
       const request = client.system(hostName)
       observedSystemRequestRef.current = {
         client,
@@ -1279,7 +1306,22 @@ function App() {
     }
   }, [handleExploreObservedUniverse])
 
+  const handleOpenObservedUniverse = useCallback(() => {
+    void ensureObservedUniverse()
+  }, [ensureObservedUniverse])
+
   const handleCenterTarget = useCallback((id: string, mode: BodyCenteredViewMode) => {
+    if (BODY_LOOKUP.has(id)) {
+      if (observedScene.mode !== 'asteria') showAsteriaScene()
+      const centered = engineRef.current?.centerOnBody(
+        id,
+        mode === 'close-approach' ? 'close' : 'orbit',
+      )
+      if (!centered) return
+      setActiveTool('explore')
+      focusViewport()
+      return
+    }
     if (observedScene.mode !== 'asteria') {
       const observedMode = mode === 'close-approach' ? 'close' : 'orbit'
       const centered = engineRef.current?.centerOnObservedObject(id, observedMode)
@@ -1288,14 +1330,7 @@ function App() {
       focusViewport()
       return
     }
-    const centered = engineRef.current?.centerOnBody(
-      id,
-      mode === 'close-approach' ? 'close' : 'orbit',
-    )
-    if (!centered) return
-    setActiveTool('explore')
-    focusViewport()
-  }, [focusViewport, observedScene.mode])
+  }, [focusViewport, observedScene.mode, showAsteriaScene])
 
   const handleFocusTarget = useCallback((id: string, surface = false) => {
     handleCenterTarget(id, surface ? 'close-approach' : 'orbit')
@@ -1318,17 +1353,11 @@ function App() {
       return
     }
     if (observedScene.mode === 'observed-universe') {
-      cancelObservedRequest()
-      engineRef.current?.showAsteriaSystem()
-      observedCenteredSelectionRef.current = null
-      setObservedSelection(null)
-      setObservedSystem(null)
-      setObservedNavigationState({ status: 'idle' })
-      focusViewport()
+      showAsteriaScene()
       return
     }
     if (engineRef.current?.returnToPreviousView()) focusViewport()
-  }, [cancelObservedRequest, ensureObservedUniverse, focusViewport, observedScene])
+  }, [cancelObservedRequest, ensureObservedUniverse, focusViewport, observedScene, showAsteriaScene])
 
   const handleSystemOverview = useCallback(() => {
     cancelObservedRequest()
@@ -1366,16 +1395,8 @@ function App() {
   const handleToolChange = useCallback((tool: NavigationTool) => {
     setOverlay(null)
     if (tool === 'home') {
-      cancelObservedRequest()
-      setObservedNavigationState({ status: 'idle' })
       if (observedScene.mode === 'asteria') engineRef.current?.showSystemOverview()
-      else {
-        engineRef.current?.showAsteriaSystem()
-        observedCenteredSelectionRef.current = null
-        setObservedSelection(null)
-        setObservedSystem(null)
-        setObservedNavigationState({ status: 'idle' })
-      }
+      else showAsteriaScene()
       setActiveTool('explore')
       focusViewport()
       return
@@ -1390,7 +1411,7 @@ function App() {
     }
     setActiveTool(tool)
     if (tool !== 'explore') setCinematic(false)
-  }, [cancelObservedRequest, focusViewport, handleOpenSearch, observedScene.mode])
+  }, [cancelObservedRequest, focusViewport, handleOpenSearch, observedScene.mode, showAsteriaScene])
 
   const handleResetView = useCallback(() => {
     cancelObservedRequest()
@@ -1435,17 +1456,12 @@ function App() {
     setOverlay(null)
     setActiveTool('explore')
     if (observedScene.mode !== 'asteria') {
-      cancelObservedRequest()
-      engineRef.current?.showAsteriaSystem()
-      observedCenteredSelectionRef.current = null
-      setObservedSelection(null)
-      setObservedSystem(null)
-      setObservedNavigationState({ status: 'idle' })
+      showAsteriaScene()
     } else {
       engineRef.current?.focusOn('pelagos')
     }
     focusViewport()
-  }, [cancelObservedRequest, focusViewport, observedScene.mode])
+  }, [focusViewport, observedScene.mode, showAsteriaScene])
 
   useEffect(() => {
     const handleGlobalKeyDown = (event: KeyboardEvent) => {
@@ -1599,7 +1615,7 @@ function App() {
             : undefined
         }
         cameraFrameCount={
-          observedScene.mode === 'observed-universe'
+          observedScene.mode !== 'asteria'
             ? observedHostIndexRef.current?.records.length
             : undefined
         }
@@ -1650,6 +1666,12 @@ function App() {
             : undefined
         }
         onSystemOverview={handleSystemOverview}
+        onOpenAsteriaSystem={
+          observedScene.mode !== 'asteria' ? showAsteriaScene : undefined
+        }
+        onOpenObservedUniverse={
+          observedScene.mode === 'asteria' ? handleOpenObservedUniverse : undefined
+        }
         onClearSelectedObject={handleClearSelection}
         onTogglePause={handleTogglePause}
         onTimeScaleChange={handleTimeScaleChange}

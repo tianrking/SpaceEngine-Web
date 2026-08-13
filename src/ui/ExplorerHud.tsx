@@ -257,6 +257,8 @@ export interface ExplorerHudProps
   onCameraViewModeChange?: (mode: BodyCenteredViewMode) => void
   onReturnToPreviousView?: () => void
   onSystemOverview?: () => void
+  onOpenAsteriaSystem?: () => void
+  onOpenObservedUniverse?: () => void
   onClearSelectedObject?: () => void
   onOverlayClose?: () => void
   onBeginExploring?: () => void
@@ -813,6 +815,8 @@ interface CameraContextBarProps {
   onCameraViewModeChange?: (mode: BodyCenteredViewMode) => void
   onReturnToPreviousView?: () => void
   onSystemOverview?: () => void
+  onOpenAsteriaSystem?: () => void
+  onOpenObservedUniverse?: () => void
 }
 
 function CameraContextBar({
@@ -825,6 +829,8 @@ function CameraContextBar({
   onCameraViewModeChange,
   onReturnToPreviousView,
   onSystemOverview,
+  onOpenAsteriaSystem,
+  onOpenObservedUniverse,
 }: CameraContextBarProps) {
   const { t, i18n } = useTranslation('hud')
   const intlLocale = localeOption(i18n.resolvedLanguage).intlLocale
@@ -861,7 +867,9 @@ function CameraContextBar({
   const observedSystemTitle = t('camera.observedSystem', {
     name: observedSystemName,
   })
-  const observedSystemDetail = t('camera.observedSystemDetail')
+  const observedSystemDetail = formattedFrameCount
+    ? t('camera.observedSystemDetailWithCount', { count: formattedFrameCount })
+    : t('camera.observedSystemDetail')
   const nonBodyFrameTitle = freeFlight
     ? t('camera.freeFlight')
     : observedUniverseFrame
@@ -957,6 +965,13 @@ function CameraContextBar({
   const overviewActionLabel = observedUniverseFrame
     ? t('camera.resetObservedUniverse')
     : t('camera.systemOverview')
+  const historyActionLabel = hierarchyNavigationError
+    ? t('camera.retry')
+    : observedSystemFrame
+      ? t('camera.observedUniverse')
+      : observedUniverseFrame
+        ? t('camera.asteriaSystem')
+        : t('camera.previousView')
   const overviewActionIsCurrent =
     !cameraView && !freeFlight && cameraFrameMode === 'system'
   const overviewActionTitle = observedUniverseFrame
@@ -1112,9 +1127,7 @@ function CameraContextBar({
           >
             <Undo2 size={15} aria-hidden="true" />
             <span>
-              {hierarchyNavigationError
-                ? t('camera.retry')
-                : t('camera.previousView')}
+              {historyActionLabel}
             </span>
           </button>
           <button
@@ -1130,6 +1143,29 @@ function CameraContextBar({
             <Maximize2 size={15} aria-hidden="true" />
             <span>{overviewActionLabel}</span>
           </button>
+          {observedSystemFrame && onOpenAsteriaSystem ? (
+            <button
+              type="button"
+              onClick={onOpenAsteriaSystem}
+              disabled={controlsBusy}
+              aria-label={t('camera.openAsteriaSystem')}
+              title={t('camera.openAsteriaSystemTitle')}
+            >
+              <Home size={15} aria-hidden="true" />
+              <span>{t('camera.asteriaSystem')}</span>
+            </button>
+          ) : !observedUniverseFrame && onOpenObservedUniverse ? (
+            <button
+              type="button"
+              onClick={onOpenObservedUniverse}
+              disabled={controlsBusy}
+              aria-label={t('camera.openObservedUniverse')}
+              title={t('camera.openObservedUniverseTitle')}
+            >
+              <Globe2 size={15} aria-hidden="true" />
+              <span>{t('camera.observedUniverse')}</span>
+            </button>
+          ) : null}
         </div>
       </section>
     </>
@@ -2199,6 +2235,8 @@ export function ExplorerHud({
   onCameraViewModeChange,
   onReturnToPreviousView,
   onSystemOverview,
+  onOpenAsteriaSystem,
+  onOpenObservedUniverse,
   onClearSelectedObject,
   onTogglePause,
   onTimeScaleChange,
@@ -2387,6 +2425,8 @@ export function ExplorerHud({
               onSystemOverview={
                 onSystemOverview ? handleSystemOverview : undefined
               }
+              onOpenAsteriaSystem={onOpenAsteriaSystem}
+              onOpenObservedUniverse={onOpenObservedUniverse}
             />
           )}
 
